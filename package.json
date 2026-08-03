@@ -1,0 +1,189 @@
+{
+  "name": "agent-usage-bar",
+  "displayName": "Agent Usage Bar",
+  "description": "Show Claude Code and Codex account usage windows in the VS Code status bar.",
+  "version": "0.1.0",
+  "publisher": "ragentis",
+  "license": "MIT",
+  "private": true,
+  "icon": "assets/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ragentis/agent-usage-bar-vscode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ragentis/agent-usage-bar-vscode/issues"
+  },
+  "homepage": "https://github.com/ragentis/agent-usage-bar-vscode#readme",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "claude code",
+    "codex",
+    "rate limits",
+    "status bar",
+    "usage"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
+    },
+    "virtualWorkspaces": true
+  },
+  "main": "./dist/extension.js",
+  "contributes": {
+    "icons": {
+      "agent-usage-bar-claude": {
+        "description": "Claude Code provider mark",
+        "default": {
+          "fontPath": "./assets/agent-usage-bar.woff",
+          "fontCharacter": "\\E801"
+        }
+      },
+      "agent-usage-bar-codex": {
+        "description": "Codex provider mark",
+        "default": {
+          "fontPath": "./assets/agent-usage-bar.woff",
+          "fontCharacter": "\\E800"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "agentUsageBar.refresh",
+        "title": "Refresh usage",
+        "category": "Agent Usage Bar"
+      },
+      {
+        "command": "agentUsageBar.openMenu",
+        "title": "Open menu",
+        "category": "Agent Usage Bar"
+      },
+      {
+        "command": "agentUsageBar.openSettings",
+        "title": "Open settings",
+        "category": "Agent Usage Bar"
+      }
+    ],
+    "configuration": {
+      "title": "Agent Usage Bar",
+      "properties": {
+        "agentUsageBar.displayMode": {
+          "type": "string",
+          "enum": [
+            "compact",
+            "full"
+          ],
+          "enumDescriptions": [
+            "Show the shortest active usage window.",
+            "Show the session and weekly windows."
+          ],
+          "default": "compact",
+          "order": 1,
+          "description": "Controls how much usage information appears in the status bar."
+        },
+        "agentUsageBar.percentageMode": {
+          "type": "string",
+          "enum": [
+            "used",
+            "remaining"
+          ],
+          "enumDescriptions": [
+            "Show the percentage already used.",
+            "Show the percentage remaining."
+          ],
+          "default": "used",
+          "order": 2,
+          "description": "Controls whether the status bar shows used or remaining percentages. Warning colors always use the percentage already used."
+        },
+        "agentUsageBar.warningThreshold": {
+          "type": "number",
+          "default": 80,
+          "minimum": 0,
+          "maximum": 100,
+          "order": 3,
+          "description": "Used-percentage threshold for the warning background."
+        },
+        "agentUsageBar.errorThreshold": {
+          "type": "number",
+          "default": 95,
+          "minimum": 0,
+          "maximum": 100,
+          "order": 4,
+          "description": "Used-percentage threshold for the error background. This cannot be lower than the warning threshold."
+        },
+        "agentUsageBar.claude.enabled": {
+          "type": "boolean",
+          "default": true,
+          "order": 5,
+          "markdownDescription": "Show Claude Code usage in the status bar. The sign-in token Claude Code already stores in `~/.claude/.credentials.json` is read and used for a single request to `api.anthropic.com` that asks for your account usage. The token is never stored, logged, refreshed, or sent anywhere else, and no prompts, code, or file contents leave your machine."
+        },
+        "agentUsageBar.codex.enabled": {
+          "type": "boolean",
+          "default": true,
+          "order": 6,
+          "markdownDescription": "Show Codex usage in the status bar. Your local Codex CLI is asked for the limits it already knows for your account. Codex keeps its own sign-in, so this extension never reads or stores your Codex credentials. Nothing is shown when Codex is not installed or is signed out."
+        },
+        "agentUsageBar.claude.label": {
+          "type": "string",
+          "default": "",
+          "order": 7,
+          "markdownDescription": "Replace the Claude mark in the status bar with your own text. Leave empty for the icon. A codicon reference such as `$(sparkle)` also works."
+        },
+        "agentUsageBar.codex.label": {
+          "type": "string",
+          "default": "",
+          "order": 8,
+          "markdownDescription": "Replace the Codex mark in the status bar with your own text. Leave empty for the icon. A codicon reference such as `$(hubot)` also works."
+        },
+        "agentUsageBar.refreshIntervalSeconds": {
+          "type": "number",
+          "default": 300,
+          "minimum": 30,
+          "maximum": 3600,
+          "order": 9,
+          "description": "How often to re-read usage in the background. Local agent activity also triggers an immediate refresh, so this only covers usage spent on other machines or in other clients."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "clean": "rimraf --glob dist \"*.vsix\"",
+    "bundle": "node scripts/build.mjs",
+    "bundle:dev": "node scripts/build.mjs --dev",
+    "bundle:watch": "node scripts/build.mjs --dev --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint",
+    "lint:fix": "oxlint --fix",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "audit:bundle": "node scripts/audit-bundle.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run package:local",
+    "vscode:prepublish": "npm run bundle && npm run audit:bundle",
+    "package:local": "npm run clean && vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/vscode": "1.100.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.28.1",
+    "oxfmt": "^0.62.0",
+    "oxlint": "^1.77.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "rimraf": "^6.1.3",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
