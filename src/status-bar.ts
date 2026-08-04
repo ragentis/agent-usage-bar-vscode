@@ -21,7 +21,7 @@ function prefix(provider: ProviderId, configuration: ExtensionConfiguration): st
   return label || `$(${PROVIDERS[provider].icon})`;
 }
 
-/** Past this the reading is old enough that the user should be told rather than trusted. */
+/** Past this the reading is old enough that its age is worth showing. */
 const STALE_AFTER_MS = 10 * 60_000;
 
 const BACKGROUNDS: Record<Severity, vscode.ThemeColor | undefined> = {
@@ -82,10 +82,10 @@ export function renderStatusBarItem(
 }
 
 /**
- * The flags decide how the lines are read, so they belong beside the wrapping rather than beside
- * the writing. Codicons in a tooltip render only when the string opts in; without the last one
- * `$(warning)` is text. Every value the lines interpolate is escaped by `buildTooltipLines`,
- * parentheses included, so nothing a provider says can arrive here as a codicon or as markup.
+ * Codicons in a tooltip render only when the string opts in; without `supportThemeIcons` the
+ * `$(warning)` line is plain text. Every value the lines interpolate is escaped by
+ * `buildTooltipLines`, parentheses included, so nothing a provider says can arrive here as a
+ * codicon or as markup.
  */
 function markdown(lines: string[]): vscode.MarkdownString {
   const tooltip = new vscode.MarkdownString(lines.join("\n\n"));

@@ -3,11 +3,11 @@ import { formatPercent, formatRemaining, resolveWindows } from "./formatting";
 import type { SnapshotSource, UsageSnapshot, WindowKind } from "./usage";
 
 /**
- * The tooltip is the one surface where what a provider said is drawn rather than counted: a plan
- * name, a reason the account is stopped, a credit balance, and the reason the last read failed all
- * reach it as text. It renders as markdown with theme icons turned on, so each of them is escaped
- * on the way in. Lines rather than a `MarkdownString`, so the escaping is a string a test can read
- * and `status-bar.ts` is left holding nothing but the wrapping.
+ * The one surface where provider text is drawn rather than counted: a plan name, a reason the
+ * account is stopped, a credit balance, and the reason the last read failed all reach it as text.
+ * It renders as markdown with theme icons on, so each is escaped on the way in. Lines rather than a
+ * `MarkdownString`, so the escaping is a string a test can read and `status-bar.ts` holds only the
+ * wrapping.
  */
 
 const WINDOW_TITLES: Record<WindowKind, string> = { session: "5-hour", weekly: "Weekly" };

@@ -4,9 +4,9 @@ const RETRY_DELAY_MS = 15_000;
 /**
  * Watching can fail for something that will pass — the agent has not run yet, so its directory is
  * not there — or for something that will not: recursive watching costs one inotify handle per
- * directory, and a machine already at its limit will refuse every attempt this window ever makes.
- * The two are indistinguishable from here, so neither is assumed: the wait doubles up to a ceiling
- * rather than either giving up on a directory that may yet appear or asking forever at full price.
+ * directory, and a machine at its limit will refuse every attempt. The two are indistinguishable
+ * from here, so the wait doubles up to a ceiling rather than giving up on a directory that may yet
+ * appear or retrying forever at full price.
  */
 const MAX_RETRY_DELAY_MS = 10 * 60_000;
 const CHANGE_DEBOUNCE_MS = 5_000;
@@ -45,8 +45,8 @@ export class FileWatcher {
 
   start(onChange: () => void): void {
     this.stop();
-    // Only here: a run of failures backs off monotonically, and a fresh start is the one thing
-    // that says the answer might have changed for a reason other than waiting.
+    // Reset only here: a run of failures backs off monotonically, and a fresh start is the one
+    // signal that the answer might have changed for a reason other than waiting.
     this.retryDelayMs = this.baseRetryDelayMs;
     this.onChange = onChange;
     this.open();

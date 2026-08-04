@@ -22,10 +22,10 @@ const REQUEST_TIMEOUT_MS = 5_000;
 const RATE_LIMIT_FALLBACK_MS = 60_000;
 
 /**
- * `Retry-After` comes as either a delta in seconds or an HTTP date, and the endpoint is not
- * documented, so neither form is assumed. A null answer is itself a finding: it says the service
- * rate limits without telling us for how long. Whatever comes back is capped before it is passed
- * on, because this value is also published to the other windows and becomes a timer in each.
+ * `Retry-After` is either a delta in seconds or an HTTP date, and the endpoint is undocumented, so
+ * both forms are accepted. Null says the service rate limits without stating for how long. The
+ * result is capped before it is passed on, because it is republished to the other windows and
+ * becomes a timer in each.
  */
 export function parseRetryAfter(header: string | null, now: Date): Date | null {
   if (!header) {
@@ -174,9 +174,8 @@ export async function fetchClaudeUsage(
     const retryAt =
       parseRetryAfter(response.headers.get("retry-after"), now) ??
       new Date(now.getTime() + RATE_LIMIT_FALLBACK_MS);
-    // No countdown in the message: `retryAt` carries the wait, and whoever draws it states the
-    // time left now. Written in here it would be the number the refusal was born with, still on
-    // screen long after the wait it describes had run out.
+    // No countdown in the message: `retryAt` carries the wait and `UsageBar.paint` states the time
+    // left at draw time.
     return {
       status: "unavailable",
       message: "The Claude usage service is rate limiting requests",

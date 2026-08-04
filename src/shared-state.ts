@@ -15,8 +15,8 @@ import {
 const KEY_PREFIX = "sharedUsage.v1.";
 
 /**
- * The slice of `vscode.Memento` this needs, named here rather than imported: the rules below are
- * worth testing, and a store the test can stand up is all they ever ask for.
+ * The slice of `vscode.Memento` this needs, named here rather than imported, so the rules below can
+ * be tested against a store the test stands up.
  */
 export interface SharedStore {
   get(key: string): unknown;
@@ -43,11 +43,10 @@ function millis(value: unknown): number | null {
 }
 
 /**
- * A wait reaching further ahead than this extension will ever sit out is not a wait it recognizes,
- * so it is dropped like any other unreadable field rather than honoured. Every version that writes
- * one caps it first; this is the guard for the stretch of an update where the other window is a
- * version this one has never seen, and it matters because an unbounded wait here is one no window
- * can outlive — each would keep renewing it from the entry for as long as the entry stands.
+ * A wait reaching further ahead than this extension will ever sit out is dropped like any other
+ * unreadable field. Every version that writes one caps it first; this guards the stretch of an
+ * update where the other window runs a version this one has never seen. An unbounded wait here is
+ * one no window can outlive, since each would keep renewing it from the entry.
  */
 function retryMillis(value: unknown): number | null {
   const retryAt = millis(value);
@@ -141,12 +140,12 @@ function serialize(entry: SharedEntry): Record<string, unknown> {
 /**
  * The last reading, shared by every window of this profile. VS Code keeps each extension host's
  * copy of global state current when another window writes a key it has read, which makes this both
- * the place the numbers travel and the lease deciding who reads: an entry is a statement that some
- * window set out to read at that moment, so the others need not.
+ * the transport for the numbers and the lease deciding who reads: an entry states that some window
+ * set out to read at that moment, so the others need not.
  *
- * Nothing read back is trusted. During an update two windows briefly run different versions, and
- * the stored shape is whatever the other one wrote; anything unrecognized is dropped rather than
- * shown. Dates cross as epoch milliseconds, because a `Date` does not survive the round trip.
+ * Nothing read back is trusted. During an update two windows briefly run different versions and the
+ * stored shape is whatever the other one wrote, so anything unrecognized is dropped. Dates cross as
+ * epoch milliseconds, because a `Date` does not survive the round trip.
  */
 export class SharedUsageState {
   constructor(private readonly store: SharedStore) {}
@@ -173,10 +172,9 @@ export class SharedUsageState {
   }
 
   /**
-   * Every write is a change to part of an entry, so each states only the part it changes and the
-   * rest carries over. What is left is what an absent entry starts as, which matters for exactly
-   * one field: a `readAt` of now, because an entry claiming to have been read at the beginning of
-   * time is one every window reads over at once.
+   * Every write changes part of an entry and the rest carries over. The defaults are what an absent
+   * entry starts as, which matters for exactly one field: a `readAt` of now, because an entry
+   * claiming to have been read at the beginning of time is one every window reads over at once.
    */
   private write(provider: ProviderId, change: Partial<SharedEntry>): PromiseLike<void> {
     const entry: SharedEntry = {

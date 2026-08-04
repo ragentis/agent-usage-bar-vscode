@@ -43,8 +43,8 @@ export function formatRemaining(resetsAt: Date | null, now = new Date()): string
 }
 
 /**
- * A retry window is short in a way a quota window never is, so "reset due" would be nonsense here
- * and seconds are worth printing. Rounds up, because saying `0s` while still waiting reads as a lie.
+ * A retry window is short in a way a quota window never is, so "reset due" would be wrong here and
+ * seconds are worth printing. Rounds up, so it never prints `0s` while still waiting.
  */
 export function formatWait(until: Date, now = new Date()): string {
   const seconds = Math.max(0, Math.ceil((until.getTime() - now.getTime()) / 1_000));

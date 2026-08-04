@@ -21,9 +21,9 @@ const RESPAWN_COOLDOWN_MS = 30_000;
 const MAX_BUFFER_CHARS = 4 * 1024 * 1024;
 
 /**
- * Replaced by the bundler from `package.json`. Typed as `unknown` and read through `typeof`
- * because the unit tests import this module with no define in place, where the name is simply
- * absent: anything but `typeof` would throw on the way in.
+ * Replaced by the bundler from `package.json`. Typed as `unknown` and read through `typeof` because
+ * the unit tests import this module with no define in place, where the name is absent and any other
+ * access would throw.
  */
 // oxlint-disable-next-line no-underscore-dangle -- the dunder marks a build-time substitution
 declare const __EXTENSION_VERSION__: unknown;
@@ -38,9 +38,9 @@ interface PendingRequest {
 }
 
 /**
- * The slice of a spawned process this needs, named here rather than imported: the lifecycle below
- * is the part worth testing — framing, timeouts, teardown — and a process the test can stand up is
- * all any of it ever asks for.
+ * The slice of a spawned process this needs, named here rather than imported: the lifecycle below —
+ * framing, timeouts, teardown — is the part worth testing, and it only ever needs a process the
+ * test can stand up.
  */
 export interface CodexProcess {
   stdin: { write(chunk: string, callback?: (error?: Error | null) => void): void };
@@ -54,7 +54,7 @@ export interface CodexProcess {
   kill(): void;
 }
 
-/** Finding the binary and starting it: one seam, because both are the machine answering back. */
+/** Finding the binary and starting it, as one seam the tests can replace. */
 export type LaunchCodex = () => Promise<CodexProcess>;
 
 /** Newest install wins: the versioned directory name carries no ordering of its own. */
@@ -96,9 +96,8 @@ async function exists(candidate: string): Promise<boolean> {
  * Codex installs itself under a content-hashed directory that changes on every update, so the
  * path cannot be hard coded. Falling back to the bare name lets a PATH install still work.
  *
- * The home directory and the platform are parameters because the layouts are the one part of this
- * extension that differs per platform, and a layout only one machine can check is a layout nobody
- * checks: every CI runner walks all three.
+ * Home directory and platform are parameters so every CI runner can walk all three layouts, rather
+ * than each one only checking its own.
  */
 export async function resolveCodexBinary(
   home: string = os.homedir(),
@@ -124,7 +123,7 @@ export async function resolveCodexBinary(
     // Last resort, mirroring Windows: the IDE plugin ships its own copy when no CLI is installed.
     path.join(home, ".codex", "plugins", ".plugin-appserver", "codex"),
   ]) {
-    // The order is the answer: the first hit wins, so running these in parallel would stat paths
+    // Sequential on purpose: the first hit wins, so running these in parallel would stat paths
     // that never needed looking at.
     // oxlint-disable-next-line no-await-in-loop
     if (await exists(candidate)) {
@@ -233,9 +232,9 @@ export class CodexAppServer {
   ) {}
 
   /**
-   * Ends the process without ruling out a later one, because switching the provider off is not
-   * the same as being done with it: the next time it is switched on, the next read starts a
-   * fresh server rather than paying for one that idled through the meantime.
+   * Ends the process without ruling out a later one: switching the provider off is not the same as
+   * being done with it, and the next read starts a fresh server rather than paying for one that
+   * idled in the meantime.
    */
   stop(): void {
     this.teardown(new Error("The Codex app server was stopped"));
@@ -292,9 +291,9 @@ export class CodexAppServer {
   private async start(): Promise<void> {
     const generation = this.generation;
     const child = await this.launch();
-    // Finding the binary and starting it walks the disk, and a provider switched off in the
-    // meantime has already torn down everything there was to tear down. Keeping this one would
-    // leave a child that nothing owns and nothing ever stops.
+    // Finding the binary and starting it walks the disk; a provider switched off in the meantime
+    // has already torn down everything there was. Keeping this child would leave one that nothing
+    // owns and nothing ever stops.
     if (this.generation !== generation) {
       child.kill();
       throw new Error("The Codex app server was stopped");
@@ -370,9 +369,9 @@ export class CodexAppServer {
     }
     const id = this.nextId++;
     return new Promise<unknown>((resolve, reject) => {
-      // A server that misses one answer has stopped speaking, and dropping only the request would
-      // leave every later read queued behind the same silent process until the window is reloaded.
-      // Tearing it down here is what makes the next read start a fresh one.
+      // A server that misses one answer has stopped speaking; dropping only the request would leave
+      // every later read behind the same silent process until the window is reloaded. Tearing it
+      // down here is what makes the next read start a fresh one.
       const timer = setTimeout(
         () => this.teardown(new Error("The Codex app server did not answer in time")),
         REQUEST_TIMEOUT_MS,

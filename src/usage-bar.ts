@@ -10,13 +10,13 @@ import {
   type ProviderView,
 } from "./usage";
 
-/** The one cadence this window runs on: it adopts, it reads when nobody has, and it redraws. */
+/** The single cadence for adopting, reading when nobody has, and redrawing. */
 const TICK_INTERVAL_MS = 5_000;
-/** A provider process this window has stopped using belongs to whichever window is reading. */
+/** How long an unused provider process is kept before it is stopped; see `stopIfIdle`. */
 const IDLE_STOP_MS = 10 * 60_000;
 const HOLD_JITTER_MS = 2_000;
 
-/** One status bar item's worth of surface, with nothing of how it is drawn. */
+/** One status bar item's worth of surface, with no vscode types in it. */
 export interface ProviderDisplay {
   render(view: ProviderView, configuration: ExtensionConfiguration): void;
   loading(configuration: ExtensionConfiguration): void;
@@ -24,8 +24,7 @@ export interface ProviderDisplay {
   dispose(): void;
 }
 
-/** Reports that this provider's agent has just run. Which directory, and how long a burst is left
- *  to settle, are its own business. */
+/** Reports that this provider's agent has just run; the directory and the debounce are its own. */
 export interface ProviderWatcher {
   start(onChange: () => void): void;
   stop(): void;
@@ -33,9 +32,9 @@ export interface ProviderWatcher {
 }
 
 /**
- * One provider as everything above the wiring sees it. Stated as an interface rather than built
- * here, which is what leaves this file with no import of vscode, of the filesystem, or of a child
- * process — and so lets the rules below be exercised whole, without an extension host.
+ * One provider as everything above the wiring sees it. An interface rather than a concrete type,
+ * so this file imports neither vscode, the filesystem, nor a child process — which is what lets
+ * the rules below be tested without an extension host.
  */
 export interface ProviderPort {
   id: ProviderId;
@@ -43,36 +42,35 @@ export interface ProviderPort {
   read: () => Promise<ProviderResult>;
   watcher: ProviderWatcher;
   isEnabled: (configuration: ExtensionConfiguration) => boolean;
-  /** Releases whatever the provider keeps running, for the stretch it is switched off. */
+  /** Releases whatever the provider keeps running while it is switched off. */
   stop?: () => void;
-  /** Releases it for good, unlike `stop`, which rules out nothing later. */
+  /** Releases it for good; `stop` allows a later restart. */
   dispose?: () => void;
 }
 
-/** Held while a provider has asked to be left alone, with the read that ends the wait booked. */
+/** A rate-limit wait, with the read that ends it already booked. */
 interface Hold {
   /** The moment this window reads again: the stated wait, capped. */
   until: Date;
   /**
-   * The wait exactly as stated, before the cap. Only ever compared for equality, so that adopting
-   * the same statement twice is a no-op — the capped moment is measured from now and would creep
-   * forward on every tick, leaving a hold that never came due.
+   * The wait exactly as stated, before the cap. Only ever compared for equality, so adopting the
+   * same statement twice is a no-op: the capped moment is measured from now and would creep forward
+   * on every tick, leaving a hold that never came due.
    */
   statedAt: number;
   timer: NodeJS.Timeout;
 }
 
 /**
- * Everything this window knows about one provider, kept beside that provider rather than spread
- * across maps that all take the same key: forgetting one is then a single place, and a field added
- * later cannot be the one the forgetting misses.
+ * Everything this window knows about one provider, kept beside it rather than spread across maps
+ * keyed alike: forgetting a provider is then one place, and a field added later cannot be missed.
  */
 interface ProviderState {
   view: ProviderView | null;
   hold: Hold | null;
   inFlight: Promise<ProviderResult> | null;
-  /** When *this* window last read, which decides only whether its provider process is still worth
-   *  keeping. The floor between reads is the shared lease, not this. */
+  /** When *this* window last read. Decides only whether its provider process is worth keeping;
+   *  the floor between reads is the shared lease. */
   usedAt: number | null;
   /** The newest publication already taken from another window, so it is taken exactly once. */
   adoptedAt: number;
@@ -100,7 +98,7 @@ export class UsageBar {
     this.configuration = readConfiguration();
   }
 
-  /** Kept current by the change event, so whoever asks always sees the settings as they stand. */
+  /** Kept current by the change event, so callers always see the settings as they stand. */
   get settings(): ExtensionConfiguration {
     return this.configuration;
   }
@@ -112,8 +110,8 @@ export class UsageBar {
   }
 
   dispose(): void {
-    // Set before anything is torn down, because reads already in flight are about to be answered
-    // by the teardown itself, and their answers are about this window rather than the account.
+    // Set before anything is torn down: reads in flight are about to be answered by the teardown
+    // itself, and those answers describe this window rather than the account.
     this.disposed = true;
     if (this.tickTimer) {
       clearInterval(this.tickTimer);
@@ -127,7 +125,7 @@ export class UsageBar {
     }
   }
 
-  /** `force` belongs to the paths the user drove: a refresh asked for should do what it says. */
+  /** `force` skips the shared floor and the claim race, for refreshes the user asked for. */
   async refresh(
     options: { only?: ProviderId; showLoading?: boolean; force?: boolean } = {},
   ): Promise<void> {
@@ -179,16 +177,16 @@ export class UsageBar {
     if (force) {
       await this.reads.take(provider.id);
     } else if (!(await this.reads.wins(provider.id))) {
-      // Losing the claim must leave no trace: a window that keeps losing is a window not using its
-      // provider, and saying otherwise here is what would keep its idle process alive for good.
+      // Losing the claim must leave no trace: a window that keeps losing is not using its provider,
+      // and stamping `usedAt` here would keep its idle process alive for good.
       return;
     }
     provider.state.usedAt = Date.now();
     try {
       await this.read(provider);
     } catch {
-      // The lease outlives us otherwise, and every other window waits out an interval for a read
-      // that was never spent. Nothing is said on the item: the last reading stands, with its age.
+      // Otherwise the lease outlives us and every other window waits out an interval for a read
+      // that never happened. Nothing is shown on the item: the last reading stands, with its age.
       await this.reads.abandon(provider.id);
     }
   }
@@ -196,9 +194,8 @@ export class UsageBar {
   private async read(provider: Provider): Promise<void> {
     const result = await this.fetchOnce(provider);
     if (this.disposed) {
-      // This window is closing, and closing it stopped the provider from under its own read. What
-      // came back describes the shutdown and nothing else; published, it would tell every other
-      // window that the provider had failed.
+      // Closing the window stopped the provider from under its own read, so what came back
+      // describes the shutdown. Published, it would tell every other window the provider failed.
       return;
     }
     // The provider may have been switched off while the read was running.
@@ -222,8 +219,8 @@ export class UsageBar {
   /**
    * Retrying before the service says to is what earns a rate limit, so the stated wait is honoured
    * for every trigger alike: the background interval, a transcript write, and a manual refresh. The
-   * wait ends in a read of its own, because that interval can be an hour and the numbers would sit
-   * stale the whole of it over a refusal that lasted a minute.
+   * wait ends in a read of its own, because the interval can be an hour and the numbers would sit
+   * stale for all of it over a refusal that lasted a minute.
    */
   private hold(provider: Provider, stated: Date): void {
     clearTimeout(provider.state.hold?.timer);
@@ -264,11 +261,10 @@ export class UsageBar {
 
   /**
    * Takes whatever another window published since we last looked. Keyed on when it was written
-   * rather than on the age of the reading inside it, because the most useful thing another window
-   * can learn is often that there is no reading to be had: a provider that is not signed in
-   * answers with a message and nothing else, and a window still showing a spinner needs to hear
-   * it. `mergeView` then applies it under the same rule as a failure of our own, which is why the
-   * rule lives beside the type rather than in either caller.
+   * rather than on the age of the reading inside it: a provider that is not signed in answers with
+   * a message and no reading at all, and a window still showing a spinner needs to hear it.
+   * `mergeView` applies it under the same rule as a failure of our own, which is why that rule
+   * lives beside the type rather than in either caller.
    */
   private adopt(provider: Provider): SharedEntry | null {
     const shared = this.reads.latest(provider.id);
@@ -282,10 +278,9 @@ export class UsageBar {
         this.hold(provider, shared.retryAt);
       }
     } else if (news) {
-      // And so is one window's success. A wait is only ever cleared by a read that got through it,
-      // because no window reads while the wait stands and a publication needs the claim: nothing
-      // else can put a newer entry here with no wait left in it. Without this the refusal outlives
-      // the service that made it, and the item states a failure over numbers seconds old.
+      // And so is one window's success. Only a read that got through the wait can put a newer entry
+      // here with no wait left in it, since no window reads while the wait stands and publishing
+      // needs the claim. Without this the refusal outlives the service that made it.
       this.releaseHold(provider);
     }
     if (news) {
@@ -297,10 +292,9 @@ export class UsageBar {
   }
 
   /**
-   * Adopting, reading, and redrawing all sit on the one interval. The countdowns move with no new
-   * reading behind them, so they need a beat of their own — and a beat this window is already
-   * keeping. It is spent whether or not anything changed, which is a status bar update every few
-   * seconds; that is the price of never showing a number that stopped being true.
+   * Adopting, reading, and redrawing all sit on the one interval, because the countdowns move with
+   * no new reading behind them. It runs whether or not anything changed — a status bar update every
+   * few seconds — which is the price of never showing a number that stopped being true.
    */
   private tick(): void {
     for (const provider of this.providers) {
@@ -319,7 +313,7 @@ export class UsageBar {
 
   /**
    * Once the reading has settled on another window, the child process this one started is only
-   * idling. It costs nothing to give up, because the next read this window does starts a fresh one.
+   * idling. It costs nothing to give up: the next read this window does starts a fresh one.
    */
   private stopIfIdle(provider: Provider): void {
     const { usedAt } = provider.state;
@@ -330,9 +324,9 @@ export class UsageBar {
   }
 
   /**
-   * The stored view keeps what the last read said; the wait is layered on here rather than written
-   * into it, so every redraw states the time left now instead of repeating the number the refusal
-   * was born with.
+   * The stored view keeps what the last read said. The rate-limit wait is layered on here rather
+   * than written into the message, so every redraw states the time left now: a countdown baked into
+   * a message would stay on screen long after the wait it describes had run out.
    */
   private paint(provider: Provider): void {
     const view = provider.state.view ?? { snapshot: null, message: null };
@@ -358,9 +352,9 @@ export class UsageBar {
   }
 
   /**
-   * Switching a provider back on is answered from the shared reading rather than by a read of our
-   * own, so an empty item is never the price of a toggle. The rate-limit hold deliberately
-   * survives: that wait was not ours to waive.
+   * Switching a provider back on is answered from the shared reading rather than a read of our own,
+   * so an empty item is never the price of a toggle. The rate-limit hold deliberately survives:
+   * that wait was not ours to waive.
    */
   private forget(provider: Provider): void {
     provider.state.view = null;
@@ -369,6 +363,10 @@ export class UsageBar {
     provider.display.hide();
   }
 
+  /**
+   * One read per provider at a time; every caller shares the in-flight request. `ReadCoordinator`
+   * relies on this: it uses the window id alone as the claim token.
+   */
   private fetchOnce(provider: Provider): Promise<ProviderResult> {
     const pending = provider.state.inFlight;
     if (pending) {

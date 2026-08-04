@@ -1,7 +1,6 @@
 /**
- * Settings as plain values, plus the rules that read them. Nothing here imports `vscode`: the
- * reading and writing lives in `settings.ts`. That line is what lets these rules be exercised
- * by the unit tests, which run without an extension host.
+ * Settings as plain values, plus the rules that read them. Nothing here imports `vscode` — that
+ * lives in `settings.ts` — which is what lets these rules be tested without an extension host.
  */
 
 export type DisplayMode = "compact" | "full";
@@ -47,8 +46,7 @@ function bounded(value: number, fallback: number, minimum: number, maximum: numb
 
 /**
  * One setting read, as `vscode.WorkspaceConfiguration.get` performs it. Taking the reader as an
- * argument is what keeps the rules below on this side of the line the module comment draws: the
- * settings a user can hand-edit are bounded here, and bounding them is testable without a host.
+ * argument is what keeps the bounding of hand-edited settings on this side of the vscode line.
  */
 export type SettingReader = <T>(key: string, fallback: T) => T;
 

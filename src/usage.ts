@@ -22,9 +22,9 @@ export interface UsageSnapshot {
 
 /**
  * Either a reading or the reason there is none. Every reason is handled alike — the last good
- * numbers stay on screen with their age — so nothing is gained by sorting them into kinds. The one
- * distinction that changes what happens next is carried by `retryAt`, set when the service named a
- * moment before which another call is pointless.
+ * numbers stay on screen with their age — so they are not sorted into kinds. The one distinction
+ * that changes what happens next is `retryAt`, set when the service named a moment before which
+ * another call is pointless.
  */
 export type ProviderResult =
   | { status: "ok"; snapshot: UsageSnapshot }
@@ -37,9 +37,9 @@ export interface ProviderView {
 }
 
 /**
- * A failed read never discards a good one. Showing the last known numbers with their age beats
- * blanking the item, because usage does not vanish when the network hiccups — and the rule holds
- * whoever the reader was, so a window adopting another's result applies it the same way.
+ * A failed read never discards a good one: usage does not vanish when the network hiccups, so the
+ * last known numbers stay on screen with their age. The rule holds whoever read, so a window
+ * adopting another's result applies it the same way.
  */
 export function mergeView(
   previous: ProviderView | null | undefined,
@@ -52,13 +52,12 @@ const SESSION_WINDOW_MAX_MINUTES = 360;
 const MAX_LABEL_LENGTH = 80;
 
 /**
- * The longest wait this extension will sit out before asking again. A service that names a longer
- * one is not contradicted — it is simply asked once more at the cap, which costs at most one
- * refused request an hour and is what keeps a stated wait from outliving every window that heard
- * it. It also has to be capped somewhere: `setTimeout` cannot represent more than about twenty-five
- * days and fires at once instead of saying so, which turns an absurd wait into a busy loop rather
- * than a long one. An hour matches the longest configurable refresh interval, past which a wait and
- * a stall look the same from the status bar.
+ * The longest wait this extension will sit out before asking again. A service naming a longer one
+ * is asked once more at the cap, which costs at most one refused request an hour and keeps a stated
+ * wait from outliving every window that heard it. It has to be capped somewhere in any case:
+ * `setTimeout` cannot represent more than about twenty-five days and fires at once instead of
+ * saying so, turning an absurd wait into a busy loop. An hour matches the longest configurable
+ * refresh interval, past which a wait and a stall look the same from the status bar.
  */
 export const MAX_RETRY_WAIT_MS = 60 * 60_000;
 

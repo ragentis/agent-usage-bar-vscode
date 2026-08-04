@@ -3,8 +3,8 @@ import type { SharedEntry, SharedUsageState } from "./shared-state";
 import type { ProviderId, ProviderView } from "./usage";
 
 /**
- * How long the window that read last keeps its head start. Long enough that it wins the ordinary
- * race and the reading settles on one window, short enough that closing that window is not felt.
+ * How long the window that read last keeps its head start: long enough that reads settle on one
+ * window, short enough that closing that window is not felt.
  */
 const INCUMBENT_GRACE_MS = 5_000;
 const CLAIM_SETTLE_MS = 100;
@@ -19,14 +19,13 @@ function delay(ms: number): Promise<void> {
 
 /**
  * Which window reads, and when. Every VS Code window runs its own copy of the extension, so six
- * open windows would otherwise ask the same question six times over and at the same instant. The
- * shared reading doubles as the arrangement that prevents it: a stamp saying some window set out
- * to read at that moment is all the others need to stand down.
+ * open windows would otherwise ask the same question six times at the same instant. The shared
+ * entry prevents it: a stamp saying some window set out to read is all the others need to stand
+ * down.
  *
- * There is no leader and nothing is elected. The window that read last is held to the plain floor
- * while the others wait a moment longer, which is enough for the reading to settle on one of them
- * without anyone deciding so — and a window closed mid-read is not a case to detect, because its
- * stamp ages out like any other.
+ * No leader is elected. The window that read last is held to the plain floor while the others wait
+ * `INCUMBENT_GRACE_MS` longer, which settles reads on one window. A window closed mid-read needs no
+ * detection: its stamp ages out like any other.
  */
 export class ReadCoordinator {
   /** Distinct between the windows running at the same time, which is all the lease compares. */
@@ -45,9 +44,8 @@ export class ReadCoordinator {
   /**
    * The floor under every automatic read, whoever asked for it and from whichever window.
    * Transcript writes arrive in bursts with pauses longer than the watcher's debounce, so one long
-   * turn would otherwise spend several requests on numbers that had barely moved, and every open
-   * window would spend them again. Nothing shown is any less true for the wait: the last reading
-   * stays on screen with its age already stated, and whoever does read hands the result over.
+   * turn would otherwise spend several requests per open window on numbers that had barely moved.
+   * The last reading stays on screen with its age stated, and whoever does read publishes it.
    */
   tooSoon(entry: SharedEntry | null): boolean {
     if (!entry) {
@@ -62,16 +60,14 @@ export class ReadCoordinator {
    * The background read is timed off the shared stamp rather than a timer of each window's own.
    * Windows restored together would otherwise hold timers in step and fire as one, and a window
    * closed mid-read would leave the rest waiting out a whole interval for a read that never came.
-   * Here the wait belongs to the machine: whoever notices it has run out does the reading.
+   * Whoever notices the wait has run out does the reading.
    *
-   * A stamp with nothing published after it is a read still in flight, or a window that was closed
-   * during one. It is given until the floor and no longer, because no window may read before the
-   * floor in any case: a claim with nothing to show for it by then is not worth an interval.
-   *
-   * So is a wait that has run out. What stands in place of a reading there is the refusal itself,
-   * and the refusal has just expired — waiting out the configured interval on top of it would mean
-   * five minutes of stale numbers bought by ten seconds of rate limiting. The floor still applies,
-   * and so does the claim that follows: this makes the read due, it does not make it ours.
+   * Two cases fall back to the floor instead of the configured interval. A stamp with nothing
+   * published after it is a read still in flight, or a window closed during one; no window may read
+   * before the floor in any case, so a claim with nothing to show for it by then is not worth an
+   * interval. An expired `retryAt` is the same: waiting out five minutes on top of ten seconds of
+   * rate limiting would buy nothing but stale numbers. Either way this makes the read due, not
+   * ours — the claim still follows.
    */
   overdue(entry: SharedEntry | null, intervalSeconds: number): boolean {
     if (entry === null) {
@@ -85,8 +81,8 @@ export class ReadCoordinator {
 
   /**
    * Stamps the lease without contesting it, for a read the user asked for: it goes ahead whatever
-   * the others are doing, but must still say so, or the next window along reads again over the top
-   * of a reading that is a second old.
+   * the others are doing, but must still say so, or the next window reads again over a reading that
+   * is a second old.
    */
   take(provider: ProviderId): PromiseLike<void> {
     return this.shared.claim(provider, this.windowId);
@@ -94,9 +90,9 @@ export class ReadCoordinator {
 
   /**
    * Two windows can find the same lease free before either write has landed, so a claim is settled
-   * before it is trusted: write it, pause for a stretch no two windows pause for alike, then ask
-   * the store who actually got there. Only that window goes on to spend a request. Nothing here is
-   * a lock and nothing can be, but this is what turns a simultaneous arrival into a single read.
+   * before it is trusted: write it, pause for a jittered stretch, then ask the store who got there.
+   * Only that window spends a request. This is not a lock and cannot be one, but it turns a
+   * simultaneous arrival into a single read.
    */
   async wins(provider: ProviderId): Promise<boolean> {
     await this.take(provider);
@@ -105,10 +101,10 @@ export class ReadCoordinator {
   }
 
   /**
-   * A result is ours to write only while the claim is still ours. A read can outlive its claim —
-   * someone forces a refresh over the top of it — and would otherwise put its own older reading
-   * where a newer one already sits. The window id is token enough: one window never has two
-   * different reads of a provider in flight, because they share the single request.
+   * A result is ours to write only while the claim is still ours. A read can outlive its claim — a
+   * forced refresh lands over the top of it — and would otherwise put an older reading where a
+   * newer one sits. The window id suffices as a token: one window never has two different reads of
+   * a provider in flight, because they share the single request (`UsageBar.fetchOnce`).
    */
   private holdsClaim(provider: ProviderId): boolean {
     return this.shared.read(provider)?.owner === this.windowId;
@@ -122,8 +118,8 @@ export class ReadCoordinator {
 
   /**
    * For a read that fell over rather than answered. The interval was never spent, so the other
-   * windows have no reason to wait it out on our account — but a lease that has since passed to
-   * another window is not ours to hand back, and doing so would set all of them reading at once.
+   * windows should not wait it out — but a lease that has since passed to another window is not
+   * ours to hand back, and returning it would set all of them reading at once.
    */
   async abandon(provider: ProviderId): Promise<void> {
     if (this.holdsClaim(provider)) {
