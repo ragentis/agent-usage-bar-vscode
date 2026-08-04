@@ -118,7 +118,6 @@ test("rejects a response that carries no recognized window", () => {
 test("reads Retry-After in both of its documented forms", () => {
   const now = new Date("2026-08-03T12:00:00Z");
   expect(parseRetryAfter("90", now)?.toISOString()).toBe("2026-08-03T12:01:30.000Z");
-  expect(parseRetryAfter("0", now)?.toISOString()).toBe("2026-08-03T12:00:00.000Z");
   expect(parseRetryAfter("Mon, 03 Aug 2026 12:05:00 GMT", now)?.toISOString()).toBe(
     "2026-08-03T12:05:00.000Z",
   );
@@ -127,6 +126,21 @@ test("reads Retry-After in both of its documented forms", () => {
   expect(parseRetryAfter("", now)).toBeNull();
   expect(parseRetryAfter("soon", now)).toBeNull();
   expect(parseRetryAfter("-30", now)).toBeNull();
+});
+
+/**
+ * What this service actually answers a refusal with, observed against the live endpoint. Read
+ * literally it is a wait of nothing: the hold it would set has expired before it is stored, so no
+ * window ever waits and the next read earns the same refusal. Unknown is the truthful reading, and
+ * it is the reading the caller has a wait of its own for.
+ */
+test("a wait that is already over is no statement of a wait at all", () => {
+  const now = new Date("2026-08-03T12:00:00Z");
+
+  expect(parseRetryAfter("0", now)).toBeNull();
+  expect(parseRetryAfter("Mon, 03 Aug 2026 11:59:59 GMT", now)).toBeNull();
+  // A second either side of the line, so the boundary is the one being tested.
+  expect(parseRetryAfter("1", now)?.toISOString()).toBe("2026-08-03T12:00:01.000Z");
 });
 
 test("a wait longer than the cap is shortened to it rather than taken at its word", () => {
