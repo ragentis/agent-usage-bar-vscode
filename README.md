@@ -23,9 +23,10 @@ the percentage **used** whichever way you display it. It also turns red, with a 
 provider reports the account as stopped — a spend limit or a hard rate limit — however low the
 percentage happens to be.
 
-Hover for a tooltip with a meter per window, the plan name, exact reset times, any credit balance,
-and the reason the last refresh failed if one did. Click either item for a menu that toggles a
-provider, refreshes, or opens the settings.
+Hover for a tooltip with a themed bar per window — filled to the percentage and colored by the same
+thresholds as the item — the plan name, exact reset times, any credit balance, the reason the last
+refresh failed if one did, and links to refresh or to open the settings. Click either item for a
+menu that toggles a provider, refreshes, or opens the settings.
 
 ## One reading for every window
 
@@ -95,7 +96,7 @@ where the reason lives.
 | No Claude Code sign-in was found                   | Run Claude Code once so it stores a sign-in. On macOS, allow the keychain prompt. |
 | The Claude Code sign-in has expired                | Run Claude Code; it renews its own token. This extension deliberately will not.   |
 | Claude Code is no longer signed in                 | The service rejected the stored token. Sign in to Claude Code again.              |
-| The Claude usage service is rate limiting requests | Nothing to do. The tooltip counts the wait down and the read resumes by itself.   |
+| The Claude usage service is rate limiting requests | Nothing to do. The tooltip names the moment the read resumes, and it resumes.     |
 | The Claude usage service could not be reached      | Network or proxy. The last reading stays on screen with its age.                  |
 | Codex reported no rate-limit windows               | Sign in to Codex, or the account has no windows to report.                        |
 | The Codex CLI could not be started                 | Codex is not installed where this looks; see [Platform scope](#platform-scope).   |

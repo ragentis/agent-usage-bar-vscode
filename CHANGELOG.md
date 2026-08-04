@@ -18,6 +18,7 @@ with the per-platform paths covered by tests on all three CI runners.
 - A refresh when a local agent writes, floored at one read per thirty seconds, plus a configurable background interval.
 - One reading shared by every open window, so the cost of six windows is the cost of one and all of them show the same number.
 - A history icon and a tooltip note once a reading is more than ten minutes old.
+- A tooltip drawn with theme colors: a filled bar per window, dimmed detail lines, and refresh and settings links.
 - A `~` marker when a window has reset since the last reading, so a refilled quota never reads as full.
 - An error color and a reason whenever a provider reports the account as stopped, however low the percentage is.
 
