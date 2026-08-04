@@ -1,15 +1,8 @@
 import * as vscode from "vscode";
 import type { ExtensionConfiguration } from "./configuration";
-import {
-  buildStatusText,
-  formatAge,
-  formatPercent,
-  formatRemaining,
-  pickSeverity,
-  resolveWindows,
-  type Severity,
-} from "./formatting";
-import type { ProviderId, ProviderView, SnapshotSource, UsageSnapshot, WindowKind } from "./usage";
+import { buildStatusText, formatAge, pickSeverity, type Severity } from "./formatting";
+import { buildTooltipLines } from "./tooltip";
+import type { ProviderId, ProviderView } from "./usage";
 
 /**
  * Status bar order is priority descending, and there is no API to keep two items together.
@@ -27,13 +20,6 @@ function prefix(provider: ProviderId, configuration: ExtensionConfiguration): st
   const label = provider === "claude" ? configuration.claudeLabel : configuration.codexLabel;
   return label || `$(${PROVIDERS[provider].icon})`;
 }
-
-const WINDOW_TITLES: Record<WindowKind, string> = { session: "5-hour", weekly: "Weekly" };
-
-const SOURCE_TITLES: Record<SnapshotSource, string> = {
-  "claude-account-api": "Claude account",
-  "codex-app-server": "Codex account",
-};
 
 /** Past this the reading is old enough that the user should be told rather than trusted. */
 const STALE_AFTER_MS = 10 * 60_000;
@@ -83,7 +69,9 @@ export function renderStatusBarItem(
     // A literal codicon, never the provider's own text, so a log value cannot alter the item.
     const blocked = snapshot.blocked ? "$(error) " : "";
     item.text = `${mark} ${blocked}${buildStatusText(snapshot, configuration, now)}${age ? " $(history)" : ""}`;
-    item.tooltip = buildTooltip(title, snapshot, configuration, view.message, age, now);
+    item.tooltip = markdown(
+      buildTooltipLines(title, snapshot, configuration, view.message, age, now),
+    );
     item.backgroundColor = BACKGROUNDS[pickSeverity(snapshot, configuration, now)];
   } else {
     item.text = `${mark} --`;
@@ -93,70 +81,16 @@ export function renderStatusBarItem(
   item.show();
 }
 
-function escapeMarkdown(value: string): string {
-  return value.replace(/[\\`*_{}[\]()<>#+.!|~-]/g, "\\$&");
-}
-
-function meter(usedPercent: number): string {
-  const filled = Math.min(10, Math.max(0, Math.round(usedPercent / 10)));
-  return `${"▰".repeat(filled)}${"▱".repeat(10 - filled)}`;
-}
-
-function formatDate(date: Date): string {
-  return date.toLocaleString(undefined, {
-    month: "numeric",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function buildTooltip(
-  title: string,
-  snapshot: UsageSnapshot,
-  configuration: ExtensionConfiguration,
-  failure: string | null,
-  age: string | null,
-  now = new Date(),
-): vscode.MarkdownString {
-  const { percentageMode } = configuration;
-  const plan = snapshot.plan ? ` · Plan: ${escapeMarkdown(snapshot.plan)}` : "";
-  const modeLabel = percentageMode === "remaining" ? " remaining" : " used";
-  const windows = resolveWindows(snapshot, now);
-  const lines = [`**${escapeMarkdown(title)}**${plan}`];
-  if (snapshot.blocked) {
-    lines.push(`**${escapeMarkdown(snapshot.blocked)}**`);
-  }
-  for (const window of windows) {
-    const reset = window.reset
-      ? " · reset since this reading"
-      : window.resetsAt
-        ? ` · resets ${formatRemaining(window.resetsAt, now) ?? "soon"} (${escapeMarkdown(formatDate(window.resetsAt))})`
-        : "";
-    lines.push(
-      `${WINDOW_TITLES[window.kind]}: ${meter(window.usedPercent)} **${formatPercent(window.usedPercent, percentageMode)}**${modeLabel}${reset}`,
-    );
-  }
-  if (snapshot.credits) {
-    lines.push(`Credits: ${escapeMarkdown(snapshot.credits)}`);
-  }
-  lines.push(
-    `From ${SOURCE_TITLES[snapshot.source]} · as of ${escapeMarkdown(formatDate(snapshot.fetchedAt))}${age ? ` (${age})` : ""}`,
-  );
-  if (failure) {
-    lines.push(`$(warning) Last refresh failed: ${escapeMarkdown(failure)}`);
-  }
-  if (windows.some((window) => window.reset)) {
-    lines.push(
-      "\\~ marks a window assumed empty after its reset; run the agent for a confirmed reading.",
-    );
-  }
-
+/**
+ * The flags decide how the lines are read, so they belong beside the wrapping rather than beside
+ * the writing. Codicons in a tooltip render only when the string opts in; without the last one
+ * `$(warning)` is text. Every value the lines interpolate is escaped by `buildTooltipLines`,
+ * parentheses included, so nothing a provider says can arrive here as a codicon or as markup.
+ */
+function markdown(lines: string[]): vscode.MarkdownString {
   const tooltip = new vscode.MarkdownString(lines.join("\n\n"));
   tooltip.isTrusted = false;
   tooltip.supportHtml = false;
-  // Codicons in a tooltip render only when the string opts in; without this `$(warning)` is text.
-  // Every value interpolated above goes through `escapeMarkdown`, so no reading can inject one.
   tooltip.supportThemeIcons = true;
   return tooltip;
 }
