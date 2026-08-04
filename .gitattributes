@@ -1,0 +1,7 @@
+# `oxfmt` is configured for LF, and `format:check` runs on the Windows runner too. Without this a
+# checkout there converts on the way in and the whole tree reads as misformatted.
+* text=auto eol=lf
+
+*.png binary
+*.woff binary
+*.vsix binary
