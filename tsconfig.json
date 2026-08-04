@@ -17,5 +17,9 @@
   },
   // Tests are checked by the same config as the source: nothing here emits, so there is no build
   // output to keep them out of, and one file means the editor sees exactly what `typecheck` sees.
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  // The vitest config is named rather than matched, because `**/*.ts` does not cover `.mts`. It is
+  // in here for `defineConfig`, whose only job is to refuse an option that does not exist: a
+  // misspelled key is otherwise accepted in silence, and the default it leaves in place is the one
+  // the option was added to escape.
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.mts"]
 }
