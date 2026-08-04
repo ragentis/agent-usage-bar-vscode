@@ -152,7 +152,7 @@
           "minimum": 30,
           "maximum": 3600,
           "order": 9,
-          "description": "How often to re-read usage in the background. Local agent activity also triggers an immediate refresh, so this only covers usage spent on other machines or in other clients."
+          "description": "How often to re-read usage in the background, so this mainly covers usage spent on other machines or in other clients. Local agent activity also triggers a refresh, and no automatic read happens less than thirty seconds after the last one."
         }
       }
     }
