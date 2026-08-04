@@ -30,7 +30,9 @@ if (unexpected.length > 0) {
 
 // Codex is spawned directly so no argument can ever be read as a command, and its stored token is
 // none of our business. Nothing is written anywhere: both providers are read-only by design, which
-// is a stronger and simpler thing to assert than guarding the credential paths one at a time.
+// is a stronger and simpler thing to assert than guarding the credential paths one at a time. The
+// macOS sign-in lives in the login keychain, and `find-generic-password` is the only verb that may
+// reach it — every verb that would change what is stored there fails the build.
 for (const pattern of [
   /\bexecSync\s*\(/,
   /\bexecFileSync\s*\(/,
@@ -39,10 +41,32 @@ for (const pattern of [
   /\bwriteFile\b/,
   /\bappendFile\b/,
   /\bcreateWriteStream\b/,
+  /\badd-generic-password\b/,
+  /\bdelete-generic-password\b/,
+  /\bset-generic-password\b/,
+  /\bunlock-keychain\b/,
 ]) {
   if (pattern.test(bundle)) {
     fail(`Forbidden pattern in the bundle: ${pattern}`);
   }
+}
+
+// Two programs are started, both of them the user's own tooling, and only one of them by absolute
+// path. Pinning every rooted path the bundle carries is what keeps that list from growing quietly.
+const ALLOWED_ROOTED_PATHS = new Set([
+  "/usr/bin/security",
+  "/usr/local/bin/codex",
+  "/opt/homebrew/bin/codex",
+]);
+const rooted = [
+  ...new Set(
+    bundle.match(/(?<=["'`])\/(?:usr|opt|bin|sbin|etc|var|private|Library|System)\/[^"'`\s]*/g) ??
+      [],
+  ),
+];
+const unpinned = rooted.filter((entry) => !ALLOWED_ROOTED_PATHS.has(entry));
+if (unpinned.length > 0) {
+  fail(`Absolute paths outside the allowlist: ${unpinned.join(", ")}`);
 }
 
 console.log(`Bundle audit passed: ${inputs.length} inputs, no runtime dependencies.`);
