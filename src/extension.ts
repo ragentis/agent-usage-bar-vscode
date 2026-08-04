@@ -7,7 +7,12 @@ import { openSettings, showMenu } from "./menu";
 import { ReadCoordinator } from "./read-coordinator";
 import { affectsSettings, readConfiguration } from "./settings";
 import { SharedUsageState } from "./shared-state";
-import { createStatusBarItem, renderStatusBarItem, showLoading } from "./status-bar";
+import {
+  createStatusBarItem,
+  hideStatusBarItem,
+  renderStatusBarItem,
+  showLoading,
+} from "./status-bar";
 import { UsageBar, type ProviderDisplay, type ProviderPort } from "./usage-bar";
 import type { ProviderId } from "./usage";
 import { FileWatcher } from "./watcher";
@@ -18,7 +23,7 @@ function display(provider: ProviderId): ProviderDisplay {
   return {
     render: (view, configuration) => renderStatusBarItem(item, provider, view, configuration),
     loading: (configuration) => showLoading(item, provider, configuration),
-    hide: () => item.hide(),
+    hide: () => hideStatusBarItem(item),
     dispose: () => item.dispose(),
   };
 }

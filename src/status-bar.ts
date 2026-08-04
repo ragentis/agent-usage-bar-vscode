@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import type { ExtensionConfiguration } from "./configuration";
 import { buildStatusText, formatAge, pickSeverity, type Severity } from "./formatting";
-import { buildTooltipLines } from "./tooltip";
+import { buildMessageTooltip, buildTooltip } from "./tooltip";
 import type { ProviderId, ProviderView } from "./usage";
 
 /**
@@ -47,11 +47,12 @@ export function showLoading(
   provider: ProviderId,
   configuration: ExtensionConfiguration,
 ): void {
-  const { title } = PROVIDERS[provider];
-  item.text = `${prefix(provider, configuration)} $(loading~spin)`;
-  item.tooltip = `${title}: loading`;
-  item.backgroundColor = undefined;
-  item.show();
+  const { title, icon } = PROVIDERS[provider];
+  draw(item, {
+    text: `${prefix(provider, configuration)} $(loading~spin)`,
+    tooltip: buildMessageTooltip(title, icon, "Reading usage…"),
+    background: undefined,
+  });
 }
 
 export function renderStatusBarItem(
@@ -61,36 +62,81 @@ export function renderStatusBarItem(
   configuration: ExtensionConfiguration,
   now = new Date(),
 ): void {
-  const { title } = PROVIDERS[provider];
+  const { title, icon } = PROVIDERS[provider];
   const mark = prefix(provider, configuration);
   const { snapshot } = view;
-  if (snapshot) {
-    const age = formatAge(snapshot.fetchedAt, STALE_AFTER_MS, now);
-    // A literal codicon, never the provider's own text, so a log value cannot alter the item.
-    const blocked = snapshot.blocked ? "$(error) " : "";
-    item.text = `${mark} ${blocked}${buildStatusText(snapshot, configuration, now)}${age ? " $(history)" : ""}`;
-    item.tooltip = markdown(
-      buildTooltipLines(title, snapshot, configuration, view.message, age, now),
-    );
-    item.backgroundColor = BACKGROUNDS[pickSeverity(snapshot, configuration, now)];
-  } else {
-    item.text = `${mark} --`;
-    item.tooltip = `${title}: ${view.message ?? "no reading yet"}`;
-    item.backgroundColor = undefined;
+  if (!snapshot) {
+    draw(item, {
+      text: `${mark} --`,
+      tooltip: buildMessageTooltip(title, icon, view.message ?? "No reading yet."),
+      background: undefined,
+    });
+    return;
   }
+  const age = formatAge(snapshot.fetchedAt, STALE_AFTER_MS, now);
+  // A literal codicon, never the provider's own text, so a log value cannot alter the item.
+  const blocked = snapshot.blocked ? "$(error) " : "";
+  draw(item, {
+    text: `${mark} ${blocked}${buildStatusText(snapshot, configuration, now)}${age ? " $(history)" : ""}`,
+    tooltip: buildTooltip(title, icon, snapshot, configuration, view.message, age, now),
+    background: BACKGROUNDS[pickSeverity(snapshot, configuration, now)],
+  });
+}
+
+/** Everything about one item that a redraw could change, as the strings it was last given. */
+interface Drawn {
+  text: string;
+  tooltip: string;
+  background: vscode.ThemeColor | undefined;
+}
+
+const drawn = new WeakMap<vscode.StatusBarItem, Drawn>();
+
+/**
+ * Writing any property of a status bar item publishes the whole item, and the workbench answers a
+ * published item by rebuilding its hover — which takes the tooltip out from under whoever is
+ * reading it and does not put it back, because the pointer never left the item to ask again. The
+ * countdowns are redrawn every few seconds and almost always come out identical, so what is drawn
+ * last is remembered and an identical drawing is not a drawing at all.
+ */
+function draw(item: vscode.StatusBarItem, next: Drawn): void {
+  const previous = drawn.get(item);
+  if (
+    previous &&
+    previous.text === next.text &&
+    previous.tooltip === next.tooltip &&
+    previous.background === next.background
+  ) {
+    return;
+  }
+  drawn.set(item, next);
+  item.text = next.text;
+  item.tooltip = markdown(next.tooltip);
+  item.backgroundColor = next.background;
   item.show();
 }
 
+/** Hiding disposes the item's entry, so the next drawing has to be a real one whatever it says. */
+export function hideStatusBarItem(item: vscode.StatusBarItem): void {
+  drawn.delete(item);
+  item.hide();
+}
+
 /**
- * Codicons in a tooltip render only when the string opts in; without `supportThemeIcons` the
- * `$(warning)` line is plain text. Every value the lines interpolate is escaped by
- * `buildTooltipLines`, parentheses included, so nothing a provider says can arrive here as a
- * codicon or as markup.
+ * The three things the renderer will not do unasked: draw `$(icon)` as a codicon, keep the html the
+ * bars and the dimmed text are made of, and follow a `command:` link.
+ *
+ * The first two are escaped against in `tooltip.ts`, which leaves every provider value as text
+ * content — brackets, parentheses and angle brackets included, so no value can become a link of any
+ * kind. That escaping is what the third rests on, because the narrower `{ enabledCommands }` form of
+ * trust cannot be used here: it is a fresh object on every drawing, the workbench compares tooltips
+ * by identity for that field, and an item whose tooltip never compares equal is an item whose hover
+ * is torn down every time the minute on its countdown changes.
  */
-function markdown(lines: string[]): vscode.MarkdownString {
-  const tooltip = new vscode.MarkdownString(lines.join("\n\n"));
-  tooltip.isTrusted = false;
-  tooltip.supportHtml = false;
+function markdown(value: string): vscode.MarkdownString {
+  const tooltip = new vscode.MarkdownString(value);
+  tooltip.isTrusted = true;
+  tooltip.supportHtml = true;
   tooltip.supportThemeIcons = true;
   return tooltip;
 }

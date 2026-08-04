@@ -43,12 +43,14 @@ export function formatRemaining(resetsAt: Date | null, now = new Date()): string
 }
 
 /**
- * A retry window is short in a way a quota window never is, so "reset due" would be wrong here and
- * seconds are worth printing. Rounds up, so it never prints `0s` while still waiting.
+ * The moment a wait ends, stated rather than counted down. A countdown would be the more natural
+ * thing to write and is the reason this is not one: it would move under a reader — the tooltip is
+ * redrawn every few seconds, and the workbench answers a tooltip that has changed by rebuilding
+ * the hover it is showing, which closes it. No wait outlives an hour here, so the time of day says
+ * it all without a date beside it.
  */
-export function formatWait(until: Date, now = new Date()): string {
-  const seconds = Math.max(0, Math.ceil((until.getTime() - now.getTime()) / 1_000));
-  return seconds < 60 ? `${seconds}s` : (formatRemaining(until, now) ?? `${seconds}s`);
+export function formatMoment(moment: Date): string {
+  return moment.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
 }
 
 /** Null while the reading is still current, so the tooltip only mentions age once it matters. */
@@ -100,6 +102,18 @@ export function buildStatusText(
   return prefix + formatWindow(alarming ?? primary, configuration.percentageMode, now);
 }
 
+/**
+ * One percentage against the two thresholds. The item colors itself from the worst window it has,
+ * while the tooltip colors each window's bar from that window alone, and both mean the same thing
+ * by a color only because they ask this.
+ */
+export function severityFor(usedPercent: number, configuration: ExtensionConfiguration): Severity {
+  if (usedPercent >= configuration.errorThreshold) {
+    return "error";
+  }
+  return usedPercent >= configuration.warningThreshold ? "warning" : "normal";
+}
+
 export function pickSeverity(
   snapshot: UsageSnapshot,
   configuration: ExtensionConfiguration,
@@ -109,9 +123,8 @@ export function pickSeverity(
   if (snapshot.blocked) {
     return "error";
   }
-  const maximum = Math.max(0, ...resolveWindows(snapshot, now).map((window) => window.usedPercent));
-  if (maximum >= configuration.errorThreshold) {
-    return "error";
-  }
-  return maximum >= configuration.warningThreshold ? "warning" : "normal";
+  return severityFor(
+    Math.max(0, ...resolveWindows(snapshot, now).map((window) => window.usedPercent)),
+    configuration,
+  );
 }

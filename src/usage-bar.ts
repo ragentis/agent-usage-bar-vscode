@@ -1,5 +1,5 @@
 import { configurationEffect, type ExtensionConfiguration } from "./configuration";
-import { formatWait } from "./formatting";
+import { formatMoment } from "./formatting";
 import type { ReadCoordinator } from "./read-coordinator";
 import type { SharedEntry } from "./shared-state";
 import {
@@ -325,8 +325,12 @@ export class UsageBar {
 
   /**
    * The stored view keeps what the last read said. The rate-limit wait is layered on here rather
-   * than written into the message, so every redraw states the time left now: a countdown baked into
-   * a message would stay on screen long after the wait it describes had run out.
+   * than written into the message, so a redraw after the wait has run out states nothing about it:
+   * a wait baked into the message would stay on screen long after it had passed.
+   *
+   * What is stated is the moment rather than the time left. The time left would be a different
+   * sentence every few seconds, and a tooltip that changes is a hover the workbench rebuilds from
+   * under whoever is reading it.
    */
   private paint(provider: Provider): void {
     const view = provider.state.view ?? { snapshot: null, message: null };
@@ -336,7 +340,7 @@ export class UsageBar {
       held
         ? {
             ...view,
-            message: `The usage service is rate limiting requests; retry in ${formatWait(hold.until)}`,
+            message: `The usage service is rate limiting requests; retrying at ${formatMoment(hold.until)}`,
           }
         : view,
       this.configuration,

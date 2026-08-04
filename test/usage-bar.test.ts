@@ -192,7 +192,10 @@ test("a stated wait is honoured even by the refresh a user asked for", async () 
 
   expect(window.counts.read).toBe(1);
   expect(window.painted.map((view) => view.message)).toContain(LOADING);
-  expect(window.last()?.message).toMatch(/rate limiting/);
+  // The provider said "rate limited"; what the item ends on says more than that, and only the wait
+  // laid over the reading at draw time says it. It names the moment rather than counting down to
+  // it, because a message that changed every tick would be a tooltip closing under a reader.
+  expect(window.last()?.message).toMatch(/rate limiting requests; retrying at \S/);
 });
 
 test("a wait longer than any this version sits out neither spins nor stalls", async () => {

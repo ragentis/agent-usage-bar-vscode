@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import type { ExtensionConfiguration } from "../src/configuration";
 import type { UsageSnapshot } from "../src/usage";
-import { buildStatusText, formatRemaining, formatWait, pickSeverity } from "../src/formatting";
+import { buildStatusText, formatMoment, formatRemaining, pickSeverity } from "../src/formatting";
 
 const now = new Date("2026-08-01T10:00:00Z");
 const snapshot: UsageSnapshot = {
@@ -53,12 +53,21 @@ test("formats reset countdown boundaries", () => {
   expect(formatRemaining(null, now)).toBeNull();
 });
 
-test("counts a retry wait in seconds and never as a due reset", () => {
-  expect(formatWait(new Date("2026-08-01T10:00:45Z"), now)).toBe("45s");
-  expect(formatWait(new Date("2026-08-01T10:01:30Z"), now)).toBe("1m");
-  expect(formatWait(new Date("2026-08-01T11:00:00Z"), now)).toBe("1h 0m");
-  // A window that has already passed reads as no wait at all, not as "reset due".
-  expect(formatWait(new Date("2026-08-01T09:59:50Z"), now)).toBe("0s");
+/**
+ * A retry is stated as the moment it happens, not as the time until it does. The seconds of a
+ * countdown would be a new tooltip every tick, and a tooltip that changes is a hover the workbench
+ * closes and does not reopen — the same rule the window resets are drawn under.
+ */
+test("a retry states the moment it comes due, to the minute", () => {
+  const moment = new Date("2026-08-01T10:00:45Z");
+
+  expect(formatMoment(moment)).toBe(
+    moment.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
+  );
+  // Nothing of the second survives, so every drawing between two minutes says the same thing.
+  expect(formatMoment(new Date("2026-08-01T10:00:01Z"))).toBe(
+    formatMoment(new Date("2026-08-01T10:00:59Z")),
+  );
 });
 
 test("severity always uses the original used percentage", () => {
