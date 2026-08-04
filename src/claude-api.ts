@@ -23,9 +23,14 @@ const RATE_LIMIT_FALLBACK_MS = 60_000;
 
 /**
  * `Retry-After` is either a delta in seconds or an HTTP date, and the endpoint is undocumented, so
- * both forms are accepted. Null says the service rate limits without stating for how long. The
- * result is capped before it is passed on, because it is republished to the other windows and
- * becomes a timer in each.
+ * both forms are accepted. Null says the service rate limits without stating for how long, which
+ * leaves the caller to assume a wait. The result is capped before it is passed on, because it is
+ * republished to the other windows and becomes a timer in each.
+ *
+ * A moment that is not in the future is read as no statement at all. This service answers a refusal
+ * with `Retry-After: 0`, and a wait of nothing is not a wait: taken at its word it would set a hold
+ * that has already expired, which is a refusal nobody waits out and a second refusal on the next
+ * read. The same holds for a date already past.
  */
 export function parseRetryAfter(header: string | null, now: Date): Date | null {
   if (!header) {
@@ -33,11 +38,13 @@ export function parseRetryAfter(header: string | null, now: Date): Date | null {
   }
   const trimmed = header.trim();
   const seconds = Number(trimmed);
-  if (trimmed !== "" && Number.isFinite(seconds) && seconds >= 0) {
-    return cappedRetryAt(new Date(now.getTime() + seconds * 1000), now);
-  }
-  const absolute = new Date(trimmed);
-  return Number.isNaN(absolute.getTime()) ? null : cappedRetryAt(absolute, now);
+  const stated =
+    trimmed !== "" && Number.isFinite(seconds)
+      ? new Date(now.getTime() + seconds * 1000)
+      : new Date(trimmed);
+  return Number.isNaN(stated.getTime()) || stated.getTime() <= now.getTime()
+    ? null
+    : cappedRetryAt(stated, now);
 }
 
 function windowKind(entry: Record<string, unknown>): WindowKind | null {
