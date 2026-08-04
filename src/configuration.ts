@@ -28,6 +28,59 @@ export const MIN_REFRESH_INTERVAL_SECONDS = 30;
 export const MAX_REFRESH_INTERVAL_SECONDS = 3_600;
 export const DEFAULT_REFRESH_INTERVAL_SECONDS = 300;
 
+export const DEFAULT_WARNING_THRESHOLD = 80;
+export const DEFAULT_ERROR_THRESHOLD = 95;
+
+/** Long enough for a word or two, short enough that the item cannot be pushed off the bar. */
+const MAX_LABEL_LENGTH = 24;
+
+/** Keeps a hand-edited setting from stretching the status bar or smuggling in newlines. */
+function label(value: unknown): string {
+  return typeof value === "string"
+    ? value.replace(/\s+/g, " ").trim().slice(0, MAX_LABEL_LENGTH)
+    : "";
+}
+
+function bounded(value: number, fallback: number, minimum: number, maximum: number): number {
+  return Number.isFinite(value) ? Math.min(maximum, Math.max(minimum, value)) : fallback;
+}
+
+/**
+ * One setting read, as `vscode.WorkspaceConfiguration.get` performs it. Taking the reader as an
+ * argument is what keeps the rules below on this side of the line the module comment draws: the
+ * settings a user can hand-edit are bounded here, and bounding them is testable without a host.
+ */
+export type SettingReader = <T>(key: string, fallback: T) => T;
+
+export function resolveConfiguration(read: SettingReader): ExtensionConfiguration {
+  const warningThreshold = bounded(
+    read("warningThreshold", DEFAULT_WARNING_THRESHOLD),
+    DEFAULT_WARNING_THRESHOLD,
+    0,
+    100,
+  );
+  return {
+    displayMode: read<DisplayMode>("displayMode", "compact"),
+    percentageMode: read<PercentageMode>("percentageMode", "used"),
+    warningThreshold,
+    // The error background must never appear before the warning background.
+    errorThreshold: Math.max(
+      warningThreshold,
+      bounded(read("errorThreshold", DEFAULT_ERROR_THRESHOLD), DEFAULT_ERROR_THRESHOLD, 0, 100),
+    ),
+    codexEnabled: read("codex.enabled", true),
+    claudeEnabled: read("claude.enabled", true),
+    codexLabel: label(read("codex.label", "")),
+    claudeLabel: label(read("claude.label", "")),
+    refreshIntervalSeconds: bounded(
+      read("refreshIntervalSeconds", DEFAULT_REFRESH_INTERVAL_SECONDS),
+      DEFAULT_REFRESH_INTERVAL_SECONDS,
+      MIN_REFRESH_INTERVAL_SECONDS,
+      MAX_REFRESH_INTERVAL_SECONDS,
+    ),
+  };
+}
+
 const PRESENTATION_KEYS = [
   "displayMode",
   "percentageMode",
