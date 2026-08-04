@@ -1,12 +1,14 @@
-import * as fs from "node:fs/promises";
-import * as path from "node:path";
-import { claudeDirectory } from "./claude";
+import {
+  hasExpired,
+  noSignInMessage,
+  readClaudeCredentials,
+  type CredentialSource,
+} from "./claude-credentials";
 import {
   cappedRetryAt,
   isRecord,
   sortWindows,
   validDate,
-  validLabel,
   validUsedPercent,
   type ProviderResult,
   type UsageSnapshot,
@@ -14,62 +16,10 @@ import {
   type WindowKind,
 } from "./usage";
 
-const CREDENTIALS_FILE = ".credentials.json";
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const OAUTH_BETA = "oauth-2025-04-20";
 const REQUEST_TIMEOUT_MS = 5_000;
 const RATE_LIMIT_FALLBACK_MS = 60_000;
-const MAX_CREDENTIALS_BYTES = 64 * 1024;
-
-interface ClaudeCredentials {
-  accessToken: string;
-  expiresAt: number | null;
-  plan: string | null;
-}
-
-/**
- * Reads the token Claude Code already holds. Refreshing it is deliberately not implemented:
- * a refresh rotates the stored token, so racing Claude Code for it would sign the user out
- * of their own CLI. An expired token is reported as unavailable and left for Claude Code.
- */
-export async function readClaudeCredentials(
-  directory = claudeDirectory(),
-): Promise<ClaudeCredentials | null> {
-  const credentialsPath = path.join(directory, CREDENTIALS_FILE);
-  let raw: string;
-  try {
-    // `lstat`, so a symlink is described rather than followed: only a real file here is read.
-    const file = await fs.lstat(credentialsPath);
-    if (!file.isFile() || file.size > MAX_CREDENTIALS_BYTES) {
-      return null;
-    }
-    raw = await fs.readFile(credentialsPath, "utf8");
-  } catch {
-    return null;
-  }
-
-  let payload: unknown;
-  try {
-    payload = JSON.parse(raw) as unknown;
-  } catch {
-    return null;
-  }
-  if (!isRecord(payload) || !isRecord(payload.claudeAiOauth)) {
-    return null;
-  }
-  const oauth = payload.claudeAiOauth;
-  if (typeof oauth.accessToken !== "string" || !oauth.accessToken) {
-    return null;
-  }
-  return {
-    accessToken: oauth.accessToken,
-    expiresAt:
-      typeof oauth.expiresAt === "number" && Number.isFinite(oauth.expiresAt)
-        ? oauth.expiresAt
-        : null,
-    plan: validLabel(oauth.subscriptionType),
-  };
-}
 
 /**
  * `Retry-After` comes as either a delta in seconds or an HTTP date, and the endpoint is not
@@ -175,15 +125,17 @@ export function parseClaudeUsageResponse(
   };
 }
 
-export async function fetchClaudeUsage(directory = claudeDirectory()): Promise<ProviderResult> {
-  const credentials = await readClaudeCredentials(directory);
+export async function fetchClaudeUsage(
+  sources?: readonly CredentialSource[],
+): Promise<ProviderResult> {
+  const credentials = await readClaudeCredentials(sources);
   if (!credentials) {
     return {
       status: "unavailable",
-      message: "No Claude Code sign-in was found; run Claude Code once",
+      message: noSignInMessage(),
     };
   }
-  if (credentials.expiresAt !== null && credentials.expiresAt <= Date.now()) {
+  if (hasExpired(credentials)) {
     return {
       status: "unavailable",
       message: "The Claude Code sign-in has expired; run Claude Code to renew it",
