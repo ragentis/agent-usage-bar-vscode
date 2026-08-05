@@ -1,12 +1,10 @@
 # Changelog
 
-Notable changes to Agent Usage Bar. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
-and the versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
+Notable changes to Agent Usage Bar. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.1.0 — 2026-08-05
+## 0.1.0 — 2026-08-06
 
-First release. Desktop VS Code on Windows, macOS, and Linux; developed and hand-tested on Windows,
-with the per-platform paths covered by tests on all three CI runners.
+First release. Desktop VS Code on Windows, macOS, and Linux; developed and hand-tested on Windows, with the per-platform paths covered by tests on all three CI runners.
 
 ### Added
 
@@ -25,14 +23,7 @@ with the per-platform paths covered by tests on all three CI runners.
 
 ### Data access
 
-- Claude Code usage is read from `https://api.anthropic.com/api/oauth/usage` with the token Claude Code
-  already stores — `~/.claude/.credentials.json` on Windows and Linux, the login keychain on macOS, read
-  through `/usr/bin/security find-generic-password`. The token is never logged, cached, written back, or
-  refreshed, and no keychain verb that would change what is stored appears in the shipped bundle.
-- Codex usage comes from the local Codex CLI over its own JSON-RPC interface. Codex keeps custody of its
-  credentials; this extension never reads them.
-- No prompt, source code, or file content is transmitted anywhere. Agent transcripts are watched for
-  the fact that they changed and never opened, and the extension writes no files of its own.
-- The last usage reading is kept in the extension's own VS Code state so the other windows can show it
-  instead of asking again. It holds percentages, reset times, window lengths, and the plan name; no
-  token, no transcript.
+- Claude Code usage is read from `https://api.anthropic.com/api/oauth/usage` with the token Claude Code already stores — `~/.claude/.credentials.json` on Windows and Linux, the login keychain on macOS, read through `/usr/bin/security find-generic-password`. The token is never logged, cached, written back, or refreshed, and no keychain verb that would change what is stored appears in the shipped bundle.
+- Codex usage comes from the local Codex CLI over its own JSON-RPC interface. Codex keeps custody of its credentials; this extension never reads them.
+- No prompt, source code, or file content is transmitted anywhere. Agent transcripts are watched for the fact that they changed and never opened, and the extension writes no files of its own.
+- The last usage reading is kept in the extension's own VS Code state so the other windows can show it instead of asking again. It holds percentages, reset times, window lengths, and the plan name; no token, no transcript.
