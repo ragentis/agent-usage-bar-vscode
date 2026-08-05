@@ -1,0 +1,86 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      ref:
+        description: Git ref to check; defaults to the triggering ref
+        required: false
+        type: string
+        default: ""
+
+# Nothing here needs write access; the jobs only build and check.
+permissions:
+  contents: read
+
+# A literal prefix rather than `github.workflow`: release.yml calls this workflow into its own run,
+# where `github.workflow` reads as the caller's name. Sharing a group with cancelling off would leave
+# the caller queued behind the job it is waiting for.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    # Typecheck, lint and format read the same files whatever the runner is, so once is enough.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      # Install scripts stay off: every tool here ships prebuilt platform binaries.
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+
+  test:
+    # Run on every supported desktop OS so filesystem, process and watcher behavior is exercised
+    # natively rather than inferred from one platform.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test
+
+  package:
+    # Packaging is a check too: it runs the bundle audit and fails on a manifest that would not
+    # install, neither of which any other job would notice. Linux produces one platform-neutral VSIX
+    # while preserving POSIX file modes if executable content is added later. release.yml publishes
+    # this exact artifact to every selected registry, so no unverified rebuild can be substituted
+    # after the bundle audit passes.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run package:local
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: "*.vsix"
+          if-no-files-found: error
+          retention-days: 14
