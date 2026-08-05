@@ -7,7 +7,7 @@ another machine, in a terminal, or in another editor still shows up here.
 
 ## What it shows
 
-One status bar item per provider, each with its own mark:
+One status bar item per provider, each with its own monochrome glyph:
 
 | Example                            | Meaning                                                         |
 | ---------------------------------- | --------------------------------------------------------------- |
@@ -251,18 +251,17 @@ browser.
 
 ## Contributing
 
-Setup, the architecture, the scripts, and how the provider marks are built are all in
+Setup, the architecture, the scripts, and how the provider glyphs are built are all in
 [CONTRIBUTING.md](CONTRIBUTING.md). Security reports go through [SECURITY.md](SECURITY.md).
 
 ## License and trademarks
 
-MIT; see [LICENSE](LICENSE). No third-party file is bundled: the icon font in
-`assets/agent-usage-bar.woff` was drawn and generated for this project, so no upstream font license
-applies.
+MIT; see [LICENSE](LICENSE).
 
-The two glyphs in that font depict the Claude and OpenAI marks. Claude and Anthropic are trademarks
-of Anthropic; Codex and OpenAI are trademarks of OpenAI. Redrawing a mark does not make it ours.
-They appear here for one purpose — identifying which usage figure belongs to which tool — and this
-project is not affiliated with, endorsed by, or sponsored by either company. Either mark can be
-replaced with your own text through the `agentUsageBar.claude.label` and `agentUsageBar.codex.label`
-settings.
+The icon font in `assets/agent-usage-bar.woff` was created specifically for this project and does not include third-party font files.
+
+Claude and Anthropic are trademarks of Anthropic. Codex and OpenAI are trademarks of OpenAI. The monochrome provider glyphs are used solely to identify the services whose usage is being displayed.
+
+This project is independent and is not affiliated with, endorsed by, or sponsored by Anthropic or OpenAI.
+
+Either provider glyph can be replaced with custom text or a VS Code codicon through the `agentUsageBar.claude.label` and `agentUsageBar.codex.label` settings.
