@@ -1,11 +1,13 @@
 import type { ExtensionConfiguration } from "./configuration";
 import {
+  formatMoment,
   formatPercent,
   type ResolvedWindow,
   resolveWindows,
   severityFor,
   type Severity,
 } from "./formatting";
+import { formatPace, paceFor } from "./pace";
 import type { SnapshotSource, UsageSnapshot, WindowKind } from "./usage";
 
 /**
@@ -213,8 +215,33 @@ function lines(...content: string[]): string {
 }
 
 /**
+ * Two footnotes on one line, the second pushed to the right edge of the block.
+ *
+ * A table is the only way there. `text-align` is not among the three declarations a style may
+ * carry — but `align` on a cell is on the renderer's attribute allowlist, beside `colspan`,
+ * `rowspan` and `width`. The width is what makes the alignment mean anything: a table sizes to its
+ * content, so without it the right cell sits against the words on its left rather than under the
+ * end of the bar.
+ *
+ * It stays a table with nothing to push right, where a plain line would do and cost a few pixels
+ * of box less. A cell carries a padding and a border spacing that nothing here can turn off —
+ * `cellpadding` and `cellspacing` are not on that allowlist — so a footnote in one sits two or
+ * three pixels right of a footnote that is not. Paid every time it is a hairline; paid only when
+ * there is a pace, it is a left edge that moves between windows and again when one resets.
+ */
+function detailRow(left: string, right: string): string {
+  if (!left && !right) {
+    return "";
+  }
+  return [
+    `<table width="100%"><tr><td>${INDENT}${dim(left)}</td>`,
+    `<td align="right">${dim(right)}${INDENT}</td></tr></table>`,
+  ].join("");
+}
+
+/**
  * One window as a heading of two lines — what it is beside what it costs, and the bar under that —
- * with the moment it refills stated underneath.
+ * with a footnote row underneath: the moment it refills, and the pace at the far right of it.
  *
  * The first two are inside the heading rather than around it, because a heading is the only element
  * here with a line-height of its own, a factor of its font size rather than the fixed nineteen and
@@ -227,25 +254,33 @@ function lines(...content: string[]): string {
  * such way out, being on the line with the number, and is dimmed instead: the same standing down,
  * bought with the one lever that is left.
  *
- * The moment is stated rather than counted down. The item beside it already carries the countdown,
- * and a tooltip that changes every minute is a tooltip the workbench rebuilds from under whoever is
- * reading it.
+ * Neither footnote moves with the clock. The item already carries the countdown, and a tooltip that
+ * changes every minute is a tooltip the workbench rebuilds from under whoever is reading it — so
+ * the reset is stated as a moment, and the pace is measured from `asOf`, when the reading was
+ * taken, rather than from now. That also pairs it with the percentage it divides.
  */
-function windowBlock(window: ResolvedWindow, configuration: ExtensionConfiguration): string {
+function windowBlock(
+  window: ResolvedWindow,
+  configuration: ExtensionConfiguration,
+  asOf: Date,
+): string {
   const reset = window.reset
     ? "Reset since this reading"
     : window.resetsAt
       ? `Resets ${escapeHtml(formatDate(window.resetsAt))}`
       : "";
+  const pace = configuration.showPace ? paceFor(window, asOf) : null;
   const percent = formatPercent(window.usedPercent, configuration.percentageMode);
   const label = configuration.percentageMode === "remaining" ? "remaining" : "used";
   // The pad on the right rides on the bar because the bar is the widest line on the tooltip, and
   // the widest line is the one that decides where the right edge of the box falls.
   const meter = `${bar(window.usedPercent, severityFor(window.usedPercent, configuration))}${INDENT}`;
+  // Side by side because that is the comparison a reader is making: when the window refills,
+  // against where the rate is taking it.
   return [
     `<h3>${INDENT}${dim(WINDOW_TITLES[window.kind])}${INDENT}${percent} <small>${dim(label)}</small>`,
     `<br>${INDENT}${meter}</h3>`,
-    reset ? lines(dim(reset)) : "",
+    detailRow(reset, pace ? escapeHtml(formatPace(pace, formatMoment)) : ""),
   ].join("");
 }
 
@@ -329,7 +364,7 @@ export function buildTooltip(
     if (index > 0) {
       blocks.push(AIR);
     }
-    blocks.push(windowBlock(window, configuration));
+    blocks.push(windowBlock(window, configuration, snapshot.fetchedAt));
   }
   if (snapshot.credits) {
     blocks.push(GAP, lines(`<b>Credits</b> ${dim(`· ${wrapped(snapshot.credits, 10)}`)}`));

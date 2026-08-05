@@ -9,6 +9,7 @@ export type PercentageMode = "used" | "remaining";
 export interface ExtensionConfiguration {
   displayMode: DisplayMode;
   percentageMode: PercentageMode;
+  showPace: boolean;
   warningThreshold: number;
   errorThreshold: number;
   codexEnabled: boolean;
@@ -60,6 +61,7 @@ export function resolveConfiguration(read: SettingReader): ExtensionConfiguratio
   return {
     displayMode: read<DisplayMode>("displayMode", "compact"),
     percentageMode: read<PercentageMode>("percentageMode", "used"),
+    showPace: read("showPace", true),
     warningThreshold,
     // The error background must never appear before the warning background.
     errorThreshold: Math.max(
@@ -82,6 +84,7 @@ export function resolveConfiguration(read: SettingReader): ExtensionConfiguratio
 const PRESENTATION_KEYS = [
   "displayMode",
   "percentageMode",
+  "showPace",
   "warningThreshold",
   "errorThreshold",
   "claudeLabel",

@@ -9,6 +9,7 @@ import {
   validDate,
   validLabel,
   validUsedPercent,
+  validWindowMinutes,
   type ProviderResult,
   type UsageSnapshot,
   type UsageWindow,
@@ -167,6 +168,9 @@ function parseWindow(value: unknown, fallback: "session" | "weekly"): UsageWindo
     kind: classifyWindow(value.windowDurationMins, fallback),
     usedPercent,
     resetsAt: validDate(value.resetsAt),
+    // Kept as well as classified with: the same number that sorts the window into a kind is what
+    // says when it opened, and a kind only implies a length that Codex here states outright.
+    windowMinutes: validWindowMinutes(value.windowDurationMins),
   };
 }
 

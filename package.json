@@ -106,12 +106,18 @@
           "order": 2,
           "description": "Controls whether the status bar shows used or remaining percentages. Warning colors always use the percentage already used."
         },
+        "agentUsageBar.showPace": {
+          "type": "boolean",
+          "default": true,
+          "order": 3,
+          "description": "Show where each window is heading, beside its reset time. The 5-hour window is forecast: when it runs out, or where it lands by the reset. The weekly window is only clocked — its hours run through nights and days off, so forecasting it would mislead."
+        },
         "agentUsageBar.warningThreshold": {
           "type": "number",
           "default": 80,
           "minimum": 0,
           "maximum": 100,
-          "order": 3,
+          "order": 4,
           "description": "Used-percentage threshold for the warning background."
         },
         "agentUsageBar.errorThreshold": {
@@ -119,31 +125,31 @@
           "default": 95,
           "minimum": 0,
           "maximum": 100,
-          "order": 4,
+          "order": 5,
           "description": "Used-percentage threshold for the error background. This cannot be lower than the warning threshold."
         },
         "agentUsageBar.claude.enabled": {
           "type": "boolean",
           "default": true,
-          "order": 5,
+          "order": 6,
           "markdownDescription": "Show Claude Code usage in the status bar. The sign-in token Claude Code already stores in `~/.claude/.credentials.json` is read and used for a single request to `api.anthropic.com` that asks for your account usage. The token is never stored, logged, refreshed, or sent anywhere else, and no prompts, code, or file contents leave your machine."
         },
         "agentUsageBar.codex.enabled": {
           "type": "boolean",
           "default": true,
-          "order": 6,
+          "order": 7,
           "markdownDescription": "Show Codex usage in the status bar. Your local Codex CLI is asked for the limits it already knows for your account. Codex keeps its own sign-in, so this extension never reads or stores your Codex credentials. Nothing is shown when Codex is not installed or is signed out."
         },
         "agentUsageBar.claude.label": {
           "type": "string",
           "default": "",
-          "order": 7,
+          "order": 8,
           "markdownDescription": "Replace the Claude mark in the status bar with your own text. Leave empty for the icon. A codicon reference such as `$(sparkle)` also works."
         },
         "agentUsageBar.codex.label": {
           "type": "string",
           "default": "",
-          "order": 8,
+          "order": 9,
           "markdownDescription": "Replace the Codex mark in the status bar with your own text. Leave empty for the icon. A codicon reference such as `$(hubot)` also works."
         },
         "agentUsageBar.refreshIntervalSeconds": {
@@ -151,7 +157,7 @@
           "default": 300,
           "minimum": 30,
           "maximum": 3600,
-          "order": 9,
+          "order": 10,
           "description": "How often to re-read usage in the background, so this mainly covers usage spent on other machines or in other clients. Local agent activity also triggers a refresh, and no automatic read happens less than thirty seconds after the last one."
         }
       }

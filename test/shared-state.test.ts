@@ -19,8 +19,15 @@ function memento(seed: Record<string, unknown> = {}): SharedStore {
 
 const snapshot: UsageSnapshot = {
   windows: [
-    { kind: "session", usedPercent: 12.4, resetsAt: new Date("2026-08-01T13:12:00Z") },
-    { kind: "weekly", usedPercent: 41, resetsAt: null },
+    // One window with a stated length and one without, which is what the two providers between
+    // them actually publish: Codex says how long its windows run and Claude never does.
+    {
+      kind: "session",
+      usedPercent: 12.4,
+      resetsAt: new Date("2026-08-01T13:12:00Z"),
+      windowMinutes: 300,
+    },
+    { kind: "weekly", usedPercent: 41, resetsAt: null, windowMinutes: null },
   ],
   plan: "plus",
   blocked: null,
@@ -144,4 +151,124 @@ test("a wait reaching past anything this version would sit out is dropped, not h
 test("a window on the other version of the shape is not read at all", () => {
   const stored = { "sharedUsage.v2.claude": { readAt: Date.now(), owner: "abc" } };
   expect(new SharedUsageState(memento(stored)).read("claude")).toBeNull();
+});
+
+/**
+ * The shape `v1` names, written out rather than round-tripped, because a round trip through this
+ * file's own two halves agrees with itself however either half is renamed. What the key promises is
+ * that two windows reading it are reading the same thing, and the windows on the other side of an
+ * update run a build this one cannot call.
+ *
+ * So this is the test that fails when the wire format moves. It is not asking to be kept passing:
+ * a field renamed or a unit changed here is a `v1` two builds no longer agree on, and the fix is
+ * either to put it back or to bump the prefix — which parts the two shapes instead of letting the
+ * older build read the newer one wrong.
+ */
+test("a v1 entry written by another window reads back as the reading it names", () => {
+  const stored = {
+    "sharedUsage.v1.claude": {
+      readAt: 1_754_000_000_000,
+      publishedAt: 1_754_000_001_000,
+      owner: "window-b",
+      retryAt: null,
+      message: null,
+      snapshot: {
+        windows: [
+          { kind: "session", usedPercent: 12.5, resetsAt: 1_754_000_600_000, windowMinutes: 300 },
+          { kind: "weekly", usedPercent: 41, resetsAt: 1_754_600_000_000, windowMinutes: null },
+        ],
+        plan: "pro",
+        blocked: null,
+        credits: "3 reset credits",
+        fetchedAt: 1_754_000_000_500,
+        source: "claude-account-api",
+      },
+    },
+  };
+
+  const entry = new SharedUsageState(memento(stored)).read("claude");
+
+  expect(entry).toEqual({
+    readAt: 1_754_000_000_000,
+    publishedAt: 1_754_000_001_000,
+    owner: "window-b",
+    retryAt: null,
+    view: {
+      message: null,
+      snapshot: {
+        windows: [
+          {
+            kind: "session",
+            usedPercent: 12.5,
+            resetsAt: new Date(1_754_000_600_000),
+            windowMinutes: 300,
+          },
+          {
+            kind: "weekly",
+            usedPercent: 41,
+            resetsAt: new Date(1_754_600_000_000),
+            windowMinutes: null,
+          },
+        ],
+        plan: "pro",
+        blocked: null,
+        credits: "3 reset credits",
+        fetchedAt: new Date(1_754_000_000_500),
+        source: "claude-account-api",
+      },
+    },
+  });
+});
+
+/** And the same shape written back out, so the promise holds in the direction this window writes. */
+test("what this window publishes is the shape v1 names", async () => {
+  const store = new Map<string, unknown>();
+  const shared = new SharedUsageState({
+    get: (key) => store.get(key),
+    update: (key, value) => {
+      store.set(key, JSON.parse(JSON.stringify(value)) as unknown);
+      return Promise.resolve();
+    },
+  });
+
+  await shared.publish("claude", {
+    owner: "window-a",
+    view: {
+      snapshot: {
+        windows: [
+          {
+            kind: "session",
+            usedPercent: 12.5,
+            resetsAt: new Date(1_754_000_600_000),
+            windowMinutes: 300,
+          },
+        ],
+        plan: "pro",
+        blocked: null,
+        credits: null,
+        fetchedAt: new Date(1_754_000_000_500),
+        source: "claude-account-api",
+      },
+      message: null,
+    },
+    retryAt: null,
+  });
+
+  expect(store.get("sharedUsage.v1.claude")).toMatchObject({
+    owner: "window-a",
+    retryAt: null,
+    message: null,
+    snapshot: {
+      // Dates cross as epoch milliseconds, which is the one unit here that a `Date` would not
+      // survive the round trip as.
+      windows: [
+        { kind: "session", usedPercent: 12.5, resetsAt: 1_754_000_600_000, windowMinutes: 300 },
+      ],
+      plan: "pro",
+      blocked: null,
+      credits: null,
+      fetchedAt: 1_754_000_000_500,
+      source: "claude-account-api",
+    },
+  });
 });

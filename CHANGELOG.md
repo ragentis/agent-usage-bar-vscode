@@ -19,6 +19,7 @@ with the per-platform paths covered by tests on all three CI runners.
 - One reading shared by every open window, so the cost of six windows is the cost of one and all of them show the same number.
 - A history icon and a tooltip note once a reading is more than ten minutes old.
 - A tooltip drawn with theme colors: a filled bar per window, dimmed detail lines, and refresh and settings links.
+- A pace beside each window's reset time, off with `agentUsageBar.showPace`: the 5-hour window forecast to when it runs out or where it lands by the reset, the weekly one only clocked, since its hours run through nights and days off and a forecast across them would mislead.
 - A `~` marker when a window has reset since the last reading, so a refilled quota never reads as full.
 - An error color and a reason whenever a provider reports the account as stopped, however low the percentage is.
 
@@ -33,4 +34,5 @@ with the per-platform paths covered by tests on all three CI runners.
 - No prompt, source code, or file content is transmitted anywhere. Agent transcripts are watched for
   the fact that they changed and never opened, and the extension writes no files of its own.
 - The last usage reading is kept in the extension's own VS Code state so the other windows can show it
-  instead of asking again. It holds percentages, reset times, and the plan name; no token, no transcript.
+  instead of asking again. It holds percentages, reset times, window lengths, and the plan name; no
+  token, no transcript.

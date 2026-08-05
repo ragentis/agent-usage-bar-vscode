@@ -44,6 +44,19 @@ const STEP = "<table><tr><td></td></tr></table>";
 /** What every line of text is broken to, and so what no line of text may be longer than. */
 const COLUMNS = 52;
 
+/**
+ * What the two cells of a footnote row may come to together. Larger than `COLUMNS`, and that is
+ * not a loosening: `COLUMNS` is what wrapped text is broken to, deliberately short of what the bar
+ * is worth so that a line of the widest characters still fits under it. A footnote row is not
+ * wrapped to anything — it is one line of proportional text laid between two edges — and measured
+ * on screen the pair has about sixty of them before it reaches the end of the bar.
+ *
+ * Past that the cells wrap rather than the tooltip widening, since a table's own width is what a
+ * cell is laid out against. Ugly, not broken — but the row is the one line here whose length no
+ * function controls, being two locale-formatted values written by two different providers.
+ */
+const ROW_COLUMNS = 60;
+
 /** The indent every line carries, which is the left padding the hover would not give us. */
 const INDENT = "&nbsp;&nbsp;";
 
@@ -63,6 +76,7 @@ function configure(overrides: Partial<ExtensionConfiguration> = {}): ExtensionCo
   return {
     displayMode: "compact",
     percentageMode: "used",
+    showPace: true,
     warningThreshold: 80,
     errorThreshold: 95,
     codexEnabled: true,
@@ -134,10 +148,14 @@ const CHARACTERS: Record<string, string> = {
  * The lines a reader is shown: the markup gone, the entities read back as themselves, and one line
  * per break. The bars come out as lines of nothing, and are dropped with the empty ones — they are
  * the widest thing on the tooltip by design, and so the one thing the width is not measured on.
+ *
+ * A cell ends a run of text the way a break does. Two of them share one line on the screen, but
+ * they are wrapped apart and belong to different edges, so what each may be is its own question;
+ * what the pair may be together is the test below that measures the row.
  */
 function drawnLines(text: string): string[] {
   return text
-    .split(/<br>|<\/?h[1-6]>|<\/?p>|<hr>|<\/div>/)
+    .split(/<br>|<\/?h[1-6]>|<\/?p>|<hr>|<\/div>|<\/td>/)
     .map((part) =>
       part
         .replace(/<[^>]+>/g, "")
@@ -176,14 +194,16 @@ test("a reading is drawn as a header, a block per window, and where it came from
   expect(text).toContain(`${INDENT}$(agent-usage-bar-claude) <b>Claude Code usage</b>`);
   expect(text).toContain("· plus");
   const session = windowBlock(text, "5-hour");
-  // What the window is beside what it cost, the bar under it, and the moment it refills under that.
-  // The moment is a local date in the reader's own locale, so what is stated here is everything up
-  // to it; that it is escaped on the way in is a later test's business.
+  // What the window is beside what it cost, the bar under it, then the moment it refills and the
+  // pace under that. The moment is a local date in the reader's own locale, so what is stated here
+  // is everything up to it; that it is escaped on the way in is a later test's business.
   expect(session).toMatch(heading("5-hour", "12%"));
   expect(session).toContain(">used<");
   expect(session.split("<br>")).toHaveLength(2);
-  // The reset line is outside the heading, which is the only way it is not bold.
-  expect(session).toMatch(new RegExp(`</h3>${INDENT}<span style="color:[^"]+">Resets .+</span>$`));
+  // The footnote row is outside the heading, which is the only way it is not bold.
+  expect(session).toMatch(
+    new RegExp(`</h3><table width="100%"><tr><td>${INDENT}<span style="color:[^"]+">Resets .+`),
+  );
   expect(text).toContain("From Claude account · as of ");
   expect(text.indexOf("Refresh")).toBeGreaterThan(text.indexOf("From Claude account"));
 });
@@ -242,11 +262,13 @@ test("every element and every attribute the tooltip writes survives the renderer
   for (const [, tag] of text.matchAll(/<\/?([a-z][a-z0-9]*)/g)) {
     expect(ALLOWED_TAGS).toContain(tag);
   }
-  // `style` is dropped from anything but a span, and `href` is the only other attribute written.
+  // `style` is dropped from anything but a span. The rest are the plain attributes the renderer
+  // allows outright — `align` and `width` sit on its list beside `colspan` and `rowspan`, which is
+  // what makes a cell the one way to reach a right edge from here.
   const attributes = [...text.matchAll(/<([a-z0-9]+) ([a-z-]+)=/g)].map(
     ([, tag, attribute]) => `${tag} ${attribute}`,
   );
-  expect(new Set(attributes)).toEqual(new Set(["span style", "a href"]));
+  expect(new Set(attributes)).toEqual(new Set(["span style", "a href", "table width", "td align"]));
   const styles = [...text.matchAll(/<span style="([^"]*)"/g)].map(([, style]) => style);
   expect(styles.length).toBeGreaterThan(0);
   for (const style of styles) {
@@ -389,6 +411,77 @@ test("a window past its reset says so instead of showing a stale number", () => 
   // Only the window that actually reset: the weekly one still states its own moment.
   expect(windowBlock(text, "Weekly")).toContain(">Resets ");
   expect(windowBlock(text, "Weekly")).toMatch(heading("Weekly", "41%"));
+});
+
+/**
+ * The two windows are paced differently on purpose. A session window opens on the first message
+ * sent into it, so the time it has been open is time spent working and extending that rate to the
+ * end of the window means something. A weekly window opens on a calendar anchor and runs through
+ * nights and days off, which the hours ahead of it hold in quite different measure — so it is
+ * clocked rather than forecast, and the reader does the comparing.
+ */
+test("the 5-hour window is paced to a rate and the weekly one only to the calendar", () => {
+  const text = tooltip();
+
+  // Opened at 08:12, five hours before it refills, with 12.4% spent in the 108 minutes since.
+  // The pace sits in a cell of its own, pushed to the right of the moment the window refills.
+  expect(windowBlock(text, "5-hour")).toMatch(
+    /<td align="right"><span style="color:[^"]+">At this pace, ~34% by reset<\/span>/,
+  );
+  expect(windowBlock(text, "Weekly")).toMatch(
+    /<td align="right"><span style="color:[^"]+">68% of the week gone<\/span>/,
+  );
+});
+
+/**
+ * The one line on the tooltip whose length nothing here decides: a reset moment and a forecast
+ * moment, both drawn in whatever the reader's locale makes of them. Both cells are measured, in
+ * every window, in both percentage modes — the left one does not move with the mode, but the test
+ * is cheap and the day it does is the day this should notice.
+ */
+test("a footnote row and its pace fit across the bar together", () => {
+  for (const percentageMode of ["used", "remaining"] as const) {
+    const text = tooltip({}, null, { percentageMode });
+    // Anchored on the width, which is what tells a footnote row from the empty box that lands a
+    // gap between two rungs of the margin ladder — that one is a `<table><tr><td>` too.
+    for (const [, left, right] of text.matchAll(
+      /<table width="100%"><tr><td>(.*?)<\/td><td align="right">(.*?)<\/td><\/tr><\/table>/g,
+    )) {
+      const row = drawnLines(`${left}</td>${right}`).join("");
+      expect(row.length).toBeLessThanOrEqual(ROW_COLUMNS);
+      expect(row.trim().length).toBeGreaterThan(0);
+    }
+  }
+});
+
+test("a window spending faster than it refills is paced to the moment it runs out", () => {
+  const text = tooltip({
+    windows: [{ kind: "session", usedPercent: 60, resetsAt: new Date("2026-08-01T13:12:00Z") }],
+  });
+
+  // The moment is drawn in the reader's own locale, so what is stated here is everything up to it.
+  expect(windowBlock(text, "5-hour")).toMatch(
+    /<td align="right"><span style="color:[^"]+">At this pace, runs out ~/,
+  );
+});
+
+/**
+ * The pace is measured from when the reading was taken, not from now — which pairs it with the
+ * percentage it divides, and is what keeps it from moving under an open hover between readings.
+ */
+test("the pace holds still while the reading does, and goes away with its setting", () => {
+  expect(tooltipAt(new Date(now.getTime() + 47 * 60_000))).toContain("At this pace, ~34% by reset");
+
+  const off = tooltip({}, null, { showPace: false });
+  expect(off).not.toContain("At this pace");
+  expect(off).not.toContain("of the week gone");
+  // The row stays a table with the right cell emptied rather than becoming a plain line. A cell
+  // carries a padding this file cannot turn off, so a footnote in one sits a couple of pixels
+  // right of a footnote that is not — and a left edge that only moves sometimes is the visible one.
+  expect(off).toMatch(
+    new RegExp(`</h3><table width="100%"><tr><td>${INDENT}<span style="color:[^"]+">Resets .+`),
+  );
+  expect(off).toContain(`<td align="right">${INDENT}</td>`);
 });
 
 test("the percentage mode the item uses is the one the tooltip explains", () => {

@@ -3,6 +3,7 @@ import {
   MAX_RETRY_WAIT_MS,
   validLabel,
   validUsedPercent,
+  validWindowMinutes,
   type ProviderId,
   type ProviderView,
   type SnapshotSource,
@@ -11,7 +12,20 @@ import {
   type WindowKind,
 } from "./usage";
 
-/** The version rides in the key, so a differing shape is simply not found rather than misread. */
+/**
+ * The version rides in the key, so a differing shape is simply not found rather than misread.
+ *
+ * Bump it when an entry this version writes would be read wrongly by the last one — a field
+ * renamed, a unit changed, a value given a new meaning. Adding a field is none of those: the older
+ * build drops what it does not know and the newer one reads its absence as absence, which is what
+ * every field here is already parsed for.
+ *
+ * The cost of a bump is that through an update the two shapes cannot see each other, so each reads
+ * on a lease of its own — twice the requests, and a rate-limit wait honoured on one side only,
+ * until the last window of the old build closes. The cost of not bumping when it was called for is
+ * two builds disagreeing about what `v1` means, which is the failure this whole file exists to
+ * prevent. The tests beside it write the shape out by hand so the choice cannot be made silently.
+ */
 const KEY_PREFIX = "sharedUsage.v1.";
 
 /**
@@ -71,7 +85,12 @@ function parseWindow(value: unknown): UsageWindow | null {
     return null;
   }
   const resetsAt = millis(value.resetsAt);
-  return { kind, usedPercent, resetsAt: resetsAt === null ? null : new Date(resetsAt) };
+  return {
+    kind,
+    usedPercent,
+    resetsAt: resetsAt === null ? null : new Date(resetsAt),
+    windowMinutes: validWindowMinutes(value.windowMinutes),
+  };
 }
 
 function parseSnapshot(value: unknown): UsageSnapshot | null {
@@ -127,6 +146,7 @@ function serialize(entry: SharedEntry): Record<string, unknown> {
         kind: window.kind,
         usedPercent: window.usedPercent,
         resetsAt: window.resetsAt?.getTime() ?? null,
+        windowMinutes: window.windowMinutes ?? null,
       })),
       plan: snapshot.plan,
       blocked: snapshot.blocked,

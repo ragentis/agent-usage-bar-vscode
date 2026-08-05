@@ -8,6 +8,13 @@ export interface UsageWindow {
   kind: WindowKind;
   usedPercent: number;
   resetsAt: Date | null;
+  /**
+   * How long the window runs, when the provider says. Absent is the ordinary case — only Codex
+   * states it — and `pace.ts`, the one reader, falls back to the length the kind implies. It is
+   * kept rather than only classified with because the moment a window opened is `resetsAt` less
+   * this, and a pace measured from the wrong moment is a wrong pace stated confidently.
+   */
+  windowMinutes?: number | null;
 }
 
 export interface UsageSnapshot {
@@ -73,6 +80,18 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 
 export function validUsedPercent(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100
+    ? value
+    : null;
+}
+
+/** A month, past which a stated window length is not a window this extension knows how to read. */
+const MAX_WINDOW_MINUTES = 31 * 24 * 60;
+
+export function validWindowMinutes(value: unknown): number | null {
+  return typeof value === "number" &&
+    Number.isFinite(value) &&
+    value > 0 &&
+    value <= MAX_WINDOW_MINUTES
     ? value
     : null;
 }

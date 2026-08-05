@@ -20,6 +20,7 @@ function configure(overrides: Partial<ExtensionConfiguration> = {}): ExtensionCo
   return {
     displayMode: "compact",
     percentageMode: "used",
+    showPace: true,
     warningThreshold: 80,
     errorThreshold: 95,
     codexEnabled: true,

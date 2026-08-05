@@ -24,9 +24,27 @@ provider reports the account as stopped — a spend limit or a hard rate limit �
 percentage happens to be.
 
 Hover for a tooltip with a themed bar per window — filled to the percentage and colored by the same
-thresholds as the item — the plan name, exact reset times, any credit balance, the reason the last
-refresh failed if one did, and links to refresh or to open the settings. Click either item for a
-menu that toggles a provider, refreshes, or opens the settings.
+thresholds as the item — the plan name, exact reset times, the pace, any credit balance, the reason
+the last refresh failed if one did, and links to refresh or to open the settings. Click either item
+for a menu that toggles a provider, refreshes, or opens the settings.
+
+## Pace
+
+Beside each window's reset time, the tooltip says where that window is heading:
+
+| Line                            | Meaning                                             |
+| ------------------------------- | --------------------------------------------------- |
+| `At this pace, runs out ~12:20` | The 5-hour window hits the limit before it refills. |
+| `At this pace, ~34% by reset`   | It does not, and this is where it ends up instead.  |
+| `68% of the week gone`          | How much of the weekly window has elapsed.          |
+
+Only the 5-hour window is forecast, because it opens on your first message — the time it has been
+open is time spent working. The weekly window opens on a calendar anchor and runs through nights and
+days off, so extrapolating across it would read a strong Monday as a limit blown by Thursday; it
+says how much of the week has gone instead, to read against the percentage above it.
+
+Nothing is stated until a window has been open long enough for its percentage to be a rate rather
+than rounding, and `agentUsageBar.showPace` turns the line off.
 
 ## One reading for every window
 
@@ -71,6 +89,7 @@ Run **Agent Usage Bar: Open settings**, or click either status bar item and pick
 | -------------------------------------- | --------- | ------------------------------------------------- |
 | `agentUsageBar.displayMode`            | `compact` | Show one or both standard usage windows.          |
 | `agentUsageBar.percentageMode`         | `used`    | Show used or remaining percentage.                |
+| `agentUsageBar.showPace`               | `true`    | Show where each window is heading.                |
 | `agentUsageBar.warningThreshold`       | `80`      | Warning color threshold based on used percentage. |
 | `agentUsageBar.errorThreshold`         | `95`      | Error color threshold; never falls below warning. |
 | `agentUsageBar.claude.enabled`         | `true`    | Show Claude Code usage.                           |
@@ -211,8 +230,8 @@ extension opens files only to parse them and writes no files of its own.
 It persists exactly two things, both through VS Code's own APIs:
 
 - Your settings, when you toggle a provider from the menu.
-- The last usage reading, so the other windows can show it — percentages, reset times, and the plan
-  name.
+- The last usage reading, so the other windows can show it — percentages, reset times, window
+  lengths, and the plan name.
 
 Neither carries a token, a prompt, or any file content. There is no telemetry, no runtime
 dependency, no custom credential path, and no custom update mechanism. No prompt, code, or file

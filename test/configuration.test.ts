@@ -16,6 +16,7 @@ function configure(overrides: Partial<ExtensionConfiguration> = {}): ExtensionCo
   return {
     displayMode: "compact",
     percentageMode: "used",
+    showPace: true,
     warningThreshold: 80,
     errorThreshold: 95,
     codexEnabled: true,
@@ -31,6 +32,8 @@ test("only source settings trigger a provider read", () => {
   expect(configurationEffect(configure(), configure())).toBe("none");
   expect(configurationEffect(configure(), configure({ warningThreshold: 50 }))).toBe("redraw");
   expect(configurationEffect(configure(), configure({ displayMode: "full" }))).toBe("redraw");
+  // The pace is drawn from the reading already in hand, so switching it on asks no provider.
+  expect(configurationEffect(configure(), configure({ showPace: false }))).toBe("redraw");
   expect(configurationEffect(configure(), configure({ claudeEnabled: true }))).toBe("refresh");
   // A relabelled item is repainted, never re-read.
   expect(configurationEffect(configure(), configure({ codexLabel: "CX" }))).toBe("redraw");
@@ -87,6 +90,7 @@ test("an unset section is the manifest's defaults, whole", () => {
   expect(stored()).toEqual({
     displayMode: "compact",
     percentageMode: "used",
+    showPace: true,
     warningThreshold: DEFAULT_WARNING_THRESHOLD,
     errorThreshold: DEFAULT_ERROR_THRESHOLD,
     codexEnabled: true,
