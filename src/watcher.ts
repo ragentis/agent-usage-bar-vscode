@@ -1,4 +1,4 @@
-import { watch, type FSWatcher } from "node:fs";
+import { existsSync, watch, type FSWatcher } from "node:fs";
 
 const RETRY_DELAY_MS = 15_000;
 /**
@@ -66,6 +66,15 @@ export class FileWatcher {
   private open(): void {
     const { target } = this;
     if (!this.onChange) {
+      return;
+    }
+    // A directory that is not there is answered here rather than left to `watch` to complain
+    // about, because on Linux it does not complain: a recursive watch of a missing path returns a
+    // watcher that neither reports nor errs, and nothing would ever arm the retry. Windows and
+    // macOS throw instead, which the catch below still covers — as it covers this path being taken
+    // away between the two calls.
+    if (!existsSync(target.directory)) {
+      this.scheduleRetry();
       return;
     }
     try {
