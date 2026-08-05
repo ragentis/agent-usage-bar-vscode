@@ -28,7 +28,14 @@ let root = "";
 const opened: FileWatcher[] = [];
 
 beforeEach(async () => {
-  root = await fs.mkdtemp(path.join(os.tmpdir(), "agent-usage-bar-watch-"));
+  // Canonical, not merely temporary. libuv asserts that the absolute path an event carries begins
+  // with the directory it was handed, and a temporary root reaches it under a name that fails that
+  // test on two of the three platforms: the Windows runner's TEMP is an 8.3 short path, and macOS
+  // hands out `/var/folders` for a `/private/var` that FSEvents reports in full. On Windows the
+  // assertion aborts the process, so it arrives as a dead worker rather than a failing test.
+  // The promises `realpath` is the one that expands a short name; the sync and callback forms
+  // resolve symlinks only and would leave `RUNNER~1` exactly as they found it.
+  root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "agent-usage-bar-watch-")));
 });
 
 afterEach(async () => {
@@ -111,5 +118,8 @@ test("a directory that does not exist yet is picked up once the agent creates it
     // would report are on separate clocks; what is under test is that a retry comes at all.
     writeFileSync(path.join(late, "session.jsonl"), String(Date.now()), "utf8");
     expect(changes).toBeGreaterThan(0);
-  }, 50);
+    // Slower than the debounce, or the writing starves the thing it is waiting for: every write
+    // restarts the timer, and a backend that delivers in under a millisecond would restart it just
+    // before each expiry, forever. Expressed against the debounce so the two cannot drift apart.
+  }, DEBOUNCE_MS * 2);
 });
