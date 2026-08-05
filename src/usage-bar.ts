@@ -328,9 +328,8 @@ export class UsageBar {
    * than written into the message, so a redraw after the wait has run out states nothing about it:
    * a wait baked into the message would stay on screen long after it had passed.
    *
-   * What is stated is the moment rather than the time left. The time left would be a different
-   * sentence every few seconds, and a tooltip that changes is a hover the workbench rebuilds from
-   * under whoever is reading it.
+   * The moment rather than the time left, for the reason `formatMoment` carries, and no mention of
+   * which service refused: the line above it already says where the reading came from.
    */
   private paint(provider: Provider): void {
     const view = provider.state.view ?? { snapshot: null, message: null };
@@ -340,7 +339,7 @@ export class UsageBar {
       held
         ? {
             ...view,
-            message: `The usage service is rate limiting requests; retrying at ${formatMoment(hold.until)}`,
+            message: `Rate limited. Retrying at ${formatMoment(hold.until)}.`,
           }
         : view,
       this.configuration,

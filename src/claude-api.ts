@@ -145,7 +145,7 @@ export async function fetchClaudeUsage(
   if (hasExpired(credentials)) {
     return {
       status: "unavailable",
-      message: "The Claude Code sign-in has expired; run Claude Code to renew it",
+      message: "The Claude Code sign-in has expired. Run Claude Code to renew it.",
     };
   }
 
@@ -165,13 +165,13 @@ export async function fetchClaudeUsage(
     });
   } catch {
     // The message never carries the thrown error, which can quote the request headers.
-    return { status: "unavailable", message: "The Claude usage service could not be reached" };
+    return { status: "unavailable", message: "The Claude usage service could not be reached." };
   }
 
   if (response.status === 401 || response.status === 403) {
     return {
       status: "unavailable",
-      message: "Claude Code is no longer signed in; run Claude Code to renew it",
+      message: "Claude Code is no longer signed in. Run Claude Code to renew it.",
     };
   }
   if (response.status === 429) {
@@ -185,14 +185,14 @@ export async function fetchClaudeUsage(
     // left at draw time.
     return {
       status: "unavailable",
-      message: "The Claude usage service is rate limiting requests",
+      message: "The Claude usage service is rate limiting requests.",
       retryAt,
     };
   }
   if (!response.ok) {
     return {
       status: "unavailable",
-      message: `The Claude usage service answered ${response.status}`,
+      message: `The Claude usage service answered ${response.status}.`,
     };
   }
 
@@ -200,11 +200,11 @@ export async function fetchClaudeUsage(
   try {
     payload = await response.json();
   } catch {
-    return { status: "unavailable", message: "The Claude usage response could not be parsed" };
+    return { status: "unavailable", message: "The Claude usage response could not be parsed." };
   }
 
   const snapshot = parseClaudeUsageResponse(payload, credentials.plan, new Date());
   return snapshot
     ? { status: "ok", snapshot }
-    : { status: "unavailable", message: "The Claude usage response held no recognized windows" };
+    : { status: "unavailable", message: "The Claude usage response held no known windows." };
 }

@@ -192,8 +192,8 @@ export function parseCredentials(raw: string | null): ClaudeCredentials | null {
  */
 export function noSignInMessage(platform: NodeJS.Platform = process.platform): string {
   return platform === "darwin"
-    ? "No Claude Code sign-in was found; run Claude Code once, and allow keychain access if macOS asks"
-    : "No Claude Code sign-in was found; run Claude Code once";
+    ? "No Claude Code sign-in was found. Run Claude Code once and allow the keychain prompt."
+    : "No Claude Code sign-in was found. Run Claude Code once.";
 }
 
 export function hasExpired(credentials: ClaudeCredentials): boolean {

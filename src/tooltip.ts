@@ -81,6 +81,15 @@ const BAR_CELLS = 320;
 /** Roughly what the bar is worth in characters of the body font, less a little for safety. */
 const COLUMNS = 52;
 
+/**
+ * What a line kept or given up whole may be, rather than what wrapped text is broken to. Larger
+ * than `COLUMNS`, which is short of the bar on purpose so that a line of the widest characters
+ * still fits under it — the right margin to keep where the alternative to fitting is a break this
+ * file has to place, and one to give up where the alternative is a second layout. Measured on
+ * screen, a line has about sixty characters of proportional text before it reaches the bar's end.
+ */
+const LINE_COLUMNS = 60;
+
 /** The left padding the hover would not give us, and the right padding, on the widest line. */
 const INDENT = "&nbsp;&nbsp;";
 
@@ -140,18 +149,50 @@ export function escapeHtml(value: string): string {
     .replace(/[&<>"'()]/g, (character) => ENTITIES[character] ?? character);
 }
 
+/** What the escaping will make of the whitespace, so text is measured as it will be drawn. */
+function flattened(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
 /**
  * Text broken to the width of the bar, and escaped after the breaking rather than before it, so
  * what is counted is characters a reader sees rather than the entities some of them turn into.
  *
- * `taken` is what the line it starts on has already spent. A word longer than the column it is
- * given is left whole and handed to the renderer, which breaks inside a word when it has to and is
- * the only thing that should: a break this function put mid-word would be a break in a url.
+ * `taken` is what the line it starts on has already spent.
  */
 function wrapped(text: string, taken = 0): string {
+  const flat = flattened(text);
+  return (atSentences(flat, taken) ?? atWords(flat, taken)).map(escapeHtml).join(`<br>${INDENT}`);
+}
+
+/**
+ * A message of more than one sentence, one sentence to a line — offered first, because a break the
+ * text already carries is a better one than any this file can find: "Run Claude Code" parted from
+ * "to renew it" reads as two halves of nothing, where the same cut at the full stop reads as a
+ * fault and a remedy. Which is what the stops in those messages are there for.
+ *
+ * All of them or none. A sentence too long for a line of its own would be broken anyway, and one
+ * wrapped sentence beside an unwrapped one is a ragged edge with no rule behind it.
+ */
+function atSentences(text: string, taken: number): string[] | null {
+  if (taken + text.length <= COLUMNS) {
+    return null;
+  }
+  const parts = text.split(/(?<=[.!?])\s+/);
+  const fits = (part: string, index: number): boolean =>
+    part.length + (index === 0 ? taken : 0) <= COLUMNS;
+  return parts.length > 1 && parts.every(fits) ? parts : null;
+}
+
+/**
+ * A word longer than the column it is given is left whole and handed to the renderer, which breaks
+ * inside a word when it has to and is the only thing that should: a break this function put
+ * mid-word would be a break in a url.
+ */
+function atWords(text: string, taken: number): string[] {
   const broken: string[] = [];
   let line = "";
-  for (const word of text.replace(/\s+/g, " ").trim().split(" ")) {
+  for (const word of text.split(" ")) {
     const columns = COLUMNS - (broken.length === 0 ? taken : 0);
     if (line && line.length + 1 + word.length > columns) {
       broken.push(line);
@@ -160,7 +201,7 @@ function wrapped(text: string, taken = 0): string {
       line = line ? `${line} ${word}` : word;
     }
   }
-  return [...broken, line].map(escapeHtml).join(`<br>${INDENT}`);
+  return [...broken, line];
 }
 
 function span(text: string, style: string): string {
@@ -284,6 +325,11 @@ function windowBlock(
   ].join("");
 }
 
+const FAILURE_LABEL = "Last refresh failed:";
+
+/** What it spends: the icon as the one glyph it is drawn as, its indent, the words, and a space. */
+const LABEL_COLUMNS = 1 + 2 + FAILURE_LABEL.length + 1;
+
 function footerBlock(snapshot: UsageSnapshot, age: string | null, failure: string | null): string {
   const source = lines(
     dim(
@@ -297,17 +343,17 @@ function footerBlock(snapshot: UsageSnapshot, age: string | null, failure: strin
   }
   // Parted from the line above by a gap rather than by a break, because it is a different thing
   // being said: what is on screen, and then why it is not newer.
-  //
-  // What is said about it is on a line of its own, so the message under it has the whole width to
-  // be read across. Sharing a line, the words this file writes take half the columns on it and
-  // every message a provider has is broken somewhere in the middle of a sentence.
+  const warning = `${span("$(warning)", `color:${COLOR.warning};`)}${INDENT}`;
+  const message = flattened(failure);
+  // A short message rides on the line that introduces it, at the cost of one line rather than two.
+  // A long one drops below, where it has the whole width: sharing the line it would have half the
+  // columns and be broken in the middle of itself, which is worse than the line that would save.
   return [
     source,
     GAP,
-    lines(
-      `${span("$(warning)", `color:${COLOR.warning};`)}${INDENT}${dim("Last refresh failed:")}`,
-      dim(wrapped(failure)),
-    ),
+    LABEL_COLUMNS + message.length <= LINE_COLUMNS
+      ? lines(`${warning}${dim(`${FAILURE_LABEL} ${escapeHtml(message)}`)}`)
+      : lines(`${warning}${dim(FAILURE_LABEL)}`, dim(wrapped(message))),
   ].join("");
 }
 
@@ -374,7 +420,7 @@ export function buildTooltip(
       GAP,
       lines(
         dim(
-          wrapped("~ marks a window assumed empty after its reset; run the agent for a reading."),
+          wrapped("~ marks a window assumed empty after its reset. Run the agent for a reading."),
         ),
       ),
     );

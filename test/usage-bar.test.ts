@@ -196,7 +196,7 @@ test("a stated wait is honoured even by the refresh a user asked for", async () 
   // The provider said "rate limited"; what the item ends on says more than that, and only the wait
   // laid over the reading at draw time says it. It names the moment rather than counting down to
   // it, because a message that changed every tick would be a tooltip closing under a reader.
-  expect(window.last()?.message).toMatch(/rate limiting requests; retrying at \S/);
+  expect(window.last()?.message).toMatch(/^Rate limited\. Retrying at \S/);
 });
 
 test("a wait longer than any this version sits out neither spins nor stalls", async () => {
@@ -251,7 +251,7 @@ test("another window getting through ends the wait for the ones still holding it
   held.bar.start();
   await flush();
   expect(held.counts.read).toBe(0);
-  expect(held.last()?.message).toMatch(/rate limiting/);
+  expect(held.last()?.message).toMatch(/^Rate limited/);
 
   // The window that owns the lease gets through before the wait it published runs out. Separated
   // in time from the refusal, because a publication is recognized as news by the moment it was
@@ -282,7 +282,7 @@ test("switching a provider off and back on clears the reading but never the wait
   window.configure({ claudeEnabled: true });
   await flush();
   expect(window.counts.read).toBe(1);
-  expect(window.last()?.message).toMatch(/rate limiting/);
+  expect(window.last()?.message).toMatch(/^Rate limited/);
 });
 
 test("a read answered by this window closing is never published as the account's", async () => {

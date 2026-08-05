@@ -241,7 +241,7 @@ export class CodexAppServer {
    * idled in the meantime.
    */
   stop(): void {
-    this.teardown(new Error("The Codex app server was stopped"));
+    this.teardown(new Error("The Codex app server was stopped."));
   }
 
   dispose(): void {
@@ -258,24 +258,24 @@ export class CodexAppServer {
         ? { status: "ok", snapshot }
         : {
             status: "unavailable",
-            message: "Codex reported no rate-limit windows; sign in to Codex",
+            message: "Codex reported no rate-limit windows. Sign in to Codex.",
           };
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "The Codex app server could not be reached";
+        error instanceof Error ? error.message : "The Codex app server could not be reached.";
       return { status: "unavailable", message };
     }
   }
 
   private ensureStarted(): Promise<void> {
     if (this.disposed) {
-      return Promise.reject(new Error("The Codex app server was stopped"));
+      return Promise.reject(new Error("The Codex app server was stopped."));
     }
     if (this.ready) {
       return this.ready;
     }
     if (Date.now() - this.lastSpawnFailedAt < RESPAWN_COOLDOWN_MS) {
-      return Promise.reject(new Error("The Codex app server is not running"));
+      return Promise.reject(new Error("The Codex app server is not running."));
     }
     const generation = this.generation;
     this.ready = this.start().catch((error: unknown) => {
@@ -284,7 +284,7 @@ export class CodexAppServer {
       if (this.generation === generation) {
         this.lastSpawnFailedAt = Date.now();
         this.teardown(
-          error instanceof Error ? error : new Error("The Codex app server failed to start"),
+          error instanceof Error ? error : new Error("The Codex app server failed to start."),
         );
       }
       throw error;
@@ -300,15 +300,15 @@ export class CodexAppServer {
     // owns and nothing ever stops.
     if (this.generation !== generation) {
       child.kill();
-      throw new Error("The Codex app server was stopped");
+      throw new Error("The Codex app server was stopped.");
     }
     this.child = child;
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => this.consume(chunk));
     // Draining stderr keeps the pipe from filling and stalling the child.
     child.stderr.resume();
-    child.on("error", () => this.teardown(new Error("The Codex CLI could not be started")));
-    child.on("exit", () => this.teardown(new Error("The Codex app server stopped")));
+    child.on("error", () => this.teardown(new Error("The Codex CLI could not be started.")));
+    child.on("exit", () => this.teardown(new Error("The Codex app server stopped.")));
 
     await this.request("initialize", {
       clientInfo: CLIENT_INFO,
@@ -320,7 +320,7 @@ export class CodexAppServer {
   private consume(chunk: string): void {
     this.buffer += chunk;
     if (this.buffer.length > MAX_BUFFER_CHARS) {
-      this.teardown(new Error("The Codex app server sent an oversized message"));
+      this.teardown(new Error("The Codex app server sent an oversized message."));
       return;
     }
     let index;
@@ -352,7 +352,7 @@ export class CodexAppServer {
       this.pending.delete(message.id);
       if (isRecord(message.error)) {
         pending.reject(
-          new Error(validLabel(message.error.message) ?? "The Codex app server returned an error"),
+          new Error(validLabel(message.error.message) ?? "The Codex app server returned an error."),
         );
       } else {
         pending.resolve(message.result);
@@ -369,7 +369,7 @@ export class CodexAppServer {
   private request(method: string, params: Record<string, unknown> = {}): Promise<unknown> {
     const child = this.child;
     if (!child) {
-      return Promise.reject(new Error("The Codex app server is not running"));
+      return Promise.reject(new Error("The Codex app server is not running."));
     }
     const id = this.nextId++;
     return new Promise<unknown>((resolve, reject) => {
@@ -377,13 +377,13 @@ export class CodexAppServer {
       // every later read behind the same silent process until the window is reloaded. Tearing it
       // down here is what makes the next read start a fresh one.
       const timer = setTimeout(
-        () => this.teardown(new Error("The Codex app server did not answer in time")),
+        () => this.teardown(new Error("The Codex app server did not answer in time.")),
         REQUEST_TIMEOUT_MS,
       );
       this.pending.set(id, { resolve, reject, timer });
       child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`, (error) => {
         if (error) {
-          this.teardown(new Error("The Codex app server could not be written to"));
+          this.teardown(new Error("The Codex app server could not be written to."));
         }
       });
     });

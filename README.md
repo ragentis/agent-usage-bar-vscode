@@ -93,7 +93,7 @@ Every failure keeps the last good numbers on screen rather than blanking the ite
 | No Claude Code sign-in was found | Run Claude Code once so it stores a sign-in. On macOS, allow the keychain prompt. |
 | The Claude Code sign-in has expired | Run Claude Code; it renews its own token. This extension deliberately will not. |
 | Claude Code is no longer signed in | The service rejected the stored token. Sign in to Claude Code again. |
-| The Claude usage service is rate limiting requests | Nothing to do. The tooltip names the moment the read resumes, and it resumes. |
+| Rate limited. Retrying at … | Nothing to do. The tooltip names the moment the read resumes, and it resumes. |
 | The Claude usage service could not be reached | Network or proxy. The last reading stays on screen with its age. |
 | Codex reported no rate-limit windows | Sign in to Codex, or the account has no windows to report. |
 | The Codex CLI could not be started | Codex is not installed where this looks; see [Platform scope](#platform-scope). |
@@ -173,7 +173,7 @@ Neither carries a token, a prompt, or any file content. There is no telemetry, n
 
 A reading is a point-in-time snapshot, so a percentage can predate a window reset. The extension detects that from the recorded reset time, shows `0%` behind a `~` marker, and suppresses the warning color rather than presenting an unconfirmed number as current. A reading older than ten minutes is marked with its age in the tooltip, and a failed refresh keeps the last good numbers rather than blanking the item.
 
-When the Claude usage service rate limits a request, the `Retry-After` it sends is honoured for every trigger alike — the background poll, local agent activity, and the menu — and the tooltip counts that wait down instead of asking again. A refusal that names no window is held for a minute, and one naming more than an hour is asked again at the hour: a wait longer than the longest refresh interval is indistinguishable from a stall, and one long enough to overflow a timer is worse than that.
+When the Claude usage service rate limits a request, the `Retry-After` it sends is honoured for every trigger alike — the background poll, local agent activity, and the menu — and the tooltip names the moment the read resumes instead of asking again. A refusal that names no window is held for a minute, and one naming more than an hour is asked again at the hour: a wait longer than the longest refresh interval is indistinguishable from a stall, and one long enough to overflow a timer is worse than that.
 
 ## Platform scope
 

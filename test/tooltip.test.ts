@@ -45,14 +45,15 @@ const STEP = "<table><tr><td></td></tr></table>";
 const COLUMNS = 52;
 
 /**
- * What the two cells of a footnote row may come to together. Larger than `COLUMNS`, and that is
- * not a loosening: `COLUMNS` is what wrapped text is broken to, deliberately short of what the bar
- * is worth so that a line of the widest characters still fits under it. A footnote row is not
- * wrapped to anything — it is one line of proportional text laid between two edges — and measured
- * on screen the pair has about sixty of them before it reaches the end of the bar.
+ * What a line that is not wrapped to anything may be: the two cells of a footnote row together, and
+ * the failure heading with a short message riding on it. Larger than `COLUMNS`, and that is not a
+ * loosening: `COLUMNS` is what wrapped text is broken to, deliberately short of what the bar is
+ * worth so that a line of the widest characters still fits under it. These lines are taken whole
+ * instead, and measured on screen there are about sixty characters of proportional text before one
+ * reaches the end of the bar.
  *
- * Past that the cells wrap rather than the tooltip widening, since a table's own width is what a
- * cell is laid out against. Ugly, not broken — but the row is the one line here whose length no
+ * Past that a row's cells wrap rather than the tooltip widening, since a table's own width is what
+ * a cell is laid out against. Ugly, not broken — but the row is the one line here whose length no
  * function controls, being two locale-formatted values written by two different providers.
  */
 const ROW_COLUMNS = 60;
@@ -240,7 +241,7 @@ test("nothing on the tooltip moves between one reading and the next", () => {
  */
 test("no line of text is wider than the bar, however much a provider says", () => {
   const message =
-    "The Claude Code sign-in has expired; run Claude Code to renew it, then refresh this reading";
+    "The Claude Code sign-in has expired. Run Claude Code to renew it, then refresh this reading";
   const text = tooltip({ plan: "a plan name of quite unreasonable length for a plan" }, message);
 
   for (const line of drawnLines(text)) {
@@ -250,6 +251,17 @@ test("no line of text is wider than the bar, however much a provider says", () =
   // the message. And every continued line is indented under the line it continues.
   expect(drawnLines(text).join(" ").replace(/\s+/g, " ")).toContain(message);
   expect(text.match(/<br>&nbsp;&nbsp;/g)?.length).toBeGreaterThan(1);
+
+  // The one line held to the other measurement, and only as far as it: a heading with a short
+  // message on it is not wrapped to anything, so what it may be is what the bar is worth.
+  const short = drawnLines(tooltip({}, "Rate limited. Retrying at 12:23 AM."));
+  const stated = (drawn: string): boolean => drawn.includes("Last refresh failed");
+  const failure = short.filter(stated);
+  expect(failure).toHaveLength(1);
+  expect(failure[0]?.length).toBeLessThanOrEqual(ROW_COLUMNS + INDENT_WIDTH);
+  for (const rest of short.filter((drawn) => !stated(drawn))) {
+    expect(rest.length).toBeLessThanOrEqual(COLUMNS + INDENT_WIDTH);
+  }
 });
 
 test("every element and every attribute the tooltip writes survives the renderer's allowlist", () => {
@@ -386,18 +398,42 @@ test("each optional line appears only when there is something to say", () => {
 test("a failed refresh is stated beside the reading it failed to replace", () => {
   const text = tooltip({}, "connection refused");
 
-  // On a line of its own, parted from the reading above it by a gap, with the icon standing off
-  // from the words rather than against them.
+  // Parted from the reading above it by a gap, with the icon standing off from the words rather
+  // than against them.
   expect(text).toContain(
     `<h6></h6>${INDENT}<span style="color:var(--vscode-charts-yellow);">$(warning)</span>${INDENT}`,
   );
-  // What this file says on one line and what the provider said on the next, so a message has the
-  // whole width to be read across instead of half of it.
-  expect(drawnLines(text)).toContain("  @  Last refresh failed:");
-  expect(drawnLines(text)).toContain("  connection refused");
+  // A message that fits reads on the line that introduces it, at the cost of one line rather than
+  // two, and no wider than the bar it sits under.
+  expect(drawnLines(text)).toContain("  @  Last refresh failed: connection refused");
   // With the age, under the last rule, rather than among the windows.
   expect(text.indexOf("Last refresh failed")).toBeGreaterThan(text.indexOf("From Claude account"));
   expect(text.indexOf("Last refresh failed")).toBeLessThan(text.indexOf("Refresh</a>"));
+});
+
+/** The other half of that choice, where the line it would ride on is not worth the half it leaves. */
+test("a message too long for that line drops below it and takes the whole width", () => {
+  const text = tooltip({}, "The Claude usage service is rate limiting requests.");
+
+  expect(drawnLines(text)).toContain("  @  Last refresh failed:");
+  expect(drawnLines(text)).toContain("  The Claude usage service is rate limiting requests.");
+});
+
+/** Where a message is broken matters as much as that it fits. */
+test("a message of two sentences is broken at the sentence rather than at the column", () => {
+  const text = tooltip({}, "The Claude Code sign-in has expired. Run Claude Code to renew it.");
+
+  expect(drawnLines(text)).toContain("  The Claude Code sign-in has expired.");
+  expect(drawnLines(text)).toContain("  Run Claude Code to renew it.");
+});
+
+test("a message with a sentence too long for a line is wrapped as one run of words", () => {
+  const long =
+    "No sign-in. Run Claude Code once, allow the keychain prompt, and refresh this reading";
+  const drawn = drawnLines(tooltip({}, long));
+
+  expect(drawn).not.toContain("  No sign-in.");
+  expect(drawn.join(" ").replace(/\s+/g, " ")).toContain(long);
 });
 
 test("a window past its reset says so instead of showing a stale number", () => {

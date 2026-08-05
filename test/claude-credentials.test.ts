@@ -192,6 +192,6 @@ test("what nothing found means is stated in terms the platform can act on", () =
   expect(noSignInMessage("win32")).not.toMatch(/keychain/);
   expect(noSignInMessage("linux")).not.toMatch(/keychain/);
   // Both still say the one thing that fixes it everywhere.
-  expect(noSignInMessage("darwin")).toMatch(/run Claude Code once/);
-  expect(noSignInMessage("linux")).toMatch(/run Claude Code once/);
+  expect(noSignInMessage("darwin")).toMatch(/Run Claude Code once/);
+  expect(noSignInMessage("linux")).toMatch(/Run Claude Code once/);
 });
