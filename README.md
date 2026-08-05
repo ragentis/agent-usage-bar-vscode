@@ -4,6 +4,8 @@ Shows how much of your Claude Code and Codex plan is left, in the VS Code status
 
 Both numbers come from the account rather than from anything counted locally, so usage you spent on another machine, in a terminal, or in another editor still shows up here.
 
+<img src="assets/screenshot.png" width="466" alt="The Claude and Codex items in the VS Code status bar, with the Claude tooltip open above them: a filled bar and reset time for the 5-hour window and for the weekly one, the pace beside each, and links to refresh or open the settings.">
+
 ## What it shows
 
 One status bar item per provider, each with its own monochrome glyph:
