@@ -3,7 +3,7 @@
 Notable changes to Agent Usage Bar. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.1.0 — 2026-08-04
+## 0.1.0 — 2026-08-05
 
 First release. Desktop VS Code on Windows, macOS, and Linux; developed and hand-tested on Windows,
 with the per-platform paths covered by tests on all three CI runners.
