@@ -49,8 +49,8 @@ export function formatRemaining(resetsAt: Date | null, now = new Date()): string
  * the hover it is showing, which closes it. No wait outlives an hour here, so the time of day says
  * it all without a date beside it.
  */
-export function formatMoment(moment: Date): string {
-  return moment.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+export function formatMoment(moment: Date, locale?: string): string {
+  return moment.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 }
 
 /** Null while the reading is still current, so the tooltip only mentions age once it matters. */

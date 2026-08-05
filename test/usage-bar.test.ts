@@ -22,6 +22,7 @@ const TICK_MS = 5_000;
 const SETTINGS: ExtensionConfiguration = {
   displayMode: "compact",
   percentageMode: "used",
+  locale: undefined,
   showPace: true,
   warningThreshold: 80,
   errorThreshold: 95,

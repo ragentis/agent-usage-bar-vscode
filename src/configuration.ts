@@ -9,6 +9,8 @@ export type PercentageMode = "used" | "remaining";
 export interface ExtensionConfiguration {
   displayMode: DisplayMode;
   percentageMode: PercentageMode;
+  /** A language tag for dates and times, or undefined to leave the host's own default in place. */
+  locale: string | undefined;
   showPace: boolean;
   warningThreshold: number;
   errorThreshold: number;
@@ -41,6 +43,27 @@ function label(value: unknown): string {
     : "";
 }
 
+/**
+ * The setting exists because leaving the locale unnamed asks the wrong thing: the extension host
+ * resolves its default from the workbench display language, not from the regional settings the
+ * machine holds, so an English editor writes US dates wherever it runs.
+ *
+ * `supportedLocalesOf` is both the check and the answer — it throws on a malformed tag, returns
+ * nothing for one it has no data for, and otherwise hands back the canonical spelling, extensions
+ * and all. Anything else would reach `toLocaleString`, which throws on a tag it cannot parse.
+ */
+function locale(value: unknown): string | undefined {
+  const tag = typeof value === "string" ? value.trim() : "";
+  if (!tag) {
+    return undefined;
+  }
+  try {
+    return Intl.DateTimeFormat.supportedLocalesOf(tag)[0];
+  } catch {
+    return undefined;
+  }
+}
+
 function bounded(value: number, fallback: number, minimum: number, maximum: number): number {
   return Number.isFinite(value) ? Math.min(maximum, Math.max(minimum, value)) : fallback;
 }
@@ -61,6 +84,7 @@ export function resolveConfiguration(read: SettingReader): ExtensionConfiguratio
   return {
     displayMode: read<DisplayMode>("displayMode", "compact"),
     percentageMode: read<PercentageMode>("percentageMode", "used"),
+    locale: locale(read("locale", "")),
     showPace: read("showPace", true),
     warningThreshold,
     // The error background must never appear before the warning background.
@@ -84,6 +108,7 @@ export function resolveConfiguration(read: SettingReader): ExtensionConfiguratio
 const PRESENTATION_KEYS = [
   "displayMode",
   "percentageMode",
+  "locale",
   "showPace",
   "warningThreshold",
   "errorThreshold",

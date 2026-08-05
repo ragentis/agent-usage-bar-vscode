@@ -77,6 +77,7 @@ function configure(overrides: Partial<ExtensionConfiguration> = {}): ExtensionCo
   return {
     displayMode: "compact",
     percentageMode: "used",
+    locale: undefined,
     showPace: true,
     warningThreshold: 80,
     errorThreshold: 95,
@@ -535,6 +536,25 @@ test("an age is stated beside the reading it belongs to, not on its own", () => 
   expect(tooltip({}, null, {}, "2h ago")).toContain("as of ");
   expect(tooltip({}, null, {}, "2h ago")).toContain(" · 2h ago");
   expect(tooltip()).not.toContain("ago<");
+});
+
+/** All three: the reset on a window's second line, the age in the footer, the moment a pace names. */
+test("a configured locale writes every date in the tooltip", () => {
+  const twelve = tooltip({}, null, { locale: "en-US-u-hc-h12" });
+  const twentyFour = tooltip({}, null, { locale: "en-US-u-hc-h23" });
+
+  expect(windowBlock(twelve, "5-hour")).toContain("PM");
+  expect(windowBlock(twentyFour, "5-hour")).not.toContain("PM");
+  expect(twelve).toMatch(/as of .*(AM|PM)/);
+  expect(twentyFour).not.toMatch(/as of .*(AM|PM)/);
+  // A window spending faster than it refills is what draws the forecast's own moment out.
+  const spent = { windows: [{ ...snapshot.windows[0]!, usedPercent: 60 }] };
+  expect(windowBlock(tooltip(spent, null, { locale: "en-US-u-hc-h12" }), "5-hour")).toMatch(
+    /runs out ~.*(AM|PM)/,
+  );
+  expect(windowBlock(tooltip(spent, null, { locale: "en-US-u-hc-h23" }), "5-hour")).not.toMatch(
+    /runs out ~.*(AM|PM)/,
+  );
 });
 
 test("a Codex reading names Codex as where it came from", () => {

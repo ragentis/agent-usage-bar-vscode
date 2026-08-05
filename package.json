@@ -152,12 +152,23 @@
           "order": 9,
           "markdownDescription": "Replace the Codex mark in the status bar with your own text. Leave empty for the icon. A codicon reference such as `$(hubot)` also works."
         },
+        "agentUsageBar.locale": {
+          "type": "string",
+          "default": "",
+          "order": 10,
+          "examples": [
+            "en-GB",
+            "de-DE",
+            "en-US-u-hc-h23"
+          ],
+          "markdownDescription": "Language tag for the dates and times in the tooltip, such as `en-GB` or `de-DE`. Leave this empty to follow VS Code, which formats by its own display language rather than by your regional settings. Add `-u-hc-h23` to a tag for a 24-hour clock, or `-u-hc-h12` for a 12-hour one, as in `en-US-u-hc-h23`. A tag VS Code cannot resolve is ignored."
+        },
         "agentUsageBar.refreshIntervalSeconds": {
           "type": "number",
           "default": 300,
           "minimum": 30,
           "maximum": 3600,
-          "order": 10,
+          "order": 11,
           "description": "How often to re-read usage in the background, so this mainly covers usage spent on other machines or in other clients. Local agent activity also triggers a refresh, and no automatic read happens less than thirty seconds after the last one."
         }
       }

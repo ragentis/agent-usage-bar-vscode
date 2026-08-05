@@ -237,8 +237,8 @@ function bar(usedPercent: number, severity: Severity): string {
   );
 }
 
-function formatDate(date: Date): string {
-  return date.toLocaleString(undefined, {
+function formatDate(date: Date, locale?: string): string {
+  return date.toLocaleString(locale, {
     month: "short",
     day: "numeric",
     hour: "2-digit",
@@ -308,7 +308,7 @@ function windowBlock(
   const reset = window.reset
     ? "Reset since this reading"
     : window.resetsAt
-      ? `Resets ${escapeHtml(formatDate(window.resetsAt))}`
+      ? `Resets ${escapeHtml(formatDate(window.resetsAt, configuration.locale))}`
       : "";
   const pace = configuration.showPace ? paceFor(window, asOf) : null;
   const percent = formatPercent(window.usedPercent, configuration.percentageMode);
@@ -321,7 +321,10 @@ function windowBlock(
   return [
     `<h3>${INDENT}${dim(WINDOW_TITLES[window.kind])}${INDENT}${percent} <small>${dim(label)}</small>`,
     `<br>${INDENT}${meter}</h3>`,
-    detailRow(reset, pace ? escapeHtml(formatPace(pace, formatMoment)) : ""),
+    detailRow(
+      reset,
+      pace ? escapeHtml(formatPace(pace, (at) => formatMoment(at, configuration.locale))) : "",
+    ),
   ].join("");
 }
 
@@ -330,11 +333,16 @@ const FAILURE_LABEL = "Last refresh failed:";
 /** What it spends: the icon as the one glyph it is drawn as, its indent, the words, and a space. */
 const LABEL_COLUMNS = 1 + 2 + FAILURE_LABEL.length + 1;
 
-function footerBlock(snapshot: UsageSnapshot, age: string | null, failure: string | null): string {
+function footerBlock(
+  snapshot: UsageSnapshot,
+  age: string | null,
+  failure: string | null,
+  locale: string | undefined,
+): string {
   const source = lines(
     dim(
       wrapped(
-        `From ${SOURCE_TITLES[snapshot.source]} · as of ${formatDate(snapshot.fetchedAt)}${age ? ` · ${age}` : ""}`,
+        `From ${SOURCE_TITLES[snapshot.source]} · as of ${formatDate(snapshot.fetchedAt, locale)}${age ? ` · ${age}` : ""}`,
       ),
     ),
   );
@@ -431,7 +439,7 @@ export function buildTooltip(
     STEP,
     RULE,
     EDGE,
-    footerBlock(snapshot, age, failure),
+    footerBlock(snapshot, age, failure, configuration.locale),
     PAD,
     actionsBlock(),
     EDGE,

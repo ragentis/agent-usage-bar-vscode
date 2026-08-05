@@ -16,6 +16,7 @@ function configure(overrides: Partial<ExtensionConfiguration> = {}): ExtensionCo
   return {
     displayMode: "compact",
     percentageMode: "used",
+    locale: undefined,
     showPace: true,
     warningThreshold: 80,
     errorThreshold: 95,
@@ -37,6 +38,8 @@ test("only source settings trigger a provider read", () => {
   expect(configurationEffect(configure(), configure({ claudeEnabled: true }))).toBe("refresh");
   // A relabelled item is repainted, never re-read.
   expect(configurationEffect(configure(), configure({ codexLabel: "CX" }))).toBe("redraw");
+  // The reading is unchanged by a new locale; only the way its dates are written is.
+  expect(configurationEffect(configure(), configure({ locale: "de-DE" }))).toBe("redraw");
   // A new interval is consulted at the next tick; there is no timer left for it to restart.
   expect(configurationEffect(configure(), configure({ refreshIntervalSeconds: 60 }))).toBe("none");
 });
@@ -90,6 +93,7 @@ test("an unset section is the manifest's defaults, whole", () => {
   expect(stored()).toEqual({
     displayMode: "compact",
     percentageMode: "used",
+    locale: undefined,
     showPace: true,
     warningThreshold: DEFAULT_WARNING_THRESHOLD,
     errorThreshold: DEFAULT_ERROR_THRESHOLD,
@@ -132,4 +136,24 @@ test("a label is trimmed to something that cannot push the item off the bar", ()
   // Anything that is not text at all reads as no label, which is the icon.
   expect(stored({ "codex.label": 42 }).codexLabel).toBe("");
   expect(stored({ "claude.label": null }).claudeLabel).toBe("");
+});
+
+/**
+ * `toLocaleString` throws on a tag it cannot parse, and it is called while a tooltip is being
+ * drawn — so a tag that would throw has to become no tag here, where the setting is read.
+ */
+test("a locale is either one the runtime can format with or none at all", () => {
+  expect(stored({ locale: "en-GB" }).locale).toBe("en-GB");
+  // Canonical spelling, so the same locale written two ways is one value to compare redraws by.
+  expect(stored({ locale: "EN-gb" }).locale).toBe("en-GB");
+  expect(stored({ locale: "  de-DE  " }).locale).toBe("de-DE");
+  // The hour cycle rides along on the tag, which is what spares this setting a format of its own.
+  expect(stored({ locale: "en-US-u-hc-h23" }).locale).toBe("en-US-u-hc-h23");
+  // Unset, malformed, unknown, and not a string at all: every one of them leaves the host's own.
+  expect(stored().locale).toBeUndefined();
+  expect(stored({ locale: "" }).locale).toBeUndefined();
+  expect(stored({ locale: "d.M.yyyy. HH:mm" }).locale).toBeUndefined();
+  expect(stored({ locale: "en_US" }).locale).toBeUndefined();
+  expect(stored({ locale: "xx-YY" }).locale).toBeUndefined();
+  expect(stored({ locale: 42 }).locale).toBeUndefined();
 });

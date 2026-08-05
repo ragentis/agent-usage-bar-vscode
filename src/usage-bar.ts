@@ -339,7 +339,7 @@ export class UsageBar {
       held
         ? {
             ...view,
-            message: `Rate limited. Retrying at ${formatMoment(hold.until)}.`,
+            message: `Rate limited. Retrying at ${formatMoment(hold.until, this.configuration.locale)}.`,
           }
         : view,
       this.configuration,

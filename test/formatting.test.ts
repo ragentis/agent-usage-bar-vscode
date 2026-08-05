@@ -20,6 +20,7 @@ function configure(overrides: Partial<ExtensionConfiguration> = {}): ExtensionCo
   return {
     displayMode: "compact",
     percentageMode: "used",
+    locale: undefined,
     showPace: true,
     warningThreshold: 80,
     errorThreshold: 95,
@@ -69,6 +70,20 @@ test("a retry states the moment it comes due, to the minute", () => {
   expect(formatMoment(new Date("2026-08-01T10:00:01Z"))).toBe(
     formatMoment(new Date("2026-08-01T10:00:59Z")),
   );
+});
+
+/**
+ * Asserted through the hour cycle a tag carries, that being the one difference here which does not
+ * depend on the locale data the runtime happens to hold.
+ */
+test("a configured locale decides how a moment is written", () => {
+  const moment = new Date("2026-08-01T18:56:00Z");
+  const at = (locale: string): string => formatMoment(moment, locale);
+
+  expect(at("en-US-u-hc-h23")).toBe(at("en-GB-u-hc-h23"));
+  expect(at("en-US-u-hc-h23")).not.toBe(at("en-US-u-hc-h12"));
+  expect(at("en-US-u-hc-h12")).toMatch(/(AM|PM)/);
+  expect(at("en-US-u-hc-h23")).not.toMatch(/(AM|PM)/);
 });
 
 test("severity always uses the original used percentage", () => {

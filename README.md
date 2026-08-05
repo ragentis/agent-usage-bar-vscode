@@ -78,9 +78,12 @@ Run **Agent Usage Bar: Open settings**, or click either status bar item and pick
 | `agentUsageBar.codex.enabled` | `true` | Show Codex usage. |
 | `agentUsageBar.claude.label` | `""` | Text to show instead of the Claude mark. |
 | `agentUsageBar.codex.label` | `""` | Text to show instead of the Codex mark. |
+| `agentUsageBar.locale` | `""` | Language tag for dates and times; empty follows VS Code. |
 | `agentUsageBar.refreshIntervalSeconds` | `300` | Background refresh interval, clamped to 30–3600. |
 
 In `compact` mode the item shows the shortest window, unless a longer one is the reason the item is colored — a highlighted status bar always explains itself.
+
+Dates and times follow VS Code's display language when the locale setting is empty, which is not the same as the regional settings your operating system holds — VS Code in English shows US dates on a machine set to anything else. Write a language tag such as `en-GB`, `de-DE`, or `sr-Latn-RS` to say which one you want, and append `-u-hc-h23` for a 24-hour clock or `-u-hc-h12` for a 12-hour one, as in `en-US-u-hc-h23`. A tag VS Code cannot resolve is ignored rather than shown.
 
 Each provider is drawn with its own monochrome mark. Set a label if you would rather see your own text; it accepts a plain string or a codicon reference such as `$(sparkle)`, and is collapsed to a single line and cut to 24 characters so a hand-edited value cannot stretch the status bar.
 
