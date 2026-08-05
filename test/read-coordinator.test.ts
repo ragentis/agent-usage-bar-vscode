@@ -15,8 +15,14 @@ function delay(ms: number): Promise<void> {
  * reaches the others only once the storage service has carried it there, which is the gap every
  * rule below exists for. `carry` of zero is a store that is never caught mid-write, for the tests
  * that are about what an entry means rather than about who got to it first.
+ *
+ * `compression` divides every wait the coordinator takes, and is a dial rather than a constant
+ * because a slot squeezed too far stops being a slot. Windows resolves a timer to about sixteen
+ * milliseconds, so a stagger compressed under that arrives whenever the clock next ticks, and the
+ * order the slots exist to impose is settled by rounding instead. A test that turns on the stagger
+ * relaxes this and raises `carry` by the same factor, which leaves the two in the same proportion.
  */
-function profile(carry = 0): { window: (id?: string) => ReadCoordinator } {
+function profile(carry = 0, compression = 20): { window: (id?: string) => ReadCoordinator } {
   const canonical = new Map<string, unknown>();
   const views: Map<string, unknown>[] = [];
   return {
@@ -50,7 +56,7 @@ function profile(carry = 0): { window: (id?: string) => ReadCoordinator } {
       };
       // Waits are compressed rather than removed: the order of the slots is what is under test, and
       // running them at their stated length would put a second and a half in every race here.
-      return new ReadCoordinator(new SharedUsageState(store), (ms) => delay(ms / 20), id);
+      return new ReadCoordinator(new SharedUsageState(store), (ms) => delay(ms / compression), id);
     },
   };
 }
@@ -87,7 +93,9 @@ test("nothing stored is nothing to defer to", () => {
 test("a simultaneous arrival spends one request, not one each", async () => {
   // Every window restored together comes due in the same instant, and the store takes a moment to
   // carry the first claim to the rest. Six windows finding the lease free at once is the case.
-  const { window } = profile(4);
+  // The one test here whose answer rests on the distance between two slots, so it is the one that
+  // cannot afford to have that distance rounded away.
+  const { window } = profile(16, 5);
   const open = ["a", "b", "c", "d", "e", "f"].map(window);
 
   const won = await Promise.all(open.map((each) => each.wins("claude")));
