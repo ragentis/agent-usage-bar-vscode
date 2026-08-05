@@ -7,8 +7,25 @@ import type { ProviderId, ProviderView } from "./usage";
  * window, short enough that closing that window is not felt.
  */
 const INCUMBENT_GRACE_MS = 5_000;
-const CLAIM_SETTLE_MS = 100;
+/**
+ * Long enough to cover the store carrying a write to the other windows, which takes tens of
+ * milliseconds once the windows are up and rather longer while they are all still starting.
+ */
+const CLAIM_SETTLE_MS = 150;
 const CLAIM_SETTLE_JITTER_MS = 150;
+/**
+ * The stagger a window waits before contesting a lease, as a slot count and the distance between
+ * slots. The distance is what makes the wait worth taking: it is longer than a claim takes to
+ * settle, so a window reaching its slot is looking at a store that has had time to carry whoever
+ * went before it. The count sets how far the stagger reaches, and a second and a half is the delay
+ * in carrying a write that it can still cover.
+ *
+ * Neither is a count of windows. However many are open, only the earliest slot any of them landed
+ * in decides anything, and windows that share that slot settle it between them. The span is paid
+ * once, on the first read after a window opens, and the window the reads have settled on skips it.
+ */
+const CLAIM_SLOTS = 6;
+const CLAIM_SLOT_MS = 350;
 
 /** An impossibly old stamp, which is what "nobody is reading" looks like to every other window. */
 const NO_LEASE = 1;
@@ -28,13 +45,19 @@ function delay(ms: number): Promise<void> {
  * detection: its stamp ages out like any other.
  */
 export class ReadCoordinator {
-  /** Distinct between the windows running at the same time, which is all the lease compares. */
-  private readonly windowId = Math.random().toString(36).slice(2, 10);
+  /** When this window last set out to read each provider; see `publish`. */
+  private readonly claimedAt = new Map<ProviderId, number>();
 
   constructor(
     private readonly shared: SharedUsageState,
     /** Injected so the tests need not wait out the settling they are checking. */
     private readonly settle: (ms: number) => Promise<void> = delay,
+    /**
+     * Distinct between the windows running at the same time, which is all the lease compares. It
+     * also picks the slot, so the tests name it rather than have the window draw one and read the
+     * order back out of the result.
+     */
+    private readonly windowId: string = Math.random().toString(36).slice(2, 10),
   ) {}
 
   latest(provider: ProviderId): SharedEntry | null {
@@ -85,7 +108,23 @@ export class ReadCoordinator {
    * is a second old.
    */
   take(provider: ProviderId): PromiseLike<void> {
+    // Kept here rather than read back from the entry, which any other window may have written over
+    // by the time the read answers. It is what `publish` weighs the result against.
+    this.claimedAt.set(provider, Date.now());
     return this.shared.claim(provider, this.windowId);
+  }
+
+  /**
+   * Which slot this window contests a free lease in. Derived from the window id rather than drawn
+   * at random, so the order between the windows open right now is decided before they need it and
+   * does not change from one read to the next.
+   */
+  private get slot(): number {
+    let hash = 0;
+    for (const character of this.windowId) {
+      hash = (hash * 31 + character.charCodeAt(0)) % CLAIM_SLOTS;
+    }
+    return hash * CLAIM_SLOT_MS;
   }
 
   /**
@@ -93,25 +132,67 @@ export class ReadCoordinator {
    * before it is trusted: write it, pause for a jittered stretch, then ask the store who got there.
    * Only that window spends a request. This is not a lock and cannot be one, but it turns a
    * simultaneous arrival into a single read.
+   *
+   * The settling alone is not enough for windows that come due in the same instant — every VS Code
+   * window restored together does — because each writes before any other's write has arrived, and
+   * so reads back its own stamp. Waiting out a slot first is what separates those writes, and the
+   * window that read last skips the wait: it is the one the reads are meant to settle on, and in
+   * the steady state it is the only one contesting anything.
    */
   async wins(provider: ProviderId): Promise<boolean> {
+    if (this.shared.read(provider)?.owner !== this.windowId) {
+      await this.settle(this.slot);
+      // Standing down here rather than after claiming is the point of the wait: a stamp left by a
+      // window that is not reading is one the window that is cannot publish under.
+      if (this.tooSoon(this.shared.read(provider))) {
+        return false;
+      }
+    }
     await this.take(provider);
     await this.settle(CLAIM_SETTLE_MS + Math.random() * CLAIM_SETTLE_JITTER_MS);
-    return this.shared.read(provider)?.owner === this.windowId;
+    const settled = this.shared.read(provider);
+    if (!settled || settled.owner === this.windowId) {
+      return true;
+    }
+    // We are holding someone else's stamp, so the check above cannot answer it: several windows
+    // claimed in the same instant and each is holding whichever write reached it last. The one
+    // that claimed latest is the one that reads, which is the same rule the check above applies —
+    // holding your own stamp means yours was the last to arrive — and the same one the store
+    // itself keeps to. It has to be the latest rather than the earliest, or every window that
+    // claimed before the last one would find a later stamp in its hands and read.
+    //
+    // Only a window that saw a free lease when it claimed gets this far, so what is found here is
+    // always a claim made alongside ours rather than one we should have deferred to.
+    const claimedAt = this.claimedAt.get(provider) ?? 0;
+    return settled.readAt === claimedAt
+      ? this.windowId > settled.owner
+      : settled.readAt < claimedAt;
   }
 
   /**
-   * A result is ours to write only while the claim is still ours. A read can outlive its claim — a
-   * forced refresh lands over the top of it — and would otherwise put an older reading where a
-   * newer one sits. The window id suffices as a token: one window never has two different reads of
-   * a provider in flight, because they share the single request (`UsageBar.fetchOnce`).
+   * Whether the lease is still stamped with this window. Only handing one back asks this: a lease
+   * is a thing one window holds, and returning one that has since passed on would set every window
+   * reading at once. What may be written under it is a separate question, answered in `publish`.
    */
   private holdsClaim(provider: ProviderId): boolean {
     return this.shared.read(provider)?.owner === this.windowId;
   }
 
+  /**
+   * What a result is weighed against is the reading already published, not the stamp on the lease.
+   * The lease cannot answer this: the store carries writes to the windows in whatever order it
+   * manages, so two windows that claimed in the same instant each end up holding the other's stamp,
+   * and asking it who reads would have both of them drop the answer they had just spent a request
+   * on. Nothing published since we set out is what makes ours the newest reading there is — and it
+   * is the same question the lease was standing in for, asked of the reading directly.
+   *
+   * So a slow read still writes nothing over the forced refresh that overtook it, and a read nobody
+   * else duplicated still lands, whatever the lease says by the time it answers.
+   */
   async publish(provider: ProviderId, view: ProviderView, retryAt: Date | null): Promise<void> {
-    if (this.holdsClaim(provider)) {
+    const claimedAt = this.claimedAt.get(provider);
+    const published = this.shared.read(provider)?.publishedAt ?? 0;
+    if (claimedAt !== undefined && published <= claimedAt) {
       await this.shared.publish(provider, { owner: this.windowId, view, retryAt });
     }
   }

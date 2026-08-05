@@ -10,22 +10,49 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** One store, as the windows of a profile see it: what one writes, the next one reads. */
-function store(): SharedStore {
-  const values = new Map<string, unknown>();
+/**
+ * The store as the windows of a profile really see it. Each window reads its own copy and a write
+ * reaches the others only once the storage service has carried it there, which is the gap every
+ * rule below exists for. `carry` of zero is a store that is never caught mid-write, for the tests
+ * that are about what an entry means rather than about who got to it first.
+ */
+function profile(carry = 0): { window: (id?: string) => ReadCoordinator } {
+  const canonical = new Map<string, unknown>();
+  const views: Map<string, unknown>[] = [];
   return {
-    get: (key) => values.get(key),
-    update: (key, value) => {
-      values.set(key, JSON.parse(JSON.stringify(value)) as unknown);
-      return Promise.resolve();
+    window: (id?: string) => {
+      // A window that opens later starts from what is already stored, rather than from nothing.
+      const own = new Map<string, unknown>(canonical);
+      views.push(own);
+      const store: SharedStore = {
+        get: (key) => own.get(key),
+        update: (key, value) => {
+          const stored = JSON.parse(JSON.stringify(value)) as unknown;
+          canonical.set(key, stored);
+          own.set(key, stored);
+          // Each window applies what reaches it, in the order it reaches it. Two windows writing at
+          // the same moment therefore end up holding each other's value rather than agreeing on
+          // one, which is why a claim cannot be a lock and why losing one has to be free.
+          const deliver = () => {
+            for (const view of views) {
+              if (view !== own) {
+                view.set(key, stored);
+              }
+            }
+          };
+          if (carry === 0) {
+            deliver();
+          } else {
+            setTimeout(deliver, carry);
+          }
+          return Promise.resolve();
+        },
+      };
+      // Waits are compressed rather than removed: the order of the slots is what is under test, and
+      // running them at their stated length would put a second and a half in every race here.
+      return new ReadCoordinator(new SharedUsageState(store), (ms) => delay(ms / 20), id);
     },
   };
-}
-
-/** Settling is kept short: what is under test is who wins, not how long the pause runs. */
-function profile(): { window: () => ReadCoordinator } {
-  const shared = new SharedUsageState(store());
-  return { window: () => new ReadCoordinator(shared, () => delay(20)) };
 }
 
 /**
@@ -52,13 +79,56 @@ test("nothing stored is nothing to defer to", () => {
   expect(window.overdue(null, 300)).toBe(true);
 });
 
+/**
+ * Ids are named rather than drawn, because the id picks the slot a window contests in: `a` to `f`
+ * take one slot each, and `g` shares `a`'s. Drawing them would make what these tests are about —
+ * the order the windows arrive in — a matter of luck.
+ */
 test("a simultaneous arrival spends one request, not one each", async () => {
-  const { window } = profile();
-  const open = [window(), window(), window(), window(), window(), window()];
+  // Every window restored together comes due in the same instant, and the store takes a moment to
+  // carry the first claim to the rest. Six windows finding the lease free at once is the case.
+  const { window } = profile(4);
+  const open = ["a", "b", "c", "d", "e", "f"].map(window);
 
   const won = await Promise.all(open.map((each) => each.wins("claude")));
 
   expect(won.filter(Boolean)).toHaveLength(1);
+});
+
+test("windows that share a slot settle it between them, however many there are", async () => {
+  // `a`, `g` and `m` hash alike, so none of them sees the others stand down and all three claim.
+  // Two of them would settle it whichever way the rule ran; three is what tells the rule apart,
+  // because every window but the last is holding a stamp later than its own.
+  const { window } = profile(4);
+  const open = ["a", "g", "m"].map(window);
+
+  const won = await Promise.all(open.map((each) => each.wins("claude")));
+
+  expect(won.filter(Boolean)).toHaveLength(1);
+});
+
+test("a claim that lost the race does not cost the window that won its reading", async () => {
+  // Carried slower than a claim settles, which is the state every window is in while they are all
+  // still starting: none of them can see the others stand down, so several claim in earnest.
+  const { window } = profile(60);
+  const open = ["a", "b", "c", "f"].map(window);
+
+  const won = await Promise.all(open.map((each) => each.wins("codex")));
+  const readers = open.filter((_, index) => won[index]);
+  // The read itself takes a moment, and the stamps left by the windows that stood down land during
+  // it. Publishing before they arrive is what made this look like it worked.
+  await delay(150);
+  await Promise.all(readers.map((each) => each.publish("codex", view, null)));
+  await delay(150);
+
+  // A reading published under a lease another window has since stamped is a reading dropped, and an
+  // entry left looking like a read still in flight — which puts every window back on the floor.
+  const entry = open[0]?.latest("codex");
+  if (!entry) {
+    throw new Error("nothing was stored for codex");
+  }
+  expect(entry.view.message).toBe("read");
+  expect(entry.publishedAt).toBeGreaterThanOrEqual(entry.readAt);
 });
 
 test("the window that read last is let back in before the others are", async () => {
