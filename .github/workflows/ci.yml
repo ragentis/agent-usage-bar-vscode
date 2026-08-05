@@ -62,6 +62,7 @@ jobs:
       - run: npm test
 
   package:
+    needs: [checks, test]
     # Packaging is a check too: it runs the bundle audit and fails on a manifest that would not
     # install, neither of which any other job would notice. Linux produces one platform-neutral VSIX
     # while preserving POSIX file modes if executable content is added later. release.yml publishes
