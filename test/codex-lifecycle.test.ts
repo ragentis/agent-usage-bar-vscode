@@ -178,7 +178,28 @@ test("an error the server names is what the item says", async () => {
 
   codex.says(`${JSON.stringify({ jsonrpc: "2.0", id: 2, error: { message: "Not signed in" } })}\n`);
 
-  await expect(reading).resolves.toEqual({ status: "unavailable", message: "Not signed in" });
+  // Marked as the server's own words, which is what keeps the tooltip from reading them for a
+  // remedy: what looks like one in a sentence nobody here wrote is whatever it happened to be.
+  await expect(reading).resolves.toEqual({
+    status: "unavailable",
+    message: "Not signed in",
+    verbatim: true,
+  });
+});
+
+test("an error of this extension's own making is not marked as the server's", async () => {
+  const world = harness();
+  const reading = world.app.readUsage();
+  const codex = world.latest();
+  await handshake(codex);
+
+  codex.says(`${JSON.stringify({ jsonrpc: "2.0", id: 2, error: { message: "   " } })}\n`);
+
+  await expect(reading).resolves.toEqual({
+    status: "unavailable",
+    message: "The Codex app server returned an error.",
+    verbatim: false,
+  });
 });
 
 test("a server that stops answering is dropped, and the next read starts a fresh one", async () => {

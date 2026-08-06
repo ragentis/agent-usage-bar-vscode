@@ -275,10 +275,10 @@ test("each way the service can decline says which one it was", async () => {
   expect(refusal(await fetchClaudeUsage(await signedIn())).message).toMatch(/answered 500/);
 
   service(answered(200, undefined));
-  expect(refusal(await fetchClaudeUsage(await signedIn())).message).toMatch(/could not be parsed/);
+  expect(refusal(await fetchClaudeUsage(await signedIn())).message).toMatch(/could not be read/);
 
   service(answered(200, { limits: [] }));
-  expect(refusal(await fetchClaudeUsage(await signedIn())).message).toMatch(/no known windows/);
+  expect(refusal(await fetchClaudeUsage(await signedIn())).message).toMatch(/held no windows/);
 
   // None of these carries a wait: only the service naming one produces a wait.
   service(answered(500, {}));
@@ -290,7 +290,7 @@ test("a request that never arrives never quotes what it was carrying", async () 
 
   const result = refusal(await fetchClaudeUsage(await signedIn()));
 
-  expect(result.message).toBe("The Claude usage service could not be reached.");
+  expect(result.message).toBe("The usage service could not be reached.");
   expect(result.message).not.toMatch(/secret-token/);
 });
 

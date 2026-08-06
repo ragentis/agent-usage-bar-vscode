@@ -339,7 +339,9 @@ export class UsageBar {
       held
         ? {
             ...view,
-            message: `Rate limited. Retrying at ${formatMoment(hold.until, this.configuration.locale)}.`,
+            // One sentence, because the tooltip reads a second one as advice and marks it as such:
+            // when the read resumes is not something a reader is being asked to do anything about.
+            message: `Rate limited, retrying at ${formatMoment(hold.until, this.configuration.locale)}.`,
           }
         : view,
       this.configuration,
@@ -399,6 +401,6 @@ function nextView(previous: ProviderView | null, result: ProviderResult): Provid
     previous,
     result.status === "ok"
       ? { snapshot: result.snapshot, message: null }
-      : { snapshot: null, message: result.message },
+      : { snapshot: null, message: result.message, verbatim: result.verbatim },
   );
 }

@@ -195,6 +195,7 @@ test("a v1 entry written by another window reads back as the reading it names", 
     retryAt: null,
     view: {
       message: null,
+      verbatim: false,
       snapshot: {
         windows: [
           {

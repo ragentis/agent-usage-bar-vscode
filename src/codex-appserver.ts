@@ -8,6 +8,7 @@ import {
   sortWindows,
   validDate,
   validLabel,
+  validMessage,
   validUsedPercent,
   validWindowMinutes,
   type ProviderResult,
@@ -31,6 +32,13 @@ declare const __EXTENSION_VERSION__: unknown;
 const VERSION = typeof __EXTENSION_VERSION__ === "string" ? __EXTENSION_VERSION__ : "0.0.0-dev";
 
 const CLIENT_INFO = { name: "agent-usage-bar", title: "Agent Usage Bar", version: VERSION };
+
+/**
+ * An error carrying the app server's own words, which the tooltip draws rather than reads for a
+ * remedy. Every other failure in this file is a sentence this extension wrote. The class is the
+ * whole of the marker: nothing is put into the text, so nothing has to be taken back out.
+ */
+class CodexSaid extends Error {}
 
 interface PendingRequest {
   resolve: (value: unknown) => void;
@@ -258,12 +266,12 @@ export class CodexAppServer {
         ? { status: "ok", snapshot }
         : {
             status: "unavailable",
-            message: "Codex reported no rate-limit windows. Sign in to Codex.",
+            message: "Codex reported no usage windows. Sign in to Codex.",
           };
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "The Codex app server could not be reached.";
-      return { status: "unavailable", message };
+        error instanceof Error ? error.message : "The Codex app server is unreachable.";
+      return { status: "unavailable", message, verbatim: error instanceof CodexSaid };
     }
   }
 
@@ -307,7 +315,11 @@ export class CodexAppServer {
     child.stdout.on("data", (chunk: string) => this.consume(chunk));
     // Draining stderr keeps the pipe from filling and stalling the child.
     child.stderr.resume();
-    child.on("error", () => this.teardown(new Error("The Codex CLI could not be started.")));
+    child.on("error", () =>
+      this.teardown(
+        new Error("The Codex CLI could not be started. Check that Codex is installed."),
+      ),
+    );
     child.on("exit", () => this.teardown(new Error("The Codex app server stopped.")));
 
     await this.request("initialize", {
@@ -320,7 +332,7 @@ export class CodexAppServer {
   private consume(chunk: string): void {
     this.buffer += chunk;
     if (this.buffer.length > MAX_BUFFER_CHARS) {
-      this.teardown(new Error("The Codex app server sent an oversized message."));
+      this.teardown(new Error("The Codex answer was too large."));
       return;
     }
     let index;
@@ -351,8 +363,9 @@ export class CodexAppServer {
       clearTimeout(pending.timer);
       this.pending.delete(message.id);
       if (isRecord(message.error)) {
+        const said = validMessage(message.error.message);
         pending.reject(
-          new Error(validLabel(message.error.message) ?? "The Codex app server returned an error."),
+          said ? new CodexSaid(said) : new Error("The Codex app server returned an error."),
         );
       } else {
         pending.resolve(message.result);
@@ -377,13 +390,13 @@ export class CodexAppServer {
       // every later read behind the same silent process until the window is reloaded. Tearing it
       // down here is what makes the next read start a fresh one.
       const timer = setTimeout(
-        () => this.teardown(new Error("The Codex app server did not answer in time.")),
+        () => this.teardown(new Error("The Codex app server timed out.")),
         REQUEST_TIMEOUT_MS,
       );
       this.pending.set(id, { resolve, reject, timer });
       child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, params })}\n`, (error) => {
         if (error) {
-          this.teardown(new Error("The Codex app server could not be written to."));
+          this.teardown(new Error("The Codex app server closed its input."));
         }
       });
     });

@@ -78,7 +78,15 @@ export function renderStatusBarItem(
   const blocked = snapshot.blocked ? "$(error) " : "";
   draw(item, {
     text: `${mark} ${blocked}${buildStatusText(snapshot, configuration, now)}${age ? " $(history)" : ""}`,
-    tooltip: buildTooltip(title, icon, snapshot, configuration, view.message, age, now),
+    tooltip: buildTooltip(
+      title,
+      icon,
+      snapshot,
+      configuration,
+      view.message === null ? null : { message: view.message, verbatim: view.verbatim },
+      age,
+      now,
+    ),
     background: BACKGROUNDS[pickSeverity(snapshot, configuration, now)],
   });
 }

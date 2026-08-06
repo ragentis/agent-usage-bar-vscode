@@ -178,10 +178,15 @@ function atSentences(text: string, taken: number): string[] | null {
   if (taken + text.length <= COLUMNS) {
     return null;
   }
-  const parts = text.split(/(?<=[.!?])\s+/);
+  const parts = sentences(text);
   const fits = (part: string, index: number): boolean =>
     part.length + (index === 0 ? taken : 0) <= COLUMNS;
   return parts.length > 1 && parts.every(fits) ? parts : null;
+}
+
+/** The breaks a message already carries, which are better ones than any this file can find. */
+function sentences(text: string): string[] {
+  return text.split(/(?<=[.!?])\s+/);
 }
 
 /**
@@ -306,7 +311,9 @@ function windowBlock(
   asOf: Date,
 ): string {
   const reset = window.reset
-    ? "Reset since this reading"
+    ? // The marker the item is showing, beside the words that explain it. It is the whole of what a
+      // note at the foot of the tooltip used to say, on a line that is drawn anyway.
+      "~ Reset since this reading"
     : window.resetsAt
       ? `Resets ${escapeHtml(formatDate(window.resetsAt, configuration.locale))}`
       : "";
@@ -330,13 +337,33 @@ function windowBlock(
 
 const FAILURE_LABEL = "Last refresh failed:";
 
-/** What it spends: the icon as the one glyph it is drawn as, its indent, the words, and a space. */
-const LABEL_COLUMNS = 1 + 2 + FAILURE_LABEL.length + 1;
+/** What it spends: the words, and the space before whatever follows them. */
+const LABEL_COLUMNS = FAILURE_LABEL.length + 1;
+
+/**
+ * What marks the line under it as advice rather than as the rest of the sentence above. A lightbulb
+ * because that is what the workbench draws where something can be done about what is on screen, and
+ * dimmed rather than colored because the heading above it is already carrying the one color here.
+ */
+const HINT_ICON = "$(lightbulb)";
+
+/** The icon as the one glyph it is drawn as, and the space standing it off from the words. */
+const HINT_COLUMNS = 1 + 1;
+
+/**
+ * Why the last read failed, and whose words say so. A pair rather than two arguments, because the
+ * second decides how the first is laid out and a boolean beside a string in an argument list is a
+ * boolean that ends up beside the wrong string.
+ */
+export interface Failure {
+  message: string;
+  verbatim?: boolean;
+}
 
 function footerBlock(
   snapshot: UsageSnapshot,
   age: string | null,
-  failure: string | null,
+  failure: Failure | null,
   locale: string | undefined,
 ): string {
   const source = lines(
@@ -351,18 +378,66 @@ function footerBlock(
   }
   // Parted from the line above by a gap rather than by a break, because it is a different thing
   // being said: what is on screen, and then why it is not newer.
-  const warning = `${span("$(warning)", `color:${COLOR.warning};`)}${INDENT}`;
-  const message = flattened(failure);
-  // A short message rides on the line that introduces it, at the cost of one line rather than two.
-  // A long one drops below, where it has the whole width: sharing the line it would have half the
-  // columns and be broken in the middle of itself, which is worse than the line that would save.
+  return [source, GAP, failureBlock(failure)].join("");
+}
+
+/**
+ * A failure as the two things it is: what happened, on the line that names it, and what to do about
+ * it under that, marked as advice rather than as more of the sentence above. Every message this
+ * extension writes is written to that shape — a statement short enough for the heading's line, and
+ * at most one remedy after it — so nothing here chooses a layout by how long a message came out.
+ * The sentence is the whole of the structure: the first is what happened, anything after it is what
+ * to do, and a message with nothing to do about it is one sentence and one line.
+ *
+ * The words of the heading are in the warning color and carry no icon. The color is what parts what
+ * this file says from what the provider said, now that a break no longer always does; and with
+ * nothing standing in the margin, every line here starts in the column the whole tooltip starts in.
+ */
+function failureBlock({ message: failure, verbatim }: Failure): string {
+  const label = span(FAILURE_LABEL, `color:${COLOR.warning};`);
+  // Someone else's words, drawn as they came and read for nothing: a second sentence in a message
+  // this extension did not write is a second sentence, not advice.
+  if (verbatim) {
+    return lines(`${label} ${dim(whole(cut(flattened(failure)), LABEL_COLUMNS))}`);
+  }
+  const [cause = "", ...rest] = sentences(flattened(failure));
+  const hint = rest.join(" ");
+  // Parted from the line above by a box rather than by nothing, the smallest rung there is: the
+  // advice is a different kind of line, and six pixels is enough to be read as one.
   return [
-    source,
-    GAP,
-    LABEL_COLUMNS + message.length <= LINE_COLUMNS
-      ? lines(`${warning}${dim(`${FAILURE_LABEL} ${escapeHtml(message)}`)}`)
-      : lines(`${warning}${dim(FAILURE_LABEL)}`, dim(wrapped(message))),
+    lines(`${label} ${dim(whole(cause, LABEL_COLUMNS))}`),
+    ...(hint ? [STEP, lines(`${dim(HINT_ICON)}&nbsp;${dim(whole(hint, HINT_COLUMNS))}`)] : []),
   ].join("");
+}
+
+/**
+ * A line taken as it is where it goes as it is, and broken where it does not — the one rule both
+ * lines of a failure are laid out by, and the reason neither needs a layout of its own. Text this
+ * extension writes is written to go whole, so only a provider's own error reaches the break, and it
+ * lands where it falls rather than stretching the box out around a bar that cannot stretch with it.
+ */
+function whole(text: string, taken: number): string {
+  return taken + text.length <= LINE_COLUMNS ? escapeHtml(text) : wrapped(text, taken);
+}
+
+/**
+ * What two lines hold: what the heading leaves of its own, and a whole line under it. Counted in
+ * the width a wrapped line is broken to, since text long enough to be cut is text that would wrap.
+ */
+const MESSAGE_COLUMNS = COLUMNS - LABEL_COLUMNS + COLUMNS;
+
+/**
+ * Two lines of it, and a mark to say there was more: only text this file did not write reaches
+ * here, and a failure of unknown length would push the actions off the bottom of a hover that
+ * cannot scroll. Cut at a space, so what is kept ends on a word rather than inside one.
+ */
+function cut(text: string): string {
+  if (text.length <= MESSAGE_COLUMNS) {
+    return text;
+  }
+  const kept = text.slice(0, MESSAGE_COLUMNS - 1).trimEnd();
+  const space = kept.lastIndexOf(" ");
+  return `${space > 0 ? kept.slice(0, space) : kept}…`;
 }
 
 function actionsBlock(): string {
@@ -389,7 +464,7 @@ export function buildTooltip(
   icon: string,
   snapshot: UsageSnapshot,
   configuration: ExtensionConfiguration,
-  failure: string | null,
+  failure: Failure | null,
   age: string | null,
   now = new Date(),
 ): string {
@@ -422,16 +497,6 @@ export function buildTooltip(
   }
   if (snapshot.credits) {
     blocks.push(GAP, lines(`<b>Credits</b> ${dim(`· ${wrapped(snapshot.credits, 10)}`)}`));
-  }
-  if (windows.some((window) => window.reset)) {
-    blocks.push(
-      GAP,
-      lines(
-        dim(
-          wrapped("~ marks a window assumed empty after its reset. Run the agent for a reading."),
-        ),
-      ),
-    );
   }
   // Thirteen of margin plus six of box over the rule, where nothing is taken back.
   blocks.push(

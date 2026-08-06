@@ -91,18 +91,18 @@ Each provider is drawn with its own monochrome mark. Set a label if you would ra
 
 ## Troubleshooting
 
-Every failure keeps the last good numbers on screen rather than blanking the item, so the tooltip is where the reason lives.
+Every failure keeps the last good numbers on screen rather than blanking the item, so the tooltip is where the reason lives. It states what happened on one line, and where there is something to do about it, that follows under a lightbulb.
 
 | The tooltip says | What it means |
 | --- | --- |
 | No Claude Code sign-in was found | Run Claude Code once so it stores a sign-in. On macOS, allow the keychain prompt. |
 | The Claude Code sign-in has expired | Run Claude Code; it renews its own token. This extension deliberately will not. |
 | Claude Code is no longer signed in | The service rejected the stored token. Sign in to Claude Code again. |
-| Rate limited. Retrying at … | Nothing to do. The tooltip names the moment the read resumes, and it resumes. |
-| The Claude usage service could not be reached | Network or proxy. The last reading stays on screen with its age. |
-| Codex reported no rate-limit windows | Sign in to Codex, or the account has no windows to report. |
+| Rate limited, retrying at … | Nothing to do. The tooltip names the moment the read resumes, and it resumes. |
+| The usage service could not be reached | Network or proxy. The last reading stays on screen with its age. |
+| Codex reported no usage windows | Sign in to Codex, or the account has no windows to report. |
 | The Codex CLI could not be started | Codex is not installed where this looks; see [Platform scope](#platform-scope). |
-| The Codex app server did not answer in time | The CLI stopped responding. The next read starts a fresh one automatically. |
+| The Codex app server timed out | The CLI stopped responding. The next read starts a fresh one automatically. |
 
 **A macOS keychain prompt was declined.** That is respected rather than retried: the read is not attempted again for half an hour, so declining does not turn into a prompt every five minutes. Run **Agent Usage Bar: Refresh usage** to ask again immediately.
 

@@ -46,7 +46,7 @@ const COLUMNS = 52;
 
 /**
  * What a line that is not wrapped to anything may be: the two cells of a footnote row together, and
- * the failure heading with a short message riding on it. Larger than `COLUMNS`, and that is not a
+ * either of the two lines a failure is written on. Larger than `COLUMNS`, and that is not a
  * loosening: `COLUMNS` is what wrapped text is broken to, deliberately short of what the bar is
  * worth so that a line of the widest characters still fits under it. These lines are taken whole
  * instead, and measured on screen there are about sixty characters of proportional text before one
@@ -101,8 +101,21 @@ function tooltip(
     "agent-usage-bar-claude",
     { ...snapshot, ...reading },
     configure(overrides),
-    failure,
+    failure === null ? null : { message: failure },
     age,
+    now,
+  );
+}
+
+/** The same tooltip, with the failure carrying words a provider chose rather than this one's. */
+function verbatimTooltip(failure: string): string {
+  return buildTooltip(
+    "Claude Code usage",
+    "agent-usage-bar-claude",
+    snapshot,
+    configure(),
+    { message: failure, verbatim: true },
+    null,
     now,
   );
 }
@@ -242,7 +255,7 @@ test("nothing on the tooltip moves between one reading and the next", () => {
  */
 test("no line of text is wider than the bar, however much a provider says", () => {
   const message =
-    "The Claude Code sign-in has expired. Run Claude Code to renew it, then refresh this reading";
+    "The Claude Code sign-in has expired and nothing here will renew one on its own account";
   const text = tooltip({ plan: "a plan name of quite unreasonable length for a plan" }, message);
 
   for (const line of drawnLines(text)) {
@@ -253,15 +266,19 @@ test("no line of text is wider than the bar, however much a provider says", () =
   expect(drawnLines(text).join(" ").replace(/\s+/g, " ")).toContain(message);
   expect(text.match(/<br>&nbsp;&nbsp;/g)?.length).toBeGreaterThan(1);
 
-  // The one line held to the other measurement, and only as far as it: a heading with a short
-  // message on it is not wrapped to anything, so what it may be is what the bar is worth.
-  const short = drawnLines(tooltip({}, "Rate limited. Retrying at 12:23 AM."));
-  const stated = (drawn: string): boolean => drawn.includes("Last refresh failed");
-  const failure = short.filter(stated);
-  expect(failure).toHaveLength(1);
-  expect(failure[0]?.length).toBeLessThanOrEqual(ROW_COLUMNS + INDENT_WIDTH);
-  for (const rest of short.filter((drawn) => !stated(drawn))) {
-    expect(rest.length).toBeLessThanOrEqual(COLUMNS + INDENT_WIDTH);
+  // The two lines a failure is written on are the exception, and only as far as the other
+  // measurement: taken whole rather than broken to a width, what they may be is what the bar is
+  // worth. The remedy below is the longer of the two here, and runs past what wrapped text may be.
+  const failure = drawnLines(
+    tooltip(
+      {},
+      "The Claude Code sign-in has expired. Run Claude Code to renew it, then refresh this reading.",
+    ),
+  ).filter((line) => line.includes("Last refresh failed") || line.includes("to renew it"));
+  expect(failure).toHaveLength(2);
+  expect(failure[1]?.length).toBeGreaterThan(COLUMNS + INDENT_WIDTH);
+  for (const line of failure) {
+    expect(line.length).toBeLessThanOrEqual(ROW_COLUMNS + INDENT_WIDTH);
   }
 });
 
@@ -399,39 +416,102 @@ test("each optional line appears only when there is something to say", () => {
 test("a failed refresh is stated beside the reading it failed to replace", () => {
   const text = tooltip({}, "connection refused");
 
-  // Parted from the reading above it by a gap, with the icon standing off from the words rather
-  // than against them.
+  // Parted from the reading above it by a gap, and stated in the warning color with no icon beside
+  // it: the message shares this line, and the color is what parts what the tooltip says from what
+  // the provider said.
   expect(text).toContain(
-    `<h6></h6>${INDENT}<span style="color:var(--vscode-charts-yellow);">$(warning)</span>${INDENT}`,
+    `<h6></h6>${INDENT}<span style="color:var(--vscode-charts-yellow);">Last refresh failed:</span> <span style="color:var(--vscode-descriptionForeground);">connection refused</span>`,
   );
-  // A message that fits reads on the line that introduces it, at the cost of one line rather than
-  // two, and no wider than the bar it sits under.
-  expect(drawnLines(text)).toContain("  @  Last refresh failed: connection refused");
+  expect(drawnLines(text)).toContain("  Last refresh failed: connection refused");
   // With the age, under the last rule, rather than among the windows.
   expect(text.indexOf("Last refresh failed")).toBeGreaterThan(text.indexOf("From Claude account"));
   expect(text.indexOf("Last refresh failed")).toBeLessThan(text.indexOf("Refresh</a>"));
 });
 
-/** The other half of that choice, where the line it would ride on is not worth the half it leaves. */
-test("a message too long for that line drops below it and takes the whole width", () => {
-  const text = tooltip({}, "The Claude usage service is rate limiting requests.");
-
-  expect(drawnLines(text)).toContain("  @  Last refresh failed:");
-  expect(drawnLines(text)).toContain("  The Claude usage service is rate limiting requests.");
-});
-
-/** Where a message is broken matters as much as that it fits. */
-test("a message of two sentences is broken at the sentence rather than at the column", () => {
+/**
+ * The sentence is the whole of the structure a failure has: the first is what happened, anything
+ * after it is what to do about it. What to do is drawn on a line of its own under a lightbulb, so
+ * that it reads as advice rather than as the rest of the sentence above — and parted from that line
+ * by the smallest box the layout has, which is what makes the pair read as two things.
+ */
+test("what to do about a failure is marked as advice rather than left in the sentence", () => {
   const text = tooltip({}, "The Claude Code sign-in has expired. Run Claude Code to renew it.");
 
-  expect(drawnLines(text)).toContain("  The Claude Code sign-in has expired.");
-  expect(drawnLines(text)).toContain("  Run Claude Code to renew it.");
+  expect(drawnLines(text)).toContain("  Last refresh failed: The Claude Code sign-in has expired.");
+  expect(drawnLines(text)).toContain("  @ Run Claude Code to renew it.");
+  expect(text).toContain(
+    `${STEP}${INDENT}<span style="color:var(--vscode-descriptionForeground);">`,
+  );
 });
 
+/** A message with nothing to do about it is one sentence, and is drawn as one line. */
+test("a failure with no remedy is stated without one", () => {
+  const drawn = drawnLines(tooltip({}, "The usage service could not be reached."));
+
+  expect(drawn).toContain("  Last refresh failed: The usage service could not be reached.");
+  expect(tooltip({}, "The usage service could not be reached.")).not.toContain("$(lightbulb)");
+});
+
+/**
+ * Words a provider chose are drawn as they came. What looks like a remedy in them is only whatever
+ * their second sentence happened to be, so nothing is read out of them and nothing is marked as
+ * advice — the break is still placed at the stop, since where a line ends says nothing about what
+ * the line means.
+ */
+test("a message in a provider's own words is drawn rather than read for advice", () => {
+  const text = verbatimTooltip("Session not found. Restart the app server and try again.");
+
+  expect(drawnLines(text)).toContain("  Last refresh failed: Session not found.");
+  expect(drawnLines(text)).toContain("  Restart the app server and try again.");
+  expect(text).not.toContain("$(lightbulb)");
+});
+
+/**
+ * And cut to what this block draws rather than swapped for a sentence of ours. Part of what went
+ * wrong is worth more than none of it, and the mark at the end says there was more — while the two
+ * lines keep a failure of unknown length from pushing the actions off a hover that cannot scroll.
+ */
+test("a message longer than the block draws is cut rather than replaced", () => {
+  const said =
+    "Codex could not start the app server because the binary at the resolved path is not executable and no other install was found";
+  const drawn = drawnLines(verbatimTooltip(said)).join(" ").replace(/\s+/g, " ");
+  const shown = drawn.slice(drawn.indexOf("Codex could not"), drawn.indexOf("…"));
+
+  expect(drawn).toContain("…");
+  expect(drawn).not.toContain("no other install was found");
+  // As far as it goes, it is what was said — and it stopped on a word rather than inside one.
+  expect(said.startsWith(shown)).toBe(true);
+  expect(said.charAt(shown.length)).toBe(" ");
+});
+
+/**
+ * Where a message is broken matters as much as that it fits, and the sentence a message is already
+ * written in is the better place to cut. This is the tooltip a reading never arrived for, where the
+ * message is all there is and the whole of it is wrapped.
+ */
+test("a message of two sentences is broken at the sentence rather than at the column", () => {
+  const drawn = drawnLines(
+    buildMessageTooltip(
+      "Claude Code usage",
+      "agent-usage-bar-claude",
+      "The Claude Code sign-in has expired. Run Claude Code to renew it.",
+    ),
+  );
+
+  expect(drawn).toContain("  The Claude Code sign-in has expired.");
+  expect(drawn).toContain("  Run Claude Code to renew it.");
+});
+
+/**
+ * All of them or none: one sentence too long for a line of its own would be broken anyway, and a
+ * wrapped sentence beside an unwrapped one is a ragged edge with no rule behind it.
+ */
 test("a message with a sentence too long for a line is wrapped as one run of words", () => {
   const long =
     "No sign-in. Run Claude Code once, allow the keychain prompt, and refresh this reading";
-  const drawn = drawnLines(tooltip({}, long));
+  const drawn = drawnLines(
+    buildMessageTooltip("Claude Code usage", "agent-usage-bar-claude", long),
+  );
 
   expect(drawn).not.toContain("  No sign-in.");
   expect(drawn.join(" ").replace(/\s+/g, " ")).toContain(long);
@@ -440,11 +520,11 @@ test("a message with a sentence too long for a line is wrapped as one run of wor
 test("a window past its reset says so instead of showing a stale number", () => {
   const text = tooltipAt(new Date("2026-08-01T16:00:00Z"));
 
-  expect(windowBlock(text, "5-hour")).toContain(">Reset since this reading<");
+  // The marker beside the words that explain it, on the line that row is drawn on anyway: what the
+  // `~` in the status bar text means is then read where the reader is already looking.
+  expect(windowBlock(text, "5-hour")).toContain(">~ Reset since this reading<");
   expect(windowBlock(text, "5-hour")).toMatch(heading("5-hour", "0%"));
   expect(cells(windowBlock(text, "5-hour"))).toMatchObject({ filled: 0, track: 320 });
-  // The note is what explains the `~` the status bar text is showing at the same moment.
-  expect(text).toContain("marks a window assumed empty after its reset");
   // Only the window that actually reset: the weekly one still states its own moment.
   expect(windowBlock(text, "Weekly")).toContain(">Resets ");
   expect(windowBlock(text, "Weekly")).toMatch(heading("Weekly", "41%"));

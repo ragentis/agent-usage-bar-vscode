@@ -35,12 +35,19 @@ export interface UsageSnapshot {
  */
 export type ProviderResult =
   | { status: "ok"; snapshot: UsageSnapshot }
-  | { status: "unavailable"; message: string; retryAt?: Date };
+  | { status: "unavailable"; message: string; retryAt?: Date; verbatim?: boolean };
 
 /** What the status bar currently knows: the newest usable snapshot, plus why it is not newer. */
 export interface ProviderView {
   snapshot: UsageSnapshot | null;
   message: string | null;
+  /**
+   * True when the message is a provider's own words. What is written here is written to one shape —
+   * a statement, then at most one thing to do about it — which the tooltip reads back out of the
+   * sentences. Words from elsewhere were never written to it, so what looks like a remedy in them
+   * is only whatever came after the first stop; marked, they are drawn rather than read.
+   */
+  verbatim?: boolean;
 }
 
 /**
@@ -52,11 +59,23 @@ export function mergeView(
   previous: ProviderView | null | undefined,
   next: ProviderView,
 ): ProviderView {
-  return next.snapshot ? next : { snapshot: previous?.snapshot ?? null, message: next.message };
+  return next.snapshot
+    ? next
+    : {
+        snapshot: previous?.snapshot ?? null,
+        message: next.message,
+        verbatim: next.verbatim,
+      };
 }
 
 const SESSION_WINDOW_MAX_MINUTES = 360;
 const MAX_LABEL_LENGTH = 80;
+
+/**
+ * Not a width: the tooltip cuts a message to the lines it draws, which are well inside this. What
+ * is refused here is only a value long enough that storing it is the problem.
+ */
+const MAX_MESSAGE_LENGTH = 500;
 
 /**
  * The longest wait this extension will sit out before asking again. A service naming a longer one
@@ -111,6 +130,19 @@ export function validLabel(value: unknown): string | null {
   }
   const trimmed = value.trim();
   return trimmed && trimmed.length <= MAX_LABEL_LENGTH ? trimmed : null;
+}
+
+/**
+ * A message is not a label. A label is a word or two beside a number — a plan, a balance — and is
+ * refused when it is longer, since a value that long was never the thing it claims to be. A message
+ * is a sentence and then some, and how much of it fits is the tooltip's business, not this one's.
+ */
+export function validMessage(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, MAX_MESSAGE_LENGTH) : null;
 }
 
 export function classifyWindow(windowMinutes: unknown, fallback: WindowKind): WindowKind {

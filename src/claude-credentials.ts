@@ -189,6 +189,7 @@ export function parseCredentials(raw: string | null): ClaudeCredentials | null {
 /**
  * Nothing found means different things per platform, and that changes what the reader can do about
  * it: elsewhere a file is simply not there yet, while on macOS the keychain may have been declined.
+ * The same statement either way, then, and a different remedy after it.
  */
 export function noSignInMessage(platform: NodeJS.Platform = process.platform): string {
   return platform === "darwin"

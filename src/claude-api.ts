@@ -165,7 +165,7 @@ export async function fetchClaudeUsage(
     });
   } catch {
     // The message never carries the thrown error, which can quote the request headers.
-    return { status: "unavailable", message: "The Claude usage service could not be reached." };
+    return { status: "unavailable", message: "The usage service could not be reached." };
   }
 
   if (response.status === 401 || response.status === 403) {
@@ -185,14 +185,14 @@ export async function fetchClaudeUsage(
     // left at draw time.
     return {
       status: "unavailable",
-      message: "The Claude usage service is rate limiting requests.",
+      message: "Rate limited by the usage service.",
       retryAt,
     };
   }
   if (!response.ok) {
     return {
       status: "unavailable",
-      message: `The Claude usage service answered ${response.status}.`,
+      message: `The usage service answered ${response.status}.`,
     };
   }
 
@@ -200,11 +200,11 @@ export async function fetchClaudeUsage(
   try {
     payload = await response.json();
   } catch {
-    return { status: "unavailable", message: "The Claude usage response could not be parsed." };
+    return { status: "unavailable", message: "The usage response could not be read." };
   }
 
   const snapshot = parseClaudeUsageResponse(payload, credentials.plan, new Date());
   return snapshot
     ? { status: "ok", snapshot }
-    : { status: "unavailable", message: "The Claude usage response held no known windows." };
+    : { status: "unavailable", message: "The usage response held no windows." };
 }

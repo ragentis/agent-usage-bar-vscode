@@ -15,6 +15,7 @@ import {
   type CredentialSource,
   type KeychainResult,
 } from "../src/claude-credentials";
+import { validMessage } from "../src/usage";
 
 /**
  * Where the sign-in is kept is the one thing about this extension that differs per platform, and
@@ -191,7 +192,20 @@ test("what nothing found means is stated in terms the platform can act on", () =
   expect(noSignInMessage("darwin")).toMatch(/keychain/);
   expect(noSignInMessage("win32")).not.toMatch(/keychain/);
   expect(noSignInMessage("linux")).not.toMatch(/keychain/);
-  // Both still say the one thing that fixes it everywhere.
-  expect(noSignInMessage("darwin")).toMatch(/Run Claude Code once/);
-  expect(noSignInMessage("linux")).toMatch(/Run Claude Code once/);
+  // The same statement of what happened on every platform, and running it once in every remedy.
+  for (const platform of ["darwin", "win32", "linux"] as const) {
+    expect(noSignInMessage(platform)).toMatch(/^No Claude Code sign-in was found\. Run .*once/);
+  }
+});
+
+/**
+ * A message reaches other windows through the shared entry, which validates what it reads back. It
+ * is validated as a message rather than as a label — a label is a word or two and is refused when
+ * it is longer, and a message refused there is a window that adopted the reading with no failure to
+ * state. The macOS one is the longest this extension writes, so it is the one that would go first.
+ */
+test("a message says its piece inside what another window can read back", () => {
+  for (const platform of ["darwin", "win32", "linux"] as const) {
+    expect(validMessage(noSignInMessage(platform))).toBe(noSignInMessage(platform));
+  }
 });

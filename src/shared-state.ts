@@ -2,6 +2,7 @@ import {
   isRecord,
   MAX_RETRY_WAIT_MS,
   validLabel,
+  validMessage,
   validUsedPercent,
   validWindowMinutes,
   type ProviderId,
@@ -129,7 +130,11 @@ function parseEntry(value: unknown): SharedEntry | null {
     publishedAt: millis(value.publishedAt) ?? 0,
     owner: validLabel(value.owner) ?? "",
     retryAt: retryAt === null ? null : new Date(retryAt),
-    view: { snapshot: parseSnapshot(value.snapshot), message: validLabel(value.message) },
+    view: {
+      snapshot: parseSnapshot(value.snapshot),
+      message: validMessage(value.message),
+      verbatim: value.verbatim === true,
+    },
   };
 }
 
@@ -141,6 +146,7 @@ function serialize(entry: SharedEntry): Record<string, unknown> {
     owner: entry.owner,
     retryAt: entry.retryAt?.getTime() ?? null,
     message: entry.view.message,
+    verbatim: entry.view.verbatim ?? false,
     snapshot: snapshot && {
       windows: snapshot.windows.map((window) => ({
         kind: window.kind,
