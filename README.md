@@ -53,7 +53,7 @@ There is no leader and nothing is elected, so there is nothing to get stuck. See
 ## Requirements
 
 - VS Code 1.100.0 or newer, desktop.
-- For the Claude item: [Claude Code](https://claude.com/claude-code) installed and signed in.
+- For the Claude item: [Claude Code](https://claude.com/claude-code) installed and signed in, either as the standalone CLI or as the official Claude Code extension, which ships its own copy of it. Signing in to the Claude desktop app is not enough on its own; it keeps its sign-in somewhere else entirely.
 - For the Codex item: [Codex](https://chatgpt.com/download/) installed and signed in, either through the desktop app or as the standalone [CLI](https://github.com/openai/codex). The extension finds whichever you have, including the copy the Codex IDE extension ships.
 
 Neither is required for the other. A provider that is not installed or not signed in says so in its tooltip; switch it off in the settings and its item disappears.
@@ -95,7 +95,7 @@ Every failure keeps the last good numbers on screen rather than blanking the ite
 
 | The tooltip says | What it means |
 | --- | --- |
-| No Claude Code sign-in was found | Run Claude Code once so it stores a sign-in. On macOS, allow the keychain prompt. |
+| No Claude Code sign-in was found | Sign in to the Claude Code CLI or extension; the Claude desktop app keeps a store of its own. |
 | The Claude Code sign-in has expired | Run Claude Code; it renews its own token. This extension deliberately will not. |
 | Claude Code is no longer signed in | The service rejected the stored token. Sign in to Claude Code again. |
 | Rate limited, retrying at … | Nothing to do. The tooltip names the moment the read resumes, and it resumes. |
@@ -103,6 +103,8 @@ Every failure keeps the last good numbers on screen rather than blanking the ite
 | Codex reported no usage windows | Sign in to Codex, or the account has no windows to report. |
 | The Codex CLI could not be started | Codex is not installed where this looks; see [Platform scope](#platform-scope). |
 | The Codex app server timed out | The CLI stopped responding. The next read starts a fresh one automatically. |
+
+**Only the Claude desktop app is signed in.** The desktop app and Claude Code keep separate sign-ins, and this reads Claude Code's. Sign in to the Claude Code CLI or to the official Claude Code extension — either one writes the sign-in this looks for, and the extension needs no CLI on your `PATH` to do it.
 
 **A macOS keychain prompt was declined.** That is respected rather than retried: the read is not attempted again for half an hour, so declining does not turn into a prompt every five minutes. Run **Agent Usage Bar: Refresh usage** to ask again immediately.
 
@@ -133,13 +135,15 @@ It is also never refreshed, deliberately. A refresh rotates the stored token, so
 | Windows, Linux | `~/.claude/.credentials.json`                                 |
 | macOS          | The login keychain, under the item Claude Code created for it |
 
+That store belongs to Claude Code, and the CLI and the official Claude Code extension share it — the extension carries its own copy of the CLI, so signing in through either one leaves the same sign-in behind. The Claude desktop app is a separate application with a store of its own, encrypted for itself: nothing in it is read here, which is why a desktop sign-in alone leaves the item saying it found none.
+
 #### Reading the macOS keychain
 
 The keychain is read through the tool macOS ships for it: `/usr/bin/security find-generic-password`, started directly at that absolute path with its arguments as a list, so nothing on `PATH` can stand in for it and no argument can be read as a command. It only reads. No keychain verb in this extension changes what is stored, and `npm run audit:bundle` fails the build if one ever appears.
 
 The file is tried first even on macOS, because it is the cheaper question and Claude Code falls back to it where the keychain is not available. An ordinary macOS read therefore starts one short-lived process, and an ordinary read anywhere else starts none.
 
-If macOS puts a prompt in front of that read, the answer is respected rather than worked around:
+In ordinary use no authorization prompt appears at all: Claude Code stores the item with an access list that already covers a read through `security`, which is what this read is. A prompt can still be put in front of it — a keychain that is locked, an item carried over from another Mac, an access list narrowed by hand — and when one is, the answer is respected rather than worked around:
 
 | Outcome | What happens next |
 | --- | --- |

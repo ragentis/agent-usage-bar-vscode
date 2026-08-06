@@ -189,12 +189,17 @@ test("only the code for a missing item is a missing item", () => {
 });
 
 test("what nothing found means is stated in terms the platform can act on", () => {
-  expect(noSignInMessage("darwin")).toMatch(/keychain/);
-  expect(noSignInMessage("win32")).not.toMatch(/keychain/);
-  expect(noSignInMessage("linux")).not.toMatch(/keychain/);
-  // The same statement of what happened on every platform, and running it once in every remedy.
+  // A declined prompt arrives here as nothing found, but only on macOS, so only there does the
+  // remedy carry the clause about allowing it.
+  expect(noSignInMessage("darwin")).toMatch(/allow the prompt/);
+  expect(noSignInMessage("win32")).not.toMatch(/allow the prompt/);
+  expect(noSignInMessage("linux")).not.toMatch(/allow the prompt/);
   for (const platform of ["darwin", "win32", "linux"] as const) {
-    expect(noSignInMessage(platform)).toMatch(/^No Claude Code sign-in was found\. Run .*once/);
+    // The same statement of what happened on every platform, and the same remedy after it: what
+    // holds the sign-in is Claude Code rather than the desktop app, and either way in writes it.
+    expect(noSignInMessage(platform)).toMatch(
+      /^No Claude Code sign-in was found\. Sign in to the CLI or extension[.,]/,
+    );
   }
 });
 

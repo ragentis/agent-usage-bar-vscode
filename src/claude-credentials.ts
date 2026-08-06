@@ -187,14 +187,23 @@ export function parseCredentials(raw: string | null): ClaudeCredentials | null {
 }
 
 /**
- * Nothing found means different things per platform, and that changes what the reader can do about
- * it: elsewhere a file is simply not there yet, while on macOS the keychain may have been declined.
- * The same statement either way, then, and a different remedy after it.
+ * What is missing is Claude Code's own sign-in, which is worth naming precisely: the Claude desktop
+ * app is a different application with a store of its own, and someone signed in to it has every
+ * reason to read "no sign-in" as wrong. Both ways in are named because both write this one store —
+ * the extension carries its own copy of the CLI, so neither is a prerequisite for the other.
+ *
+ * Nothing found still means something more on macOS, where a declined keychain prompt arrives here
+ * as nothing found too. Hence the same statement either way and one clause more after it. It is
+ * written as a condition rather than as a step, because the prompt is not the usual case: the item
+ * is stored through the same tool this reads it with, which is a match macOS does not ask about.
  */
 export function noSignInMessage(platform: NodeJS.Platform = process.platform): string {
+  // Which CLI and which extension is the statement's to say, and it says it: a remedy naming them
+  // again is the same words twice, and on macOS it is a line and a half of them.
+  const remedy = "Sign in to the CLI or extension";
   return platform === "darwin"
-    ? "No Claude Code sign-in was found. Run Claude Code once and allow the keychain prompt."
-    : "No Claude Code sign-in was found. Run Claude Code once.";
+    ? `No Claude Code sign-in was found. ${remedy}, and allow the prompt.`
+    : `No Claude Code sign-in was found. ${remedy}.`;
 }
 
 export function hasExpired(credentials: ClaudeCredentials): boolean {
