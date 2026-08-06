@@ -96,6 +96,14 @@ The build writes two untracked files: `dist/extension.js` is what ships, and `di
 
 A change that needs one of these is a change to the promise the README makes. Update both, or find another way.
 
+## Failure messages
+
+Every message a read can fail with is written to one shape, because the tooltip lays a failure out by reading that shape back: the first sentence is what happened, and anything after it is what the reader can do about it, drawn on a line of its own under a lightbulb. A message with nothing to do about it is one sentence, and one line. Punctuate them as prose — the full stop is where the tooltip breaks a message that will not fit, and a semicolon leaves it nowhere to land.
+
+Both parts are written to fit the line they are drawn on: `LINE_COLUMNS` less `LABEL_COLUMNS` for the statement, and less `HINT_COLUMNS` for the remedy, all in `tooltip.ts` — 39 and 58 characters as those numbers stand. Longer is not broken, since the line wraps, but the block then runs to three lines where every other failure takes two. Where the statement already names something, the remedy leans on it rather than saying it again: _No Claude Code sign-in was found. Sign in to the CLI or extension._
+
+A message also crosses to the other windows through the shared entry, which reads it back with `validMessage` rather than `validLabel` — a label is a word or two beside a number and is refused when it is longer. Words a provider chose rather than this extension are marked `verbatim`: those are drawn as they came, never read for a remedy, and cut to two lines rather than swapped for a sentence of ours.
+
 ## Provider marks
 
 VS Code renders status bar text through the codicon pipeline, which accepts an icon font and nothing else, so the two marks ship as `assets/agent-usage-bar.woff`, registered through `contributes.icons`. The font is generated with [Fontello](https://fontello.com) from `assets/fontello-config.json`; open that file in Fontello to edit the marks or rebuild it. Keep the pinned code points on re-import — `U+E800` for Codex and `U+E801` for Claude — because `contributes.icons` addresses the glyphs by exactly those characters.
