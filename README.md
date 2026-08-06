@@ -186,7 +186,7 @@ When the Claude usage service rate limits a request, the `Retry-After` it sends 
 
 ## Platform scope
 
-Version 0.1.0 is developed and hand-tested on desktop VS Code on Windows. Both other desktop platforms are implemented rather than assumed: the Codex install layouts and the macOS keychain read are covered by tests that run on all three CI runners, and the file watcher is exercised against the real `recursive` implementation on each. What no runner can supply is an actual Codex install or an actual Claude Code sign-in, so what remains unconfirmed on macOS and Linux is whether those live in the places this looks — not whether looking there works.
+Desktop VS Code on Windows, macOS, and Linux, hand-tested on all three against real installs of both agents. The per-platform paths are covered by tests on all three CI runners as well: the Codex install layouts, the macOS keychain read, and the file watcher against the real `recursive` implementation.
 
 The extension runs on the machine your editor is running on, which is where both agents keep their sign-ins. In a Remote-SSH, WSL, or dev container window it therefore reports the usage of the local account. If your agents run on the remote side, their usage is not what you will see.
 
