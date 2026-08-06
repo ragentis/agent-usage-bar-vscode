@@ -26,7 +26,7 @@ Then run **Extensions: Install from VSIX...** in VS Code and pick the generated 
 npm run verify
 ```
 
-That runs the type check, lint, format check, tests, and a local package build, and it is exactly what CI runs on every push and pull request. Linting is `oxlint` with type-aware rules through `oxlint-tsgolint`, and formatting is `oxfmt`; both are configured in `.oxlintrc.json` and `.oxfmtrc.json`, and the type-aware rules are why the toolchain is on TypeScript 7.
+That runs the type check, lint, format check, and tests — the same checks CI runs on every push and pull request. CI then packages as well, which is where `audit:bundle` runs; `npm run package:local` is that step locally. Linting is `oxlint` with type-aware rules through `oxlint-tsgolint`, and formatting is `oxfmt`; both are configured in `.oxlintrc.json` and `.oxfmtrc.json`, and the type-aware rules are why the toolchain is on TypeScript 7.
 
 ## Architecture
 
