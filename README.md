@@ -6,6 +6,8 @@ Both numbers come from the account rather than from anything counted locally, so
 
 <img src="assets/screenshot.png" width="466" alt="The Claude and Codex items in the VS Code status bar, with the Claude tooltip open above them: a filled bar and reset time for the 5-hour window and for the weekly one, the pace beside each, and links to refresh or open the settings.">
 
+There is nothing to set up. Each item appears as soon as it finds that agent's sign-in, and keeps itself current from there.
+
 ## What it shows
 
 One status bar item per provider, each with its own monochrome glyph:
@@ -15,8 +17,8 @@ One status bar item per provider, each with its own monochrome glyph:
 | `5h 42% (2h 15m)` | 42% of the 5-hour window used, which refills in 2h 15m. |
 | `5h 42% (2h 15m) · 7d 18% (4d 6h)` | Both windows, in `full` display mode. |
 | `5h 58% left (2h 15m)` | The same reading with `percentageMode` set to `remaining`. |
-| `~5h 0%` | The window reset since this reading; `0%` is assumed, not read. |
-| `5h 42% (2h 15m)` + history icon | The reading is more than ten minutes old. |
+| `~5h 0%` | The window reset since this reading; `0%` is assumed, not read, and no color is raised on it. |
+| `$(history) 5h 42% (2h 15m)` | The reading is more than ten minutes old. |
 | `--` | No reading yet. The tooltip says why. |
 
 The item turns yellow past the warning threshold and red past the error threshold, both measured on the percentage **used** whichever way you display it. It also turns red, with a reason, whenever a provider reports the account as stopped — a spend limit or a hard rate limit — however low the percentage happens to be.
@@ -35,7 +37,7 @@ Beside each window's reset time, the tooltip says where that window is heading:
 
 Only the 5-hour window is forecast, because it opens on your first message — the time it has been open is time spent working. The weekly window opens on a calendar anchor and runs through nights and days off, so extrapolating across it would read a strong Monday as a limit blown by Thursday; it says how much of the week has gone instead, to read against the percentage above it.
 
-Nothing is stated until a window has been open long enough for its percentage to be a rate rather than rounding, and `agentUsageBar.showPace` turns the line off.
+Nothing is stated until a window has been open long enough for its percentage to be a rate rather than rounding: fifteen minutes for either line, and three percent used before the 5-hour window is forecast at all. `agentUsageBar.showPace` turns the line off.
 
 ## One reading for every window
 
@@ -48,7 +50,9 @@ This extension does not work that way. The windows of a profile share one readin
 - **No window has a timer of its own.** The refresh interval belongs to the machine, so closing the window that happened to be reading costs one cycle rather than leaving the others stalled.
 - **A rate limit is honoured everywhere at once**, and every item counts the same wait down.
 
-There is no leader and nothing is elected, so there is nothing to get stuck. See [Sharing between windows](#sharing-between-windows) for how it works.
+The reading lives in the extension's own state, which VS Code shares between the windows of a profile, together with the moment the read was started. A window that finds a reading younger than the thirty-second floor between reads displays it rather than asking again, and whichever window notices the interval has run out does the next read.
+
+There is no leader and nothing to elect — the window that read last simply keeps a few seconds of head start, which is enough for the reading to settle on one of them. Two windows arriving in the same instant both write their claim and then re-read it before spending a request, so all but one stand down. That is not a lock and cannot be one; on a rare tie the cost is a second request, not a wrong number.
 
 ## Requirements
 
@@ -60,9 +64,11 @@ Neither is required for the other. A provider that is not installed or not signe
 
 ## Install
 
-From the Marketplace, or from a `.vsix`:
+Search for **Agent Usage Bar** in the Extensions view, or install it from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=ragentis.agent-usage-bar) or [Open VSX](https://open-vsx.org/extension/ragentis/agent-usage-bar).
 
-1. Download or build a `.vsix` (see [CONTRIBUTING.md](CONTRIBUTING.md)).
+To install a `.vsix` by hand instead:
+
+1. Download or build one (see [CONTRIBUTING.md](CONTRIBUTING.md)).
 2. Run **Extensions: Install from VSIX...** in VS Code and pick the file.
 
 ## Settings
@@ -71,8 +77,8 @@ Run **Agent Usage Bar: Open settings**, or click either status bar item and pick
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
-| `agentUsageBar.displayMode` | `compact` | Show one or both standard usage windows. |
-| `agentUsageBar.percentageMode` | `used` | Show used or remaining percentage. |
+| `agentUsageBar.displayMode` | `compact` | `compact` shows the shortest active window; `full` shows both. |
+| `agentUsageBar.percentageMode` | `used` | Show the percentage `used` or the percentage `remaining`. |
 | `agentUsageBar.showPace` | `true` | Show where each window is heading. |
 | `agentUsageBar.warningThreshold` | `80` | Warning color threshold based on used percentage. |
 | `agentUsageBar.errorThreshold` | `95` | Error color threshold; never falls below warning. |
@@ -104,7 +110,7 @@ Every failure keeps the last good numbers on screen rather than blanking the ite
 | The Codex CLI could not be started | Codex is not installed where this looks; see [Platform scope](#platform-scope). |
 | The Codex app server timed out | The CLI stopped responding. The next read starts a fresh one automatically. |
 
-**Only the Claude desktop app is signed in.** The desktop app and Claude Code keep separate sign-ins, and this reads Claude Code's. Sign in to the Claude Code CLI or to the official Claude Code extension — either one writes the sign-in this looks for, and the extension needs no CLI on your `PATH` to do it.
+**Rate limited.** The `Retry-After` the usage service sends is honoured for every trigger alike — the background poll, local agent activity, and the menu — and the tooltip names the moment the read resumes instead of asking again. A refusal that names no delay is held for a minute, and one naming more than an hour is asked again at the hour: a wait longer than the longest refresh interval is indistinguishable from a stall, and one long enough to overflow a timer is worse than that.
 
 **A macOS keychain prompt was declined.** That is respected rather than retried: the read is not attempted again for half an hour, so declining does not turn into a prompt every five minutes. Run **Agent Usage Bar: Refresh usage** to ask again immediately.
 
@@ -135,7 +141,7 @@ It is also never refreshed, deliberately. A refresh rotates the stored token, so
 | Windows, Linux | `~/.claude/.credentials.json`                                 |
 | macOS          | The login keychain, under the item Claude Code created for it |
 
-That store belongs to Claude Code, and the CLI and the official Claude Code extension share it — the extension carries its own copy of the CLI, so signing in through either one leaves the same sign-in behind. The Claude desktop app is a separate application with a store of its own, encrypted for itself: nothing in it is read here, which is why a desktop sign-in alone leaves the item saying it found none.
+That store belongs to Claude Code, and the CLI and the official Claude Code extension share it — the extension carries its own copy of the CLI, so signing in through either one leaves the same sign-in behind. The Claude desktop app keeps a store of its own, encrypted for itself; nothing in it is read here.
 
 #### Reading the macOS keychain
 
@@ -161,12 +167,6 @@ Codex also pushes an `account/rateLimits/updated` notification, but that only ar
 
 Every automatic read sits behind a floor of thirty seconds per provider, whichever trigger asked for it: a single long turn writes its transcript in bursts, and the percentages it moves are not worth a request each. A refresh you ask for from the menu ignores the floor.
 
-### Sharing between windows
-
-Each reading is stored in the extension's own state, which VS Code shares between the windows of a profile, together with the moment the read was started. A window that finds a reading younger than the floor displays it rather than asking again, and a rate-limit wait is honoured by all of them at once.
-
-The background interval is the machine's rather than each window's: whichever window notices it has run out does the reading, so a window closed mid-read costs one cycle rather than a stalled status bar. There is no leader and nothing to elect — the window that read last simply keeps a few seconds of head start, which is enough for the reading to settle on one of them. Two windows arriving in the same instant both write their claim and then re-read it before spending a request, so all but one stand down. That is not a lock and cannot be one; on a rare tie the cost is a second request, not a wrong number.
-
 ### What is stored, and what never leaves
 
 That one endpoint is the only network target in the extension. `npm run audit:bundle` pins the full allowlist, so a second URL, a shell execution, or any filesystem write fails the build. The extension opens files only to parse them and writes no files of its own.
@@ -177,12 +177,6 @@ It persists exactly two things, both through VS Code's own APIs:
 - The last usage reading, so the other windows can show it — percentages, reset times, window lengths, and the plan name.
 
 Neither carries a token, a prompt, or any file content. There is no telemetry, no runtime dependency, no custom credential path, and no custom update mechanism. No prompt, code, or file content ever leaves the machine.
-
-### Resets, staleness, and rate limits
-
-A reading is a point-in-time snapshot, so a percentage can predate a window reset. The extension detects that from the recorded reset time, shows `0%` behind a `~` marker, and suppresses the warning color rather than presenting an unconfirmed number as current. A reading older than ten minutes is marked with its age in the tooltip, and a failed refresh keeps the last good numbers rather than blanking the item.
-
-When the Claude usage service rate limits a request, the `Retry-After` it sends is honoured for every trigger alike — the background poll, local agent activity, and the menu — and the tooltip names the moment the read resumes instead of asking again. A refusal that names no window is held for a minute, and one naming more than an hour is asked again at the hour: a wait longer than the longest refresh interval is indistinguishable from a stall, and one long enough to overflow a timer is worse than that.
 
 ## Platform scope
 
@@ -204,6 +198,4 @@ The icon font in `assets/agent-usage-bar.woff` was created specifically for this
 
 Claude and Anthropic are trademarks of Anthropic. Codex and OpenAI are trademarks of OpenAI. The monochrome provider glyphs are used solely to identify the services whose usage is being displayed.
 
-This project is independent and is not affiliated with, endorsed by, or sponsored by Anthropic or OpenAI.
-
-Either provider glyph can be replaced with custom text or a VS Code codicon through the `agentUsageBar.claude.label` and `agentUsageBar.codex.label` settings.
+This project is independent and is not affiliated with, endorsed by, or sponsored by Anthropic or OpenAI. Either glyph can be replaced with your own text or a codicon; see [Settings](#settings).
