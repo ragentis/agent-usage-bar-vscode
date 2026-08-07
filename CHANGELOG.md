@@ -2,6 +2,18 @@
 
 Notable changes to Agent Usage Bar. Release Please builds this file from the [commit subjects](.github/commit-instructions.md) that land on `main`, and the versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.1.0...v0.2.0) (2026-08-07)
+
+
+### Added
+
+* **tooltip:** state a failure as what happened and what to do ([ae6a5ef](https://github.com/ragentis/agent-usage-bar-vscode/commit/ae6a5efed97896b0fde43a4a612c768563384c9c))
+
+
+### Fixed
+
+* **claude:** send a missing sign-in to the CLI or the extension ([b9fefdc](https://github.com/ragentis/agent-usage-bar-vscode/commit/b9fefdc71f29d2601a3b8a6f3e0bb861e3c9b11c))
+
 ## 0.1.0 (2026-08-06)
 
 First release. Desktop VS Code on Windows, macOS, and Linux; developed and hand-tested on Windows, with the per-platform paths covered by tests on all three CI runners.
