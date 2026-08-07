@@ -1,4 +1,4 @@
-name: ci
+name: CI
 
 on:
   pull_request:
@@ -17,15 +17,56 @@ on:
 permissions:
   contents: read
 
-# A literal prefix rather than `github.workflow`: release.yml calls this workflow into its own run,
-# where `github.workflow` reads as the caller's name. Sharing a group with cancelling off would leave
-# the caller queued behind the job it is waiting for.
+# `github.workflow` reads as the caller's name when release.yml calls this workflow into its own run,
+# which is exactly the distinction the group needs: the release commit is pushed to main and verified
+# from release.yml at the same moment, and one group with cancelling off would serialize the two.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # The version and the changelog are both read out of commit subjects, and a subject that does not
+  # parse is not reported anywhere: it earns no changelog entry, bumps nothing, and says nothing
+  # about it. Refusing one here is the only place that silence turns into a failure.
+  commits:
+    name: Commit Convention
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          fetch-depth: 0
+      - name: Check the subjects added by this event
+        env:
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          # A first push, a manual run, or a force push leaves no base worth comparing against —
+          # a force push leaves one that exists but no longer leads here, hence the second test.
+          # Merges carry no subject of their own to read, so only what they bring in is checked.
+          if git cat-file -e "${BASE}^{commit}" 2>/dev/null &&
+             git merge-base --is-ancestor "$BASE" HEAD; then
+            selection=(--no-merges "${BASE}..HEAD")
+          else
+            echo "No usable base commit for this event; checking the tip only."
+            selection=(--no-merges -1 HEAD)
+          fi
+
+          failed=0
+          while IFS= read -r subject; do
+            [ -n "$subject" ] || continue
+            if [[ ! "$subject" =~ ^(feat|fix|perf|revert|refactor|test|docs|style|build|ci|chore)(\([a-z0-9./-]+\))?!?:\ .+ ]]; then
+              echo "Not a conventional subject: ${subject}" >&2
+              failed=1
+            fi
+          done < <(git log --format=%s "${selection[@]}")
+
+          if [ "$failed" -ne 0 ]; then
+            echo "See .github/commit-instructions.md for the types and the shape." >&2
+            exit 1
+          fi
+
   checks:
+    name: Static Checks
     # Typecheck, lint and format read the same files whatever the runner is, so once is enough.
     runs-on: ubuntu-latest
     steps:
@@ -43,6 +84,7 @@ jobs:
       - run: npm run format:check
 
   test:
+    name: Tests (${{ matrix.os }})
     # Run on every supported desktop OS so filesystem, process and watcher behavior is exercised
     # natively rather than inferred from one platform.
     strategy:
@@ -62,7 +104,8 @@ jobs:
       - run: npm test
 
   package:
-    needs: [checks, test]
+    name: Package VSIX
+    needs: [commits, checks, test]
     # Packaging is a check too: it runs the bundle audit and fails on a manifest that would not
     # install, neither of which any other job would notice. Linux produces one platform-neutral VSIX
     # while preserving POSIX file modes if executable content is added later. release.yml publishes

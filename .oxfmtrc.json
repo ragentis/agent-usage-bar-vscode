@@ -18,6 +18,7 @@
     "dist/",
     "package-lock.json",
     "*.vsix",
-    "assets/fontello-config.json"
+    "assets/fontello-config.json",
+    "CHANGELOG.md"
   ]
 }

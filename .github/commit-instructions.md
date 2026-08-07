@@ -12,17 +12,21 @@ Use Conventional Commits for every commit.
 
 ## Types
 
-| Type       | Use for                                   |
-| ---------- | ----------------------------------------- |
-| `feat`     | New user-visible behavior or settings     |
-| `fix`      | Bug fixes, including security fixes       |
-| `refactor` | Internal changes without behavior changes |
-| `perf`     | Performance improvements                  |
-| `test`     | Test additions or corrections             |
-| `docs`     | Documentation-only changes                |
-| `build`    | Bundling, packaging, or build tooling     |
-| `ci`       | GitHub Actions and other CI changes       |
-| `chore`    | Repository maintenance not covered above  |
+Release Please reads the type to decide the next version and the changelog section. A type that publishes nothing is still released — it rides along with the next commit that does.
+
+| Type       | Use for                                   | Version | Changelog section |
+| ---------- | ----------------------------------------- | ------- | ----------------- |
+| `feat`     | New user-visible behavior or settings     | minor   | Added             |
+| `fix`      | Bug fixes, including security fixes       | patch   | Fixed             |
+| `perf`     | Performance improvements                  | patch   | Performance       |
+| `revert`   | Undoing a change that already shipped     | patch   | Reverted          |
+| `refactor` | Internal changes without behavior changes | —       | —                 |
+| `test`     | Test additions or corrections             | —       | —                 |
+| `docs`     | Documentation-only changes                | —       | —                 |
+| `style`    | Formatting-only changes                   | —       | —                 |
+| `build`    | Bundling, packaging, or build tooling     | —       | —                 |
+| `ci`       | GitHub Actions and other CI changes       | —       | —                 |
+| `chore`    | Repository maintenance not covered above  | —       | —                 |
 
 ## Scopes
 
@@ -49,8 +53,9 @@ Use a more specific module or feature name when it is clearer than this list. Do
 - Keep the first line concise, preferably at or below 72 characters.
 - Describe one coherent change per commit; use the body to explain motivation or non-obvious tradeoffs.
 - Put issue references and other metadata in footers.
-- Mark a breaking change with `!` after the type or scope and add a `BREAKING CHANGE:` footer explaining the migration impact. Treat renamed or removed settings, commands, and other extension contracts as breaking changes.
-- Use `style` only for formatting-only changes if needed; visual or user-facing display changes are `feat` or `fix`.
+- Mark a breaking change with `!` after the type or scope and add a `BREAKING CHANGE:` footer explaining the migration impact. Treat renamed or removed settings, commands, and other extension contracts as breaking changes. A marked commit is collected under its own heading whatever its type; while the version is below 1.0 it lifts a `fix` to minor but leaves a `feat` where it already was.
+- Visual or user-facing display changes are `feat` or `fix`, never `style`.
+- A subject that does not parse is worse than a wrong type: it earns no changelog entry, moves no version, and reports nothing. CI refuses one, so a `git revert` needs its generated `Revert "…"` subject rewritten as `revert: …`.
 
 ## Examples
 

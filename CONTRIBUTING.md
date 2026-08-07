@@ -26,7 +26,7 @@ Then run **Extensions: Install from VSIX...** in VS Code and pick the generated 
 npm run verify
 ```
 
-That runs the type check, lint, format check, and tests — the same checks CI runs on every push and pull request. CI then packages as well, which is where `audit:bundle` runs; `npm run package:local` is that step locally. Linting is `oxlint` with type-aware rules through `oxlint-tsgolint`, and formatting is `oxfmt`; both are configured in `.oxlintrc.json` and `.oxfmtrc.json`, and the type-aware rules are why the toolchain is on TypeScript 7.
+That runs the type check, lint, format check, and tests — the same checks CI runs on every push and pull request. CI adds two of its own: packaging, which is where `audit:bundle` runs and which `npm run package:local` is locally, and a refusal of any commit subject not written to [the convention](.github/commit-instructions.md). Linting is `oxlint` with type-aware rules through `oxlint-tsgolint`, and formatting is `oxfmt`; both are configured in `.oxlintrc.json` and `.oxfmtrc.json`, and the type-aware rules are why the toolchain is on TypeScript 7.
 
 ## Architecture
 
@@ -73,7 +73,7 @@ One `tsconfig.json` covers `src/` and `test/` alike, so the editor checks exactl
 | `lint` / `format` | `oxlint` and `oxfmt`; `format:check` reports instead of writing. |
 | `test` / `test:watch` | `vitest`, which runs the TypeScript tests without a build step. |
 | `audit:bundle` | Checks the built bundle against the promises under **Data access**. |
-| `verify` | The whole gate: type check, lint, format check, tests, package. |
+| `verify` | The local gate: type check, lint, format check, tests. |
 | `vscode:prepublish` | Bundle and audit. `vsce` runs this itself; never call it by hand. |
 | `package:local` | Cleans, then packages a `.vsix` through `vsce`. |
 
@@ -110,4 +110,30 @@ VS Code renders status bar text through the codicon pipeline, which accepts an i
 
 ## Releasing
 
-[.vscodeignore](.vscodeignore) denies everything and then allows exactly what ships, so a new asset or document is invisible to the package until it is listed there. `CHANGELOG.md` follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the version follows [semantic versioning](https://semver.org/spec/v2.0.0.html).
+Nothing about a release is typed by hand. Release Please reads the commit subjects that landed on `main` — the types and what each one costs are in [commit-instructions.md](.github/commit-instructions.md) — and keeps a pull request titled `chore: release X.Y.Z` in step with them, so ten pushes still produce one pull request and one version. **Two decisions stand between a commit and the stores: merging that pull request, and approving the deployment in the last phase.** Squash-merge it, so exactly one release commit lands.
+
+[release.yml](.github/workflows/release.yml) then runs in four phases, named as its jobs:
+
+| Phase | What it does |
+| --- | --- |
+| **Prepare the release** | Refreshes that pull request, or on its merge tags the commit and drafts the release |
+| **Verify the release** | Runs the whole of [ci.yml](.github/workflows/ci.yml) again at the release commit |
+| **Publish the release** | Attaches the verified VSIX and takes the release out of draft |
+| **Publish to …** | Waits for approval, then Visual Studio Marketplace and Open VSX, independently |
+
+The tag lands in the first phase rather than the last, through `force-tag-creation`: a draft release GitHub holds no tag for is one the next run cannot find, and it would replay the whole history into the following changelog. So the tag is public at once, while the release page and its package are not. Verification has little left to find by then — the release commit carries byte-identical sources to what was already on `main`, since Release Please touches only `package.json`, `package-lock.json`, `CHANGELOG.md`, and `.release-please-manifest.json`.
+
+The last phase waits behind the `release` environment, which owns both store tokens and names a required reviewer. That is where a pause belongs: a GitHub release can still be edited or deleted, but a Marketplace version is immutable the moment it lands. The package is attached before the request arrives, so it can be downloaded and installed before anyone approves.
+
+**When something fails.** A flaky test or an expired store token is a **Re-run failed jobs** on the same run, which GitHub allows for thirty days; after that the package is still on the release to publish by hand. Both registries skip a version they already have, so a repeat costs nothing. A genuine break is the one case that differs — that version is spent, since the manifest has moved on — so push the fix, let the next release pull request open, and delete the draft with `gh release delete vX.Y.Z --yes`. Leave its tag: it is the boundary the next run reads, and removing it is what `force-tag-creation` is there to prevent.
+
+**Things worth knowing before they surprise you.**
+
+- [.vscodeignore](.vscodeignore) denies everything and then allows exactly what ships, so a new asset or document is invisible to the package until it is listed there.
+- `README.md` is packaged, which makes it the store page: prose fixed there reaches the Marketplace only in a published version. `assets/screenshot.png` is not packaged — `vsce` rewrites the relative link to `github.com/…/raw/HEAD/…` — so the image is served live from `main` and changes without a release.
+- The `autorelease:` labels are the state machine. An open release pull request carries `autorelease: pending`, and that label is how the merge is recognized. Remove it and the release is never created.
+- **Prevent self-review** on the `release` environment has to stay off; with one maintainer, turning it on leaves an approval nobody may give.
+- A run waiting for that approval still holds the `release` concurrency group, so pushes to `main` stop refreshing the release pull request until it is answered.
+- Hand edits to `CHANGELOG.md` inside the release pull request do not survive: the branch is rewritten whenever a later commit changes the release notes. Changelog wording is fixed by fixing the commit subject before it lands.
+- A `Release-As: X.Y.Z` footer on any commit forces that version outright, and is the only way to reach 1.0, since below it even a breaking change stops at a minor bump. Nothing needs unsetting afterwards, as `bump-minor-pre-major` applies only below 1.0. Do not use `release-as` in [release-please-config.json](release-please-config.json) instead; there it pins the version until someone removes it.
+- CI does not start on the release pull request by itself. It is opened by the default `GITHUB_TOKEN`, and a run from that token parks until someone with write access clicks **Approve workflows to run** — the same button a first-time contributor's pull request shows. Ignoring it is fine here, since phase 2 verifies that commit anyway. Requiring status checks on `main` would make the click compulsory before a release could merge; any credential other than `GITHUB_TOKEN` lifts it, a GitHub App token being preferable to a personal one, as it is scoped here and does not expire.
