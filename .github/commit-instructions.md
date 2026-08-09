@@ -12,7 +12,7 @@ Use Conventional Commits for every commit.
 
 ## Types
 
-Release Please reads the type to decide the next version and the changelog section. A type that publishes nothing is still released — it rides along with the next commit that does.
+The type decides the next version and the changelog section. Use no type outside this table.
 
 | Type       | Use for                                   | Version | Changelog section |
 | ---------- | ----------------------------------------- | ------- | ----------------- |
@@ -39,7 +39,7 @@ The scope is optional. Prefer one of these when it makes the affected area clear
 - `watcher` — local activity detection and refresh triggers
 - `formatting` — usage values, time windows, and display formatting
 - `build` — bundling, packaging, and cleanup scripts
-- `audit` — bundle and VSIX security checks
+- `audit` — the bundle security checks
 - `deps` — dependency updates
 - `ci` — workflows and automated verification
 - `docs` — user or contributor documentation, when the scope adds useful context
@@ -53,9 +53,8 @@ Use a more specific module or feature name when it is clearer than this list. Do
 - Keep the first line concise, preferably at or below 72 characters.
 - Describe one coherent change per commit; use the body to explain motivation or non-obvious tradeoffs.
 - Put issue references and other metadata in footers.
-- Mark a breaking change with `!` after the type or scope and add a `BREAKING CHANGE:` footer explaining the migration impact. Treat renamed or removed settings, commands, and other extension contracts as breaking changes. A marked commit is collected under its own heading whatever its type; while the version is below 1.0 it lifts a `fix` to minor but leaves a `feat` where it already was.
 - Visual or user-facing display changes are `feat` or `fix`, never `style`.
-- A subject that does not parse is worse than a wrong type: it earns no changelog entry, moves no version, and reports nothing. CI refuses one, so a `git revert` needs its generated `Revert "…"` subject rewritten as `revert: …`.
+- Mark a breaking change with `!` after the type or scope and add a `BREAKING CHANGE:` footer explaining the migration impact. Treat renamed or removed settings, commands, and other extension contracts as breaking changes.
 
 ## Examples
 
@@ -64,7 +63,7 @@ feat(status-bar): show Codex credits in the tooltip
 fix(claude): ignore stale responses after disabling the provider
 refactor(config): separate redraw and refresh handling
 test(watcher): cover rapid log file updates
-build(audit): verify packaged VSIX contents
+build(audit): pin the endpoints the bundle may reach
 ci: run verification on Windows
 docs: document provider privacy behavior
 feat(config)!: rename the percentage mode setting

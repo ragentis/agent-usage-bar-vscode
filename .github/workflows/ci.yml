@@ -17,63 +17,54 @@ on:
 permissions:
   contents: read
 
-# `github.workflow` reads as the caller's name when release.yml calls this workflow into its own run,
-# which is exactly the distinction the group needs: the release commit is pushed to main and verified
-# from release.yml at the same moment, and one group with cancelling off would serialize the two.
+# The release commit runs CI twice, from its own push and from release.yml; `github.workflow` reads
+# as the caller's name under `workflow_call`, which keeps those two in separate groups, not a queue.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # The version and the changelog are both read out of commit subjects, and a subject that does not
-  # parse is not reported anywhere: it earns no changelog entry, bumps nothing, and says nothing
-  # about it. Refusing one here is the only place that silence turns into a failure.
+  # A subject Release Please cannot parse is silent, so it is refused here; the shape and the reason
+  # are in `scripts/check-commit-subject.mjs`, which pr-title.yml and the `commit-msg` hook run too.
+  # A pull request's own subjects are squashed away, so this job has nothing to check on one.
   commits:
     name: Commit Convention
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 0
+
+      # Start at the shared commit so a rewritten push still checks every subject it introduced;
+      # with no reachable base, check the tip. A merge has no subject of its own, so only what it
+      # brings in is checked.
       - name: Check the subjects added by this event
         env:
-          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          BASE: ${{ github.event.before }}
         run: |
-          # A first push, a manual run, or a force push leaves no base worth comparing against —
-          # a force push leaves one that exists but no longer leads here, hence the second test.
-          # Merges carry no subject of their own to read, so only what they bring in is checked.
           if git cat-file -e "${BASE}^{commit}" 2>/dev/null &&
-             git merge-base --is-ancestor "$BASE" HEAD; then
-            selection=(--no-merges "${BASE}..HEAD")
+             base="$(git merge-base "$BASE" HEAD)"; then
+            selection=(--no-merges "${base}..HEAD")
           else
             echo "No usable base commit for this event; checking the tip only."
             selection=(--no-merges -1 HEAD)
           fi
 
-          failed=0
-          while IFS= read -r subject; do
-            [ -n "$subject" ] || continue
-            if [[ ! "$subject" =~ ^(feat|fix|perf|revert|refactor|test|docs|style|build|ci|chore)(\([a-z0-9./-]+\))?!?:\ .+ ]]; then
-              echo "Not a conventional subject: ${subject}" >&2
-              failed=1
-            fi
-          done < <(git log --format=%s "${selection[@]}")
-
-          if [ "$failed" -ne 0 ]; then
-            echo "See .github/commit-instructions.md for the types and the shape." >&2
-            exit 1
-          fi
+          git log --format=%s "${selection[@]}" | node scripts/check-commit-subject.mjs
 
   checks:
     name: Static Checks
     # Typecheck, lint and format read the same files whatever the runner is, so once is enough.
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -85,18 +76,19 @@ jobs:
 
   test:
     name: Tests (${{ matrix.os }})
-    # Run on every supported desktop OS so filesystem, process and watcher behavior is exercised
-    # natively rather than inferred from one platform.
+    # Every supported desktop OS, so filesystem, process and watcher behavior is exercised natively
+    # rather than inferred from one platform.
     strategy:
       fail-fast: false
       matrix:
         os: [windows-latest, ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
@@ -105,26 +97,26 @@ jobs:
 
   package:
     name: Package VSIX
-    needs: [commits, checks, test]
+    # Not `commits`: that job is skipped on a pull request, and a skipped need skips its dependents.
+    needs: [checks, test]
     # Packaging is a check too: it runs the bundle audit and fails on a manifest that would not
-    # install, neither of which any other job would notice. Linux produces one platform-neutral VSIX
-    # while preserving POSIX file modes if executable content is added later. release.yml publishes
-    # this exact artifact to every selected registry, so no unverified rebuild can be substituted
-    # after the bundle audit passes.
+    # install, neither of which another job would notice. release.yml publishes this exact artifact
+    # to both registries, so nothing rebuilt after the audit can be substituted for it.
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.ref || github.ref }}
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run package:local
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: vsix
           path: "*.vsix"
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30

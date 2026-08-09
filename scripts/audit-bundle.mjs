@@ -28,11 +28,9 @@ if (unexpected.length > 0) {
   fail(`Network targets outside the allowlist: ${unexpected.join(", ")}`);
 }
 
-// Codex is spawned directly so no argument can ever be read as a command, and its stored token is
-// none of our business. Nothing is written anywhere: both providers are read-only by design, which
-// is a stronger and simpler thing to assert than guarding the credential paths one at a time. The
-// macOS sign-in lives in the login keychain, and `find-generic-password` is the only verb that may
-// reach it — every verb that would change what is stored there fails the build.
+// Codex is spawned directly so no argument can be read as a command, its stored token is none of
+// our business, and nothing is written anywhere — a stronger claim than guarding each credential
+// path in turn.
 for (const pattern of [
   /\bexecSync\s*\(/,
   /\bexecFileSync\s*\(/,
@@ -41,9 +39,6 @@ for (const pattern of [
   /\bwriteFile\b/,
   /\bappendFile\b/,
   /\bcreateWriteStream\b/,
-  /\badd-generic-password\b/,
-  /\bdelete-generic-password\b/,
-  /\bset-generic-password\b/,
   /\bunlock-keychain\b/,
 ]) {
   if (pattern.test(bundle)) {
@@ -51,8 +46,16 @@ for (const pattern of [
   }
 }
 
-// Two programs are started, both of them the user's own tooling, and only one of them by absolute
-// path. Pinning every rooted path the bundle carries is what keeps that list from growing quietly.
+// The macOS sign-in lives in the login keychain, and only the verb that reads may reach it.
+const keychainVerbs = [...new Set(bundle.match(/\b[a-z]+-(?:generic|internet)-password\b/g) ?? [])];
+const writeVerbs = keychainVerbs.filter((verb) => verb !== "find-generic-password");
+if (writeVerbs.length > 0) {
+  fail(`Keychain verbs other than find-generic-password: ${writeVerbs.join(", ")}`);
+}
+
+// Three rooted paths belong here: the keychain tool, and the two system locations `codex` may sit
+// in. Its other candidates are built from the home directory, so they never reach the bundle as
+// literals. Pinning what does is what keeps the list from growing quietly.
 const ALLOWED_ROOTED_PATHS = new Set([
   "/usr/bin/security",
   "/usr/local/bin/codex",

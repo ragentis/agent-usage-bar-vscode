@@ -1,0 +1,32 @@
+name: PR Title
+
+# A pull request is squash-merged with its title as the subject, so the title is what lands on
+# `main` and what Release Please reads; the branch's own subjects are thrown away. Its own workflow
+# because it has to run again when a title changes, and `edited` on ci.yml would replay the tests on
+# three platforms every time a description is reworded.
+#
+# `synchronize` is here because a check belongs to the commit it ran on: without it a push leaves
+# the head commit with no title check at all, rather than with the passing one from before.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  title:
+    # Distinct from ci.yml's `Commit Convention`, which is skipped on a pull request and so reports
+    # as passing: two checks under one name would be indistinguishable as a status context.
+    name: PR Title Convention
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: node scripts/check-commit-subject.mjs "$TITLE"

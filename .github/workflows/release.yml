@@ -23,7 +23,11 @@ jobs:
   # it before its page and package are public.
   prepare:
     name: Prepare the release
+    # Not redundant with `target-branch`: phase 2 calls ci.yml by relative path, which GitHub
+    # resolves from the caller's commit, and phase 3 publishes before any environment policy runs.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
       issues: write
@@ -34,10 +38,12 @@ jobs:
       sha: ${{ steps.release.outputs.sha }}
     steps:
       - id: release
-        uses: googleapis/release-please-action@v5
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          target-branch: main
 
-  # Phase 2. The same CI main runs, checked out at the release commit — what phase 1 reports,
-  # leaving no tag to resolve. This is also where the VSIX the later phases publish is built.
+  # Phase 2. The same CI `main` runs, at the SHA phase 1 reports — a commit, so no tag to resolve.
+  # This is also where the VSIX the later phases publish is built.
   verify:
     name: Verify the release
     needs: prepare
@@ -53,32 +59,27 @@ jobs:
     name: Publish the release
     needs: [prepare, verify]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: vsix
           path: release-artifact
 
-      # Two things no other step would notice: more than one package, and a stale one picked up by
-      # a re-run. The name carries the version, so checking it costs nothing.
-      - name: Resolve the package
+      # Nothing else ties the version the package was built from to the tag it is published under,
+      # and the file name carries that version, so the check is free.
+      - name: Check the package against the tag
         env:
           TARGET_TAG: ${{ needs.prepare.outputs.tag }}
         run: |
-          mapfile -t packages < <(find release-artifact -maxdepth 1 -type f -name '*.vsix')
-          if [ "${#packages[@]}" -ne 1 ]; then
-            echo "Expected exactly one VSIX, found ${#packages[@]}" >&2
-            exit 1
-          fi
-
           expected="agent-usage-bar-${TARGET_TAG#v}.vsix"
-          if [ "$(basename "${packages[0]}")" != "$expected" ]; then
-            echo "Expected ${expected}, found $(basename "${packages[0]}")" >&2
+          if [ ! -f "release-artifact/${expected}" ]; then
+            echo "Expected ${expected}, found: $(ls release-artifact)" >&2
             exit 1
           fi
-          echo "VSIX=${packages[0]}" >> "$GITHUB_ENV"
+          echo "VSIX=release-artifact/${expected}" >> "$GITHUB_ENV"
 
       - name: Attach the package and publish the release
         env:
@@ -89,61 +90,44 @@ jobs:
           gh release upload "$TARGET_TAG" "$VSIX" --clobber
           gh release edit "$TARGET_TAG" --draft=false --latest
 
-  # Phase 4. Both registries take the package off the release rather than off the run that built
-  # it: that copy is permanent where the build artifact expires, and it is the one whose name was
-  # checked against the tag. Neither blocks the other, and both skip a version already published.
-  marketplace:
-    name: Publish to Visual Studio Marketplace
+  # Phase 4. Both registries publish the artifact phase 2 built and phase 3 attached, so a store
+  # install and a release download are the same bytes. A failing leg is re-run alone, and both skip
+  # a version already published, so a repeat costs nothing. No GitHub credential reaches here.
+  registries:
+    name: Publish to ${{ matrix.registry }}
     needs: [prepare, publish-release]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     environment: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - registry: Visual Studio Marketplace
+            cli: vsce
+          - registry: Open VSX
+            cli: ovsx
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.prepare.outputs.sha }}
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
           cache: npm
+      # Only to put `vsce` and `ovsx` on the path at the versions the lockfile pins.
       - run: npm ci --ignore-scripts
-      - name: Take the published package
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          TARGET_TAG: ${{ needs.prepare.outputs.tag }}
-        run: |
-          vsix="agent-usage-bar-${TARGET_TAG#v}.vsix"
-          gh release download "$TARGET_TAG" --pattern "$vsix" --dir release-artifact
-          echo "VSIX=release-artifact/${vsix}" >> "$GITHUB_ENV"
-      - name: Publish to Visual Studio Marketplace
-        env:
-          VSCE_PAT: ${{ secrets.VSCE_PAT }}
-        run: npx --no-install vsce publish --packagePath "$VSIX" --skip-duplicate
-
-  open-vsx:
-    name: Publish to Open VSX
-    needs: [prepare, publish-release]
-    runs-on: ubuntu-latest
-    environment: release
-    steps:
-      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          ref: ${{ needs.prepare.outputs.sha }}
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - name: Take the published package
+          name: vsix
+          path: release-artifact
+      - name: Publish
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
           TARGET_TAG: ${{ needs.prepare.outputs.tag }}
+          # Each leg is handed the token for its own registry and nothing else.
+          VSCE_PAT: ${{ matrix.cli == 'vsce' && secrets.VSCE_PAT || '' }}
+          OVSX_PAT: ${{ matrix.cli == 'ovsx' && secrets.OVSX_PAT || '' }}
+        # Both tools read their token from the environment and take the same two options here.
         run: |
-          vsix="agent-usage-bar-${TARGET_TAG#v}.vsix"
-          gh release download "$TARGET_TAG" --pattern "$vsix" --dir release-artifact
-          echo "VSIX=release-artifact/${vsix}" >> "$GITHUB_ENV"
-      - name: Publish to Open VSX
-        env:
-          OVSX_PAT: ${{ secrets.OVSX_PAT }}
-        run: npx --no-install ovsx publish "$VSIX" --skip-duplicate
+          npx --no-install ${{ matrix.cli }} publish \
+            --packagePath "release-artifact/agent-usage-bar-${TARGET_TAG#v}.vsix" --skip-duplicate

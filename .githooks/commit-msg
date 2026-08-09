@@ -1,0 +1,14 @@
+#!/bin/sh
+# Refuse a subject Release Please cannot read while it is still being written, rather than once it
+# has landed on `main`, where nothing takes it back. `--no-verify` skips this; CI does not.
+#
+# `npm install` points `core.hooksPath` here; by hand, `git config core.hooksPath .githooks`.
+
+subject="$(sed -n '1p' "$1")"
+
+# A merge has no subject of its own, and the fixup forms are rewritten by the rebase that eats them.
+case "$subject" in
+  "Merge "* | "fixup! "* | "squash! "*) exit 0 ;;
+esac
+
+exec node "$(dirname "$0")/../scripts/check-commit-subject.mjs" "$subject"
