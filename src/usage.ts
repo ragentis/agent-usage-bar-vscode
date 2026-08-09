@@ -1,19 +1,14 @@
 export type ProviderId = "claude" | "codex";
 export type WindowKind = "session" | "weekly";
 
-/** Where a reading came from. Both describe the whole subscription across every device. */
+/** Account-wide source of a usage reading. */
 export type SnapshotSource = "claude-account-api" | "codex-app-server";
 
 export interface UsageWindow {
   kind: WindowKind;
   usedPercent: number;
   resetsAt: Date | null;
-  /**
-   * How long the window runs, when the provider says. Absent is the ordinary case — only Codex
-   * states it — and `pace.ts`, the one reader, falls back to the length the kind implies. It is
-   * kept rather than only classified with because the moment a window opened is `resetsAt` less
-   * this, and a pace measured from the wrong moment is a wrong pace stated confidently.
-   */
+  /** Provider-supplied duration used by `pace.ts`; the window kind supplies a fallback. */
   windowMinutes?: number | null;
 }
 
@@ -28,33 +23,22 @@ export interface UsageSnapshot {
 }
 
 /**
- * Either a reading or the reason there is none. Every reason is handled alike — the last good
- * numbers stay on screen with their age — so they are not sorted into kinds. The one distinction
- * that changes what happens next is `retryAt`, set when the service named a moment before which
- * another call is pointless.
+ * A new snapshot or the reason it is unavailable. Failures retain the last good snapshot;
+ * `retryAt` additionally prevents another request before the provider's stated time.
  */
 export type ProviderResult =
   | { status: "ok"; snapshot: UsageSnapshot }
   | { status: "unavailable"; message: string; retryAt?: Date; verbatim?: boolean };
 
-/** What the status bar currently knows: the newest usable snapshot, plus why it is not newer. */
+/** Latest usable snapshot and, when present, the reason it could not be refreshed. */
 export interface ProviderView {
   snapshot: UsageSnapshot | null;
   message: string | null;
-  /**
-   * True when the message is a provider's own words. What is written here is written to one shape —
-   * a statement, then at most one thing to do about it — which the tooltip reads back out of the
-   * sentences. Words from elsewhere were never written to it, so what looks like a remedy in them
-   * is only whatever came after the first stop; marked, they are drawn rather than read.
-   */
+  /** Prevents provider-authored sentences from being interpreted as a cause and remedy. */
   verbatim?: boolean;
 }
 
-/**
- * A failed read never discards a good one: usage does not vanish when the network hiccups, so the
- * last known numbers stay on screen with their age. The rule holds whoever read, so a window
- * adopting another's result applies it the same way.
- */
+/** Retains the last good snapshot when a local or shared refresh fails. */
 export function mergeView(
   previous: ProviderView | null | undefined,
   next: ProviderView,
@@ -71,23 +55,16 @@ export function mergeView(
 const SESSION_WINDOW_MAX_MINUTES = 360;
 const MAX_LABEL_LENGTH = 80;
 
-/**
- * Not a width: the tooltip cuts a message to the lines it draws, which are well inside this. What
- * is refused here is only a value long enough that storing it is the problem.
- */
+/** Storage bound; tooltip layout applies its own shorter display limit. */
 const MAX_MESSAGE_LENGTH = 500;
 
 /**
- * The longest wait this extension will sit out before asking again. A service naming a longer one
- * is asked once more at the cap, which costs at most one refused request an hour and keeps a stated
- * wait from outliving every window that heard it. It has to be capped somewhere in any case:
- * `setTimeout` cannot represent more than about twenty-five days and fires at once instead of
- * saying so, turning an absurd wait into a busy loop. An hour matches the longest configurable
- * refresh interval, past which a wait and a stall look the same from the status bar.
+ * Caps an external retry delay at the longest configurable refresh interval. This prevents a bad
+ * value from suppressing reads indefinitely and stays well below `setTimeout` overflow behavior.
  */
 export const MAX_RETRY_WAIT_MS = 60 * 60_000;
 
-/** Applied wherever a wait enters from outside: the response header, and another window's entry. */
+/** Applies the retry cap to provider responses and waits adopted from another window. */
 export function cappedRetryAt(retryAt: Date, now = new Date()): Date {
   const cap = now.getTime() + MAX_RETRY_WAIT_MS;
   return retryAt.getTime() > cap ? new Date(cap) : retryAt;
@@ -103,7 +80,7 @@ export function validUsedPercent(value: unknown): number | null {
     : null;
 }
 
-/** A month, past which a stated window length is not a window this extension knows how to read. */
+/** Rejects durations beyond the supported monthly upper bound. */
 const MAX_WINDOW_MINUTES = 31 * 24 * 60;
 
 export function validWindowMinutes(value: unknown): number | null {
@@ -132,11 +109,7 @@ export function validLabel(value: unknown): string | null {
   return trimmed && trimmed.length <= MAX_LABEL_LENGTH ? trimmed : null;
 }
 
-/**
- * A message is not a label. A label is a word or two beside a number — a plan, a balance — and is
- * refused when it is longer, since a value that long was never the thing it claims to be. A message
- * is a sentence and then some, and how much of it fits is the tooltip's business, not this one's.
- */
+/** Validates sentence-length messages independently from the shorter label limit. */
 export function validMessage(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;

@@ -11,27 +11,15 @@ import { formatPace, paceFor } from "./pace";
 import type { SnapshotSource, UsageSnapshot, WindowKind } from "./usage";
 
 /**
- * The one surface where provider text is drawn rather than counted: a plan name, a reason the
- * account is stopped, a credit balance, and the reason the last read failed all reach it as text.
- * Every one of them is escaped on the way in, because what the renderer is handed is trusted
- * markdown with html and theme icons enabled, where a link is a command waiting to be clicked.
+ * Builds trusted tooltip Markdown from provider-supplied text. Every external value is escaped
+ * because trusted Markdown enables HTML, theme icons, and command links.
  *
- * It is drawn as one html element rather than as markdown paragraphs, which is what buys the
- * spacing. A paragraph in a hover has no rule of its own and falls back to a browser default of
- * about thirteen pixels above and below, and there is no reaching that rule from here. Inside a
- * single element there are no paragraphs to space out, and every gap is one this file put there.
+ * The tooltip uses one HTML element to avoid uncontrollable paragraph margins. Its layout depends
+ * on VS Code's sanitizer and hover styles:
  *
- * What the markup may contain is not up to us either. VS Code sanitizes hover html against a fixed
- * allowlist, and the layout below is built around three of its rules:
- *
- *   - `style` survives on a `<span>` and nowhere else, carrying at most `color`, then
- *     `background-color`, then `border-radius`, in that order, with no spaces, and with values that
- *     are either a hex literal or a `var(--vscode-*)` theme color. No width, no height, no padding.
- *   - `line-height` is set on the hover in `em`, so it computes once and every line inherits the
- *     same nineteen and a half pixels however small its font. Vertical gaps therefore come from the
- *     margins of empty block elements, which are the only small ones on offer.
- *   - Headings above `h3` have no margin rule of their own, so `h3` is the largest text this can
- *     draw without paying a browser default margin for it.
+ *   - A `<span>` may retain `color`, `background-color`, and `border-radius`, in that order.
+ *   - All lines inherit the hover's fixed line height, so empty block margins provide small gaps.
+ *   - `h3` is the largest heading with a predictable workbench margin.
  */
 
 const WINDOW_TITLES: Record<WindowKind, string> = { session: "5-hour", weekly: "Weekly" };
@@ -41,17 +29,12 @@ const SOURCE_TITLES: Record<SnapshotSource, string> = {
   "codex-app-server": "Codex account",
 };
 
-/**
- * The two commands the tooltip links to, which the tests beside this file state are the only links
- * a tooltip ever carries. Nothing a provider says can become a third: the angle brackets and
- * parentheses a link is written with are escaped before they are drawn.
- */
+/** The tooltip's only links. Escaping prevents provider text from adding another command link. */
 export const TOOLTIP_COMMANDS = ["agentUsageBar.refresh", "agentUsageBar.openSettings"] as const;
 
 /**
- * The chart colors, because those are the ones a theme picks to be read as a filled shape against
- * the widget background. `focusBorder`, which the workbench uses for its own quota bars, is chosen
- * to be seen as an outline instead, and a theme that mutes it leaves the bar the color of its track.
+ * Chart colors are intended for filled shapes on widget backgrounds. `focusBorder` is avoided
+ * because themes may mute it as an outline color.
  */
 const COLOR = {
   dim: "var(--vscode-descriptionForeground)",
@@ -61,64 +44,41 @@ const COLOR = {
   error: "var(--vscode-charts-red)",
 } as const;
 
-/**
- * A background is only ever as tall as the line it sits on, and the only way down is the font size.
- * Seven nestings measured from the heading the bar is drawn inside — where a font starts half again
- * larger than the body's — land at about four pixels, which is what the workbench draws its own
- * quota bars at.
- */
+/** Seven nested `<small>` elements produce an approximately four-pixel bar inside an `h3`. */
 const BAR_SCALE = 7;
 
 /**
- * A space at that size is worth about a pixel, and a hover is as wide as the widest line in it, up
- * to five hundred. Those two facts make this number and the one under it a single decision: enough
- * cells that the bar is the widest line on the tooltip, and a column count just under it that every
- * line of text is broken to. Together they hold the box at one width whatever a provider says,
- * rather than letting a long message stretch it out around a bar that cannot stretch with it.
+ * The scaled non-breaking spaces make the bar the tooltip's widest line. Text wraps to the related
+ * `COLUMNS` limit so provider messages cannot widen the tooltip beyond the fixed bar.
  */
 const BAR_CELLS = 320;
 
-/** Roughly what the bar is worth in characters of the body font, less a little for safety. */
+/** Approximate text width of the bar, with margin for proportional glyphs. */
 const COLUMNS = 52;
 
 /**
- * What a line kept or given up whole may be, rather than what wrapped text is broken to. Larger
- * than `COLUMNS`, which is short of the bar on purpose so that a line of the widest characters
- * still fits under it — the right margin to keep where the alternative to fitting is a break this
- * file has to place, and one to give up where the alternative is a second layout. Measured on
- * screen, a line has about sixty characters of proportional text before it reaches the bar's end.
+ * Maximum length kept on one line before explicit wrapping. It is larger than `COLUMNS` because
+ * measured proportional text normally fits about sixty characters under the bar.
  */
 const LINE_COLUMNS = 60;
 
-/** The left padding the hover would not give us, and the right padding, on the widest line. */
+/** Adds horizontal padding that the hover container does not provide. */
 const INDENT = "&nbsp;&nbsp;";
 
 /**
- * Vertical space, as empty blocks kept for the margins they collapse to. Adjacent margins collapse
- * rather than add — two of these in a row are worth one, and the larger — so these three and the
- * one below them are the whole of the range: eight pixels from a small heading, thirteen from a
- * paragraph, and seventeen and a half from an `h1`, the one heading the hover leaves the browser's
- * own `0.67em` on, of its own `2em` font, which is where the seventeen comes from.
- *
- * A rule takes four off whichever of them follows it, its bottom margin being negative.
+ * Empty blocks provide three predictable vertical gaps through their existing margins. Adjacent
+ * margins collapse to the larger value, and an `<hr>` reduces the following gap by four pixels.
  */
 const GAP = "<h6></h6>";
 const PAD = "<p></p>";
 const EDGE = "<h1></h1>";
 
-/**
- * The rung above the ladder, and the only one that is not a margin: a heading with a space in it,
- * whose line is worth about ten pixels on top of the eight it is margined by either side. Margins
- * collapse and content does not, which is why this is the one that can be told to be larger.
- */
+/** A non-empty heading adds line height when a margin alone is not enough separation. */
 const AIR = "<h6>&nbsp;</h6>";
 
 /**
- * And the half rung between them. An empty cell is a pixel of padding inside two of border spacing,
- * about six pixels of box, and a box collapses with nothing — so written after one of the margins
- * above it adds to it rather than disappearing into it, which is what lands a gap between two rungs
- * that are otherwise eight pixels apart. Nothing is drawn: a hover styles no table of its own, and
- * an unstyled one has neither border nor rule.
+ * An empty table contributes about six pixels without margin collapse, providing an intermediate
+ * gap between the block-margin sizes above.
  */
 const STEP = "<table><tr><td></td></tr></table>";
 
@@ -135,13 +95,8 @@ const ENTITIES: Record<string, string> = {
 };
 
 /**
- * Text, in a document made of html rather than of markdown. The characters an html parser reads as
- * markup, plus the parentheses — the renderer draws `$(icon)` over the finished html, before it is
- * sanitized, so a parenthesis is a metacharacter here even though html has no opinion about it.
- *
- * Whitespace is flattened first. A blank line is the one thing that ends an html block, and a
- * message with two newlines in it would hand the rest of the tooltip back to the markdown parser
- * halfway through the layout.
+ * Escapes HTML markup and parentheses, which VS Code interprets as part of `$(icon)` syntax before
+ * sanitization. Whitespace is flattened because a blank line would end the surrounding HTML block.
  */
 export function escapeHtml(value: string): string {
   return value
@@ -149,30 +104,20 @@ export function escapeHtml(value: string): string {
     .replace(/[&<>"'()]/g, (character) => ENTITIES[character] ?? character);
 }
 
-/** What the escaping will make of the whitespace, so text is measured as it will be drawn. */
+/** Normalizes whitespace before measuring and rendering text. */
 function flattened(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-/**
- * Text broken to the width of the bar, and escaped after the breaking rather than before it, so
- * what is counted is characters a reader sees rather than the entities some of them turn into.
- *
- * `taken` is what the line it starts on has already spent.
- */
+/** Wraps visible characters before escaping; `taken` is the space already used on the first line. */
 function wrapped(text: string, taken = 0): string {
   const flat = flattened(text);
   return (atSentences(flat, taken) ?? atWords(flat, taken)).map(escapeHtml).join(`<br>${INDENT}`);
 }
 
 /**
- * A message of more than one sentence, one sentence to a line — offered first, because a break the
- * text already carries is a better one than any this file can find: "Run Claude Code" parted from
- * "to renew it" reads as two halves of nothing, where the same cut at the full stop reads as a
- * fault and a remedy. Which is what the stops in those messages are there for.
- *
- * All of them or none. A sentence too long for a line of its own would be broken anyway, and one
- * wrapped sentence beside an unwrapped one is a ragged edge with no rule behind it.
+ * Prefers sentence boundaries when every sentence fits on its own line. Otherwise word wrapping
+ * handles the complete message consistently.
  */
 function atSentences(text: string, taken: number): string[] | null {
   if (taken + text.length <= COLUMNS) {
@@ -184,16 +129,12 @@ function atSentences(text: string, taken: number): string[] | null {
   return parts.length > 1 && parts.every(fits) ? parts : null;
 }
 
-/** The breaks a message already carries, which are better ones than any this file can find. */
+/** Splits at sentence-ending punctuation while preserving the punctuation. */
 function sentences(text: string): string[] {
   return text.split(/(?<=[.!?])\s+/);
 }
 
-/**
- * A word longer than the column it is given is left whole and handed to the renderer, which breaks
- * inside a word when it has to and is the only thing that should: a break this function put
- * mid-word would be a break in a url.
- */
+/** Wraps at spaces and leaves oversized words, including URLs, for the renderer to break. */
 function atWords(text: string, taken: number): string[] {
   const broken: string[] = [];
   let line = "";
@@ -221,12 +162,7 @@ function scaled(markup: string): string {
   return `${"<small>".repeat(BAR_SCALE)}${markup}${"</small>".repeat(BAR_SCALE)}`;
 }
 
-/**
- * The fill nested inside the track rather than laid beside it, which is the whole of how a bar gets
- * rounded ends: a radius is all four corners of a span or none, so two segments side by side meet
- * in a notch. Nested, there is no seam to notch — the fill is a pill lying on a rounded track, and
- * both start at the same left edge.
- */
+/** Nests the fill inside the track so both retain rounded ends without a seam between segments. */
 function bar(usedPercent: number, severity: Severity): string {
   const filled = Math.min(BAR_CELLS, Math.max(0, Math.round((usedPercent / 100) * BAR_CELLS)));
   const cell = "&nbsp;";
@@ -251,29 +187,14 @@ function formatDate(date: Date, locale?: string): string {
   });
 }
 
-/**
- * Lines of one paragraph's worth of text. A break is written between them and never after the last
- * one: a trailing `<br>` before a block element leaves an empty line box behind it, which is a
- * nineteen pixel hole in a layout costed in eights.
- */
+/** Joins inline content without a trailing `<br>`, which would add an empty line before a block. */
 function lines(...content: string[]): string {
   return content.map((line) => `${INDENT}${line}`).join("<br>");
 }
 
 /**
- * Two footnotes on one line, the second pushed to the right edge of the block.
- *
- * A table is the only way there. `text-align` is not among the three declarations a style may
- * carry — but `align` on a cell is on the renderer's attribute allowlist, beside `colspan`,
- * `rowspan` and `width`. The width is what makes the alignment mean anything: a table sizes to its
- * content, so without it the right cell sits against the words on its left rather than under the
- * end of the bar.
- *
- * It stays a table with nothing to push right, where a plain line would do and cost a few pixels
- * of box less. A cell carries a padding and a border spacing that nothing here can turn off —
- * `cellpadding` and `cellspacing` are not on that allowlist — so a footnote in one sits two or
- * three pixels right of a footnote that is not. Paid every time it is a hairline; paid only when
- * there is a pace, it is a left edge that moves between windows and again when one resets.
+ * Aligns reset and pace details at opposite edges. A full-width table is used because the sanitizer
+ * permits cell `align` and `width` attributes but not the equivalent CSS declarations.
  */
 function detailRow(left: string, right: string): string {
   if (!left && !right) {
@@ -286,24 +207,12 @@ function detailRow(left: string, right: string): string {
 }
 
 /**
- * One window as a heading of two lines — what it is beside what it costs, and the bar under that —
- * with a footnote row underneath: the moment it refills, and the pace at the far right of it.
+ * Renders a usage window as a two-line heading followed by reset and pace details. The heading owns
+ * the percentage and bar because it provides a compact line height. Details stay outside it to
+ * avoid inherited bold text.
  *
- * The first two are inside the heading rather than around it, because a heading is the only element
- * here with a line-height of its own, a factor of its font size rather than the fixed nineteen and
- * a half pixels every other line inherits, and because the eight pixels it is margined by are then
- * spent between windows instead of between a number and the bar that means the same thing.
- *
- * The third is deliberately outside it. Everything in a heading is bold and there is no unbolding
- * it — `font-weight` is not among the three declarations a style may carry — so a line that should
- * read as a footnote has to be a line the heading does not contain. The window's own name has no
- * such way out, being on the line with the number, and is dimmed instead: the same standing down,
- * bought with the one lever that is left.
- *
- * Neither footnote moves with the clock. The item already carries the countdown, and a tooltip that
- * changes every minute is a tooltip the workbench rebuilds from under whoever is reading it — so
- * the reset is stated as a moment, and the pace is measured from `asOf`, when the reading was
- * taken, rather than from now. That also pairs it with the percentage it divides.
+ * Reset and pace values are fixed to the reading timestamp. Updating them with the clock would
+ * rebuild an open tooltip and would separate the pace calculation from its measured percentage.
  */
 function windowBlock(
   window: ResolvedWindow,
@@ -311,8 +220,7 @@ function windowBlock(
   asOf: Date,
 ): string {
   const reset = window.reset
-    ? // The marker the item is showing, beside the words that explain it. It is the whole of what a
-      // note at the foot of the tooltip used to say, on a line that is drawn anyway.
+    ? // Reuse the detail row instead of adding a separate reset notice.
       "~ Reset since this reading"
     : window.resetsAt
       ? `Resets ${escapeHtml(formatDate(window.resetsAt, configuration.locale))}`
@@ -320,11 +228,9 @@ function windowBlock(
   const pace = configuration.showPace ? paceFor(window, asOf) : null;
   const percent = formatPercent(window.usedPercent, configuration.percentageMode);
   const label = configuration.percentageMode === "remaining" ? "remaining" : "used";
-  // The pad on the right rides on the bar because the bar is the widest line on the tooltip, and
-  // the widest line is the one that decides where the right edge of the box falls.
+  // Right padding belongs on the bar because it determines the tooltip width.
   const meter = `${bar(window.usedPercent, severityFor(window.usedPercent, configuration))}${INDENT}`;
-  // Side by side because that is the comparison a reader is making: when the window refills,
-  // against where the rate is taking it.
+  // Keep reset time and projected pace on the same row for direct comparison.
   return [
     `<h3>${INDENT}${dim(WINDOW_TITLES[window.kind])}${INDENT}${percent} <small>${dim(label)}</small>`,
     `<br>${INDENT}${meter}</h3>`,
@@ -337,24 +243,16 @@ function windowBlock(
 
 const FAILURE_LABEL = "Last refresh failed:";
 
-/** What it spends: the words, and the space before whatever follows them. */
+/** Width occupied by the failure label and its following space. */
 const LABEL_COLUMNS = FAILURE_LABEL.length + 1;
 
-/**
- * What marks the line under it as advice rather than as the rest of the sentence above. A lightbulb
- * because that is what the workbench draws where something can be done about what is on screen, and
- * dimmed rather than colored because the heading above it is already carrying the one color here.
- */
+/** Marks a second failure sentence as suggested action without adding another warning color. */
 const HINT_ICON = "$(lightbulb)";
 
-/** The icon as the one glyph it is drawn as, and the space standing it off from the words. */
+/** Width occupied by the hint icon and following space. */
 const HINT_COLUMNS = 1 + 1;
 
-/**
- * Why the last read failed, and whose words say so. A pair rather than two arguments, because the
- * second decides how the first is laid out and a boolean beside a string in an argument list is a
- * boolean that ends up beside the wrong string.
- */
+/** Failure text and whether it came directly from a provider. */
 export interface Failure {
   message: string;
   verbatim?: boolean;
@@ -376,61 +274,39 @@ function footerBlock(
   if (!failure) {
     return source;
   }
-  // Parted from the line above by a gap rather than by a break, because it is a different thing
-  // being said: what is on screen, and then why it is not newer.
+  // Separate snapshot provenance from the reason it is not newer.
   return [source, GAP, failureBlock(failure)].join("");
 }
 
 /**
- * A failure as the two things it is: what happened, on the line that names it, and what to do about
- * it under that, marked as advice rather than as more of the sentence above. Every message this
- * extension writes is written to that shape — a statement short enough for the heading's line, and
- * at most one remedy after it — so nothing here chooses a layout by how long a message came out.
- * The sentence is the whole of the structure: the first is what happened, anything after it is what
- * to do, and a message with nothing to do about it is one sentence and one line.
- *
- * The words of the heading are in the warning color and carry no icon. The color is what parts what
- * this file says from what the provider said, now that a break no longer always does; and with
- * nothing standing in the margin, every line here starts in the column the whole tooltip starts in.
+ * Splits extension-authored failures into a cause and an optional remedy. Extension messages follow
+ * that two-sentence contract; provider-authored text is rendered verbatim because its sentence
+ * structure has no such meaning.
  */
 function failureBlock({ message: failure, verbatim }: Failure): string {
   const label = span(FAILURE_LABEL, `color:${COLOR.warning};`);
-  // Someone else's words, drawn as they came and read for nothing: a second sentence in a message
-  // this extension did not write is a second sentence, not advice.
+  // Do not interpret a provider's second sentence as advice.
   if (verbatim) {
     return lines(`${label} ${dim(whole(cut(flattened(failure)), LABEL_COLUMNS))}`);
   }
   const [cause = "", ...rest] = sentences(flattened(failure));
   const hint = rest.join(" ");
-  // Parted from the line above by a box rather than by nothing, the smallest rung there is: the
-  // advice is a different kind of line, and six pixels is enough to be read as one.
+  // A small non-collapsing gap separates the optional remedy from the cause.
   return [
     lines(`${label} ${dim(whole(cause, LABEL_COLUMNS))}`),
     ...(hint ? [STEP, lines(`${dim(HINT_ICON)}&nbsp;${dim(whole(hint, HINT_COLUMNS))}`)] : []),
   ].join("");
 }
 
-/**
- * A line taken as it is where it goes as it is, and broken where it does not — the one rule both
- * lines of a failure are laid out by, and the reason neither needs a layout of its own. Text this
- * extension writes is written to go whole, so only a provider's own error reaches the break, and it
- * lands where it falls rather than stretching the box out around a bar that cannot stretch with it.
- */
+/** Keeps short failure text on one line and wraps it when it exceeds the measured line width. */
 function whole(text: string, taken: number): string {
   return taken + text.length <= LINE_COLUMNS ? escapeHtml(text) : wrapped(text, taken);
 }
 
-/**
- * What two lines hold: what the heading leaves of its own, and a whole line under it. Counted in
- * the width a wrapped line is broken to, since text long enough to be cut is text that would wrap.
- */
+/** Maximum provider failure text that fits across two wrapped lines. */
 const MESSAGE_COLUMNS = COLUMNS - LABEL_COLUMNS + COLUMNS;
 
-/**
- * Two lines of it, and a mark to say there was more: only text this file did not write reaches
- * here, and a failure of unknown length would push the actions off the bottom of a hover that
- * cannot scroll. Cut at a space, so what is kept ends on a word rather than inside one.
- */
+/** Truncates provider failures to two lines so actions remain visible in the non-scrolling hover. */
 function cut(text: string): string {
   if (text.length <= MESSAGE_COLUMNS) {
     return text;
@@ -443,18 +319,13 @@ function cut(text: string): string {
 function actionsBlock(): string {
   const link = (command: string, label: string): string =>
     `<a href="command:${command}">${label}</a>`;
-  // Two spaces either side of the dot rather than one, so the pair reads as two actions with a
-  // separator between them rather than as one run of words.
+  // Two spaces on each side keep the separator visually distinct from both actions.
   return lines(
     `${link(TOOLTIP_COMMANDS[0], "$(refresh) Refresh")}${INDENT}${dim("·")}${INDENT}${link(TOOLTIP_COMMANDS[1], "$(settings-gear) Settings")}`,
   );
 }
 
-/**
- * One element, with no blank line anywhere inside it. A blank line would end the html block and
- * hand what follows back to the markdown parser, which is a layout in two halves that only the
- * first half of the styling reaches.
- */
+/** Keeps all blocks inside one HTML element; a blank line would resume Markdown parsing. */
 function tooltip(...blocks: string[]): string {
   return `<div>${blocks.join("")}</div>`;
 }
@@ -468,12 +339,10 @@ export function buildTooltip(
   age: string | null,
   now = new Date(),
 ): string {
-  // The icon and the title have spent that much of the line the plan continues on.
+  // Account for the icon and title when wrapping the plan on the same line.
   const plan = snapshot.plan ? ` ${dim(`· ${wrapped(snapshot.plan, title.length + 5)}`)}` : "";
   const windows = resolveWindows(snapshot, now);
-  // The edges are padded to about what the indent gives the left one, which the box has none of
-  // otherwise: a hover pads itself by four.
-  // Eight of margin plus six of box under the rule, which the rule then takes four of back.
+  // EDGE supplies outer padding; GAP plus STEP compensates for the rule's negative bottom margin.
   const blocks = [
     EDGE,
     lines(`$(${icon}) <b>${escapeHtml(title)}</b>${plan}`),
@@ -489,7 +358,7 @@ export function buildTooltip(
     );
   }
   for (const [index, window] of windows.entries()) {
-    // Margins collapse, so a heading's own eight pixels are all two windows would be parted by.
+    // AIR adds non-collapsing space between window headings.
     if (index > 0) {
       blocks.push(AIR);
     }
@@ -498,7 +367,7 @@ export function buildTooltip(
   if (snapshot.credits) {
     blocks.push(GAP, lines(`<b>Credits</b> ${dim(`· ${wrapped(snapshot.credits, 10)}`)}`));
   }
-  // Thirteen of margin plus six of box over the rule, where nothing is taken back.
+  // PAD plus STEP creates the larger gap above the footer rule.
   blocks.push(
     PAD,
     STEP,
@@ -512,10 +381,7 @@ export function buildTooltip(
   return tooltip(...blocks);
 }
 
-/**
- * The same frame with a sentence where the numbers would be: a tooltip that has lost its reading
- * still says whose it is, and still offers the one action that might bring it back.
- */
+/** Builds the same frame without usage data while preserving refresh and settings actions. */
 export function buildMessageTooltip(title: string, icon: string, message: string): string {
   return tooltip(
     EDGE,
