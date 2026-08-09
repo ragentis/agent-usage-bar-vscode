@@ -13,8 +13,9 @@ const CHANGE_DEBOUNCE_MS = 5_000;
 /**
  * Every window watches the same directory and sees the same write in the same millisecond, so
  * without a spread they would all come due at once. `ReadCoordinator` settles that case on its own
- * through claim slots, but two windows can hash into one slot; arriving apart costs nothing and
- * leaves fewer ties for it to settle. Drawn once per watcher, which is once per window.
+ * through claim slots, but two windows can hash into one slot, and arriving apart leaves it fewer
+ * ties to settle. The cost is up to `CHANGE_JITTER_MS` of extra delay on a refresh that already
+ * waits out the debounce. Drawn once per watcher, which is once per window.
  */
 const CHANGE_JITTER_MS = 2_000;
 

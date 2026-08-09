@@ -110,9 +110,13 @@ The build writes two untracked files. `dist/extension.js` is the shipped extensi
 | Keychain verbs | Any password verb other than `find-generic-password`, and `unlock-keychain`. |
 | Absolute paths | A rooted path outside the pinned list of two programs the extension starts. |
 
-The module checks read the members the bundle actually uses rather than listing forbidden names, because a denylist misses the spelling nobody thought of: `/\bwriteFile\b/` does not match `writeFileSync`. Adding a member to one of those sets is the explicit decision; the binding is taken from the `require` that created it, so a rename by the bundler fails the audit instead of quietly disabling it.
+The module checks read the members the bundle actually uses rather than listing forbidden names, because a denylist misses the spelling nobody thought of: `/\bwriteFile\b/` does not match `writeFileSync`. Adding a member to one of those sets is the explicit decision. The binding comes from the `require` that created it, so the bundler may name it anything; what would disable the check is a `require` the script cannot parse, and that fails outright rather than passing with nothing found. An index expression such as `fs["writeFile"]` fails for the same reason — it puts the member name out of reach.
 
-Two limits are worth stating rather than discovering. The script reads the shipped text, so a URL assembled at runtime is past what it can settle, and packaging proves neither that the VSIX installs nor that it activates. The first is covered by review, the second by the install before approving a release.
+Three limits are worth stating rather than discovering, because each marks where the audit stops and review begins:
+
+- A URL assembled from parts at runtime is outside the allowlist, which covers addresses written out in full.
+- `spawn` is the only way a process starts and `shell: true` is refused, but the program it starts is resolved at runtime, so the audit constrains how rather than which.
+- Packaging proves neither that the VSIX installs nor that it activates; the install before approving a release is what covers that.
 
 If a change requires one of these capabilities, it changes the security boundary described in the README. Update the implementation, audit, and documentation together, or redesign the change to stay inside the existing boundary.
 

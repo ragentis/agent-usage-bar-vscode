@@ -130,9 +130,10 @@ export class ReadCoordinator {
   /**
    * Two windows can find the same lease free before either write has landed, so a claim is settled
    * before it is trusted: write it, pause for a jittered stretch, then ask the store who got there.
-   * Only that window spends a request. This is not a lock and cannot be one, so a simultaneous
-   * arrival becomes a single read in all but a rare tie, and a tie costs one extra request rather
-   * than a wrong number — `publish` refuses to write over a reading newer than the claim.
+   * Whoever reads back its own claim goes on to spend a request, and the rest stand down. This is
+   * not a lock and cannot be one, so two windows can still come through together; a tie costs one
+   * extra request rather than a wrong number, since `publish` refuses to write over a reading
+   * newer than the claim.
    *
    * The settling alone is not enough for windows that come due in the same instant — every VS Code
    * window restored together does — because each writes before any other's write has arrived, and
