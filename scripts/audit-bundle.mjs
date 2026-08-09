@@ -1,9 +1,13 @@
 import { readFile } from "node:fs/promises";
 
 // The README makes four promises about an extension that reads an OAuth token: it ships only this
-// repository's own code, talks to exactly one host, never starts a shell, and never writes to disk.
-// Those are the claims a reader cannot verify by looking at the status bar, and the ones that decay
-// silently as code changes. This script is their machine-checkable form; nothing else belongs here.
+// repository's own code, reaches one host, starts no shell, and writes nothing to disk. Those are
+// the claims a reader cannot verify by looking at the status bar, and the ones that decay silently
+// as code changes. This script is their machine-checkable form; nothing else belongs here.
+//
+// It reads the shipped text, so it holds for what the bundle spells out and not for what it could
+// assemble at runtime. That is worth stating rather than implying: the point is to catch a change
+// that quietly breaks a promise, not to contain an author who means to.
 
 const manifest = JSON.parse(await readFile("package.json", "utf8"));
 if (Object.keys(manifest.dependencies ?? {}).length > 0) {
@@ -20,7 +24,8 @@ if (foreign.length > 0) {
 const bundle = await readFile("dist/extension.js", "utf8");
 
 // One remote, to read the signed-in user's own usage. The list is pinned rather than shaped, so a
-// second endpoint fails the build even if it looks harmless.
+// second endpoint fails the build even if it looks harmless. Literal URLs only — a target built
+// from parts at runtime is past what reading the text can settle.
 const ALLOWED_URLS = new Set(["https://api.anthropic.com/api/oauth/usage"]);
 const urls = [...new Set(bundle.match(/https?:\/\/[^\s"'`\\]+/g) ?? [])];
 const unexpected = urls.filter((url) => !ALLOWED_URLS.has(url));
@@ -28,19 +33,50 @@ if (unexpected.length > 0) {
   fail(`Network targets outside the allowlist: ${unexpected.join(", ")}`);
 }
 
-// Codex is spawned directly so no argument can be read as a command, its stored token is none of
-// our business, and nothing is written anywhere — a stronger claim than guarding each credential
-// path in turn.
-for (const pattern of [
-  /\bexecSync\s*\(/,
-  /\bexecFileSync\s*\(/,
-  /\bshell\s*:\s*true/,
-  /\.codex[\\/]auth\.json/,
-  /\bwriteFile\b/,
-  /\bappendFile\b/,
-  /\bcreateWriteStream\b/,
-  /\bunlock-keychain\b/,
-]) {
+// Whatever the bundle reaches for in these modules has to be a member that reads. Collecting what
+// is there beats naming what is not: a denylist of spellings misses `writeFileSync` the moment
+// someone writes it that way, and misses every verb nobody thought of. `spawn` is the only way a
+// program is started here, which is what keeps an argument from being read as a command.
+const READ_ONLY_MEMBERS = {
+  fs: ["existsSync", "watch"],
+  "fs/promises": ["readFile", "readdir", "stat", "lstat"],
+  child_process: ["spawn"],
+};
+
+for (const [specifier, allowed] of Object.entries(READ_ONLY_MEMBERS)) {
+  const required = new RegExp(String.raw`require\("(?:node:)?${specifier}"\)`);
+  if (!required.test(bundle)) {
+    continue;
+  }
+
+  // The binding is taken from the require that made it, so renaming by the bundler cannot switch
+  // this check off without being noticed: a module that is there with no binding found is a
+  // failure, never a pass.
+  const bindings = [
+    ...bundle.matchAll(
+      new RegExp(String.raw`(?:var|let|const)\s+([\w$]+)\s*=\s*[\w$]*\(?${required.source}`, "g"),
+    ),
+  ].map((match) => match[1]);
+  if (bindings.length === 0) {
+    fail(`Cannot tell which binding holds ${specifier}; the audit cannot read this bundle`);
+  }
+
+  const used = new Set();
+  for (const binding of bindings) {
+    for (const match of bundle.matchAll(new RegExp(String.raw`\b${binding}\.([\w$]+)`, "g"))) {
+      used.add(match[1]);
+    }
+  }
+
+  const writes = [...used].filter((member) => !allowed.includes(member) && member !== "default");
+  if (writes.length > 0) {
+    fail(`Members of ${specifier} outside the read-only set: ${writes.join(", ")}`);
+  }
+}
+
+// What the module allowlists cannot say: that `spawn` is never handed a shell, and that the Codex
+// credential file is none of our business.
+for (const pattern of [/\bshell\s*:\s*true/, /\.codex[\\/]auth\.json/, /\bunlock-keychain\b/]) {
   if (pattern.test(bundle)) {
     fail(`Forbidden pattern in the bundle: ${pattern}`);
   }
