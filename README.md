@@ -2,11 +2,11 @@
 
 Shows how much of your Claude Code and Codex plan is left, in the VS Code status bar.
 
-Both numbers come from the account rather than from anything counted locally, so usage you spent on another machine, in a terminal, or in another editor still shows up here.
+Both readings come from the account rather than local activity. Usage from another machine, a terminal, or another editor is therefore included.
 
 <img src="assets/screenshot.png" width="466" alt="The Claude and Codex items in the VS Code status bar, with the Claude tooltip open above them: a filled bar and reset time for the 5-hour window and for the weekly one, the pace beside each, and links to refresh or open the settings.">
 
-There is nothing to set up. Each item appears as soon as it finds that agent's sign-in, and keeps itself current from there.
+The extension requires no configuration. Both provider items are enabled by default and refresh automatically. If a provider is unavailable or signed out, its tooltip explains the missing reading.
 
 ## What it shows
 
@@ -21,9 +21,9 @@ One status bar item per provider, each with its own monochrome glyph:
 | `$(history) 5h 42% (2h 15m)` | The reading is more than ten minutes old. |
 | `--` | No reading yet. The tooltip says why. |
 
-The item turns yellow past the warning threshold and red past the error threshold, both measured on the percentage **used** whichever way you display it. It also turns red, with a reason, whenever a provider reports the account as stopped — a spend limit or a hard rate limit — however low the percentage happens to be.
+The item turns yellow past the warning threshold and red past the error threshold. Both thresholds use the percentage **used**, regardless of the selected display mode. The item also turns red when a provider reports that the account is stopped by a spend limit or hard rate limit, even when the percentage is low; the tooltip states the reason.
 
-Hover for a tooltip with a themed bar per window — filled to the percentage and colored by the same thresholds as the item — the plan name, exact reset times, the pace, any credit balance, the reason the last refresh failed if one did, and links to refresh or to open the settings. Click either item for a menu that toggles a provider, refreshes, or opens the settings.
+Hover to see the plan name, a themed progress bar for each window, exact reset times, pace, any credit balance, and the last refresh error. The bars use the same warning and error thresholds as the status item. The tooltip also links to refresh and settings. Click either status item to toggle that provider, refresh usage, or open settings.
 
 ## Pace
 
@@ -35,24 +35,24 @@ Beside each window's reset time, the tooltip says where that window is heading:
 | `At this pace, ~34% by reset`   | It does not, and this is where it ends up instead.  |
 | `68% of the week gone`          | How much of the weekly window has elapsed.          |
 
-Only the 5-hour window is forecast, because it opens on your first message — the time it has been open is time spent working. The weekly window opens on a calendar anchor and runs through nights and days off, so extrapolating across it would read a strong Monday as a limit blown by Thursday; it says how much of the week has gone instead, to read against the percentage above it.
+Only the 5-hour window is forecast. It opens on your first message, so its elapsed time roughly follows working time. The weekly window starts from a calendar anchor and continues through nights and days off. Forecasting from a busy Monday could therefore predict a limit by Thursday even when the rest of the week is quiet. For that window, the tooltip shows elapsed time instead of a forecast.
 
-Nothing is stated until a window has been open long enough for its percentage to be a rate rather than rounding: fifteen minutes for either line, and three percent used before the 5-hour window is forecast at all. `agentUsageBar.showPace` turns the line off.
+Pace remains hidden until the window has been open for fifteen minutes, and the 5-hour forecast also requires at least three percent usage. These minimums prevent rounded early values from being presented as a meaningful rate. Set `agentUsageBar.showPace` to `false` to hide pace information.
 
 ## One reading for every window
 
-Every VS Code window runs its own copy of an extension, so six open windows normally means six of everything: six timers, six requests, and six items that disagree with each other for a few seconds after each one lands.
+Every VS Code window runs its own copy of an extension. Without coordination, six open windows could make the same request six times and briefly show different readings.
 
-This extension does not work that way. The windows of a profile share one reading and one schedule:
+The windows in one VS Code profile instead share the latest reading and the network refresh schedule:
 
 - **Six windows cost about what one does.** Only one window actually asks; the rest read the answer.
 - **All of them show the same number**, including the ones that never made a request.
-- **No window has a timer of its own.** The refresh interval belongs to the machine, so closing the window that happened to be reading costs one cycle rather than leaving the others stalled.
+- **No window has an independent network refresh schedule.** Each window still updates its own countdown display, but the next account read is due at one shared time. If the reading window closes, another window can retry after the shared minimum delay instead of waiting for a full refresh interval.
 - **A rate limit is honoured everywhere at once**, and every item counts the same wait down.
 
-The reading lives in the extension's own state, which VS Code shares between the windows of a profile, together with the moment the read was started. A window that finds a reading younger than the thirty-second floor between reads displays it rather than asking again, and whichever window notices the interval has run out does the next read.
+VS Code shares the extension state between windows in the same profile. That state contains the latest result and the time its read began. A window that finds a recent shared result displays it instead of requesting another one. When the configured interval expires, whichever window notices first can attempt the next read.
 
-There is no leader and nothing to elect — the window that read last simply keeps a few seconds of head start, which is enough for the reading to settle on one of them. Two windows arriving in the same instant both write their claim and then re-read it before spending a request, so all but one stand down. That is not a lock and cannot be one; on a rare tie the cost is a second request, not a wrong number.
+There is no elected leader. The window that completed the previous read gets a short head start, which usually keeps subsequent reads in the same window. When several windows become due together, they write a shared claim, wait briefly for it to propagate, and check it again before making a request. This is coordination through VS Code state, not an atomic lock. A rare tie can produce one duplicate request, but cannot replace a newer published reading with an older one.
 
 ## Requirements
 
@@ -89,50 +89,50 @@ Run **Agent Usage Bar: Open settings**, or click either status bar item and pick
 | `agentUsageBar.locale` | `""` | Language tag for dates and times; empty follows VS Code. |
 | `agentUsageBar.refreshIntervalSeconds` | `300` | Background refresh interval, clamped to 30–3600. |
 
-In `compact` mode the item shows the shortest window, unless a longer one is the reason the item is colored — a highlighted status bar always explains itself.
+In `compact` mode, the item normally shows the shortest window. If a longer window crosses a warning or error threshold, that window is shown instead so the highlighted state has a visible cause.
 
-Dates and times follow VS Code's display language when the locale setting is empty, which is not the same as the regional settings your operating system holds — VS Code in English shows US dates on a machine set to anything else. Write a language tag such as `en-GB`, `de-DE`, or `sr-Latn-RS` to say which one you want, and append `-u-hc-h23` for a 24-hour clock or `-u-hc-h12` for a 12-hour one, as in `en-US-u-hc-h23`. A tag VS Code cannot resolve is ignored rather than shown.
+When the locale setting is empty, dates and times follow VS Code's display language rather than the operating system's regional settings. For example, VS Code in English uses US-style dates even when the operating system uses another region. Set a language tag such as `en-GB`, `de-DE`, or `sr-Latn-RS` to choose the format explicitly. Add `-u-hc-h23` for a 24-hour clock or `-u-hc-h12` for a 12-hour clock, as in `en-US-u-hc-h23`. An unsupported tag is ignored.
 
-Each provider is drawn with its own monochrome mark. Set a label if you would rather see your own text; it accepts a plain string or a codicon reference such as `$(sparkle)`, and is collapsed to a single line and cut to 24 characters so a hand-edited value cannot stretch the status bar.
+Each provider has its own monochrome mark. Set a label to replace it with a plain string or a codicon reference such as `$(sparkle)`. The value is collapsed to one line and limited to 24 characters so a hand-edited setting cannot stretch the status bar.
 
 ## Troubleshooting
 
-Every failure keeps the last good numbers on screen rather than blanking the item, so the tooltip is where the reason lives. It states what happened on one line, and where there is something to do about it, that follows under a lightbulb.
+After a refresh failure, the last good reading remains visible instead of being replaced with an empty value. The tooltip states what happened and, when an action can help, shows it on a separate line under a lightbulb.
 
 | The tooltip says | What it means |
 | --- | --- |
 | No Claude Code sign-in was found | Sign in to the Claude Code CLI or extension; the Claude desktop app keeps a store of its own. |
 | The Claude Code sign-in has expired | Run Claude Code; it renews its own token. This extension deliberately will not. |
 | Claude Code is no longer signed in | The service rejected the stored token. Sign in to Claude Code again. |
-| Rate limited, retrying at … | Nothing to do. The tooltip names the moment the read resumes, and it resumes. |
-| The usage service could not be reached | Network or proxy. The last reading stays on screen with its age. |
+| Rate limited, retrying at … | No action is required. Reading resumes at the displayed time. |
+| The usage service could not be reached | Check the network or proxy. The last reading remains visible with its age. |
 | Codex reported no usage windows | Sign in to Codex, or the account has no windows to report. |
-| The Codex CLI could not be started | Codex is not installed where this looks; see [Platform scope](#platform-scope). |
+| The Codex CLI could not be started | Codex was not found in a supported local installation; see [Platform scope](#platform-scope). |
 | The Codex app server timed out | The CLI stopped responding. The next read starts a fresh one automatically. |
 
-**Rate limited.** The `Retry-After` the usage service sends is honoured for every trigger alike — the background poll, local agent activity, and the menu — and the tooltip names the moment the read resumes instead of asking again. A refusal that names no delay is held for a minute, and one naming more than an hour is asked again at the hour: a wait longer than the longest refresh interval is indistinguishable from a stall, and one long enough to overflow a timer is worse than that.
+**Rate limited.** A `Retry-After` response pauses background polling, refreshes triggered by local agent activity, and menu refreshes alike. The tooltip shows when reading will resume. A response without a delay pauses reads for one minute. A delay longer than one hour is capped at one hour so an excessive or invalid value cannot leave the extension stalled beyond its longest refresh interval.
 
-**A macOS keychain prompt was declined.** That is respected rather than retried: the read is not attempted again for half an hour, so declining does not turn into a prompt every five minutes. Run **Agent Usage Bar: Refresh usage** to ask again immediately.
+**A macOS keychain prompt was declined.** The extension waits half an hour before trying again, preventing a new prompt on every five-minute refresh. Run **Agent Usage Bar: Refresh usage** to retry immediately.
 
-**The numbers look old.** A history icon and a note in the tooltip appear once a reading is more than ten minutes old, so a stale number never passes as current. Refresh from the menu to force a read that ignores the usual floor.
+**The numbers look old.** A history icon and tooltip note appear when a reading is more than ten minutes old. Refresh from the menu to request a new reading without the normal minimum interval.
 
-**Nothing appears at all in a Remote-SSH, WSL, or dev container window.** The extension runs on the machine your editor runs on, which is where both agents keep their sign-ins. See [Platform scope](#platform-scope).
+**Nothing appears in a Remote-SSH, WSL, or dev container window.** The extension runs beside the local VS Code user interface and reads local agent sign-ins. See [Platform scope](#platform-scope).
 
 ## Data access
 
-This extension reads a credential, so the boundary is worth stating exactly. Usage is a property of the account rather than of this machine, so both providers are asked about the account instead of a local scoreboard being counted up.
+Account usage cannot be calculated reliably from activity on one machine, so the extension asks each provider for the account-level reading. The credential boundary for those requests is described below.
 
 ### Codex
 
-The extension starts `codex app-server` and asks it over JSON-RPC on stdin and stdout. Codex holds its own credentials and refreshes them itself, so this extension never reads or handles a Codex token: `~/.codex/auth.json` stays outside the boundary, and `npm run audit:bundle` fails the build if that path appears in the shipped bundle. When the CLI cannot be located or is signed out, the item reports that rather than guessing from local files.
+The extension starts `codex app-server` and requests usage over JSON-RPC through stdin and stdout. Codex manages and refreshes its own credentials, so this extension never reads or handles a Codex token. `~/.codex/auth.json` remains outside the boundary, and `npm run audit:bundle` fails if that path appears in the shipped bundle. If the CLI cannot be found or is signed out, the status item reports that state instead of inferring usage from local files.
 
 ### Claude Code
 
-**The extension reads the token Claude Code stores, spends it on one request, and drops it.** That request goes to `https://api.anthropic.com/api/oauth/usage`, the same endpoint the official Claude Code extension uses for this.
+**The extension reads the token stored by Claude Code, uses it for one request, and discards it.** The request goes to `https://api.anthropic.com/api/oauth/usage`, the same endpoint used by the official Claude Code extension for usage data.
 
-The token is never logged, cached, or written back — not to the shared state, not to settings, not to the extension's secret storage. Keeping a copy would trade one file read every five minutes for a second place a credential lives: one that goes stale when Claude Code rotates the token, and that would have to be invalidated on sign-out.
+The token is never logged, cached, or written back to shared state, settings, or the extension's secret storage. Caching it would create a second credential store that could become stale when Claude Code rotates the token or signs out. Reading the existing store when needed avoids that additional copy.
 
-It is also never refreshed, deliberately. A refresh rotates the stored token, so racing Claude Code for it would sign Claude Code itself out. When the token is expired or rejected, the extension says so and leaves the renewing to Claude Code.
+The extension also never refreshes the token. Refreshing can rotate the stored credential, and competing with Claude Code for that update could invalidate Claude Code's own session. When the token expires or is rejected, the extension reports it and leaves renewal to Claude Code.
 
 **Where the token lives** depends on the platform:
 
@@ -141,48 +141,48 @@ It is also never refreshed, deliberately. A refresh rotates the stored token, so
 | Windows, Linux | `~/.claude/.credentials.json`                                 |
 | macOS          | The login keychain, under the item Claude Code created for it |
 
-That store belongs to Claude Code, and the CLI and the official Claude Code extension share it — the extension carries its own copy of the CLI, so signing in through either one leaves the same sign-in behind. The Claude desktop app keeps a store of its own, encrypted for itself; nothing in it is read here.
+The store belongs to Claude Code and is shared by the CLI and the official Claude Code extension, which includes its own copy of the CLI. Signing in through either one therefore creates the same credential. The Claude desktop app uses a separate encrypted store that this extension does not read.
 
 #### Reading the macOS keychain
 
-The keychain is read through the tool macOS ships for it: `/usr/bin/security find-generic-password`, started directly at that absolute path with its arguments as a list, so nothing on `PATH` can stand in for it and no argument can be read as a command. It only reads. No keychain verb in this extension changes what is stored, and `npm run audit:bundle` fails the build if one ever appears.
+The extension reads the keychain with `/usr/bin/security find-generic-password`, using the absolute system path and a separate argument list. Nothing on `PATH` can replace that executable, and no argument is interpreted as a command. The operation is read-only; `npm run audit:bundle` fails if any keychain-modifying verb appears in the shipped bundle.
 
-The file is tried first even on macOS, because it is the cheaper question and Claude Code falls back to it where the keychain is not available. An ordinary macOS read therefore starts one short-lived process, and an ordinary read anywhere else starts none.
+The credentials file is checked first on every platform because Claude Code uses it when the keychain is unavailable. A normal macOS keychain read therefore starts one short-lived process; normal reads on other platforms start none.
 
-In ordinary use no authorization prompt appears at all: Claude Code stores the item with an access list that already covers a read through `security`, which is what this read is. A prompt can still be put in front of it — a keychain that is locked, an item carried over from another Mac, an access list narrowed by hand — and when one is, the answer is respected rather than worked around:
+Normally, reading the item through `security` requires no authorization prompt because Claude Code's access list already permits it. A locked keychain, an item transferred from another Mac, or a manually restricted access list can still cause a prompt. The extension respects that result:
 
 | Outcome | What happens next |
 | --- | --- |
-| No such item | Asked again on the next interval; asking costs nothing. |
+| No such item | Checked again on the next interval without showing a prompt. |
 | Declined, locked, or not ours | Not asked again for half an hour, so a declined prompt does not come back five minutes later. |
 | No answer within five seconds | Abandoned, and counted as a refusal. |
 
-`security` exits with the status it was given, so these are told apart by its exit code rather than guessed at. Only one window ever asks, because only one window does the reading.
+The extension distinguishes these outcomes through the exit code returned by `security`. Multi-window coordination ensures that only the window performing the account read can trigger the keychain request.
 
 ### Agent transcripts
 
-`~/.codex/sessions` and `~/.claude/projects` are watched purely as an "an agent just ran" signal: only the fact that a `.jsonl` file changed is used, and once the writes settle a refresh is requested. The transcripts themselves are never opened.
+The extension watches `~/.codex/sessions` and `~/.claude/projects` only for the fact that a `.jsonl` file changed. After the writes settle, that change requests a usage refresh. Transcript contents are never opened.
 
-Codex also pushes an `account/rateLimits/updated` notification, but that only arrives while its app server is running, and this extension stops that process ten minutes after the window last read rather than keeping a child process resident for a signal. The watch covers the rest of the time, and is what starts a fresh app server when an answer is wanted again.
+Codex also sends an `account/rateLimits/updated` notification while its app server is running. The extension stops an idle app server after ten minutes instead of keeping a child process alive only for that notification. File watching covers later activity and triggers a fresh app server when another reading is needed.
 
-Every automatic read sits behind a floor of thirty seconds per provider, whichever trigger asked for it: a single long turn writes its transcript in bursts, and the percentages it moves are not worth a request each. A refresh you ask for from the menu ignores the floor.
+Every automatic read has a minimum interval of thirty seconds per provider, regardless of which trigger requested it. A long agent turn can write its transcript in several bursts, and those small updates do not justify a request each. A manual menu refresh bypasses this minimum.
 
 ### What is stored, and what never leaves
 
-That one endpoint is the only network target in the extension. `npm run audit:bundle` pins the full allowlist, so a second URL, a shell execution, or any filesystem write fails the build. The extension opens files only to parse them and writes no files of its own.
+The Anthropic usage endpoint is the extension's only direct network target. `npm run audit:bundle` pins that allowlist and also rejects shell execution and filesystem-write APIs in the bundle. The extension opens files only for parsing and performs no direct filesystem writes.
 
 It persists exactly two things, both through VS Code's own APIs:
 
 - Your settings, when you toggle a provider from the menu.
 - The last usage reading, so the other windows can show it — percentages, reset times, window lengths, and the plan name.
 
-Neither carries a token, a prompt, or any file content. There is no telemetry, no runtime dependency, no custom credential path, and no custom update mechanism. No prompt, code, or file content ever leaves the machine.
+Neither stored value contains a token, prompt, or file content. The extension has no telemetry, runtime dependency, custom credential path, or custom update mechanism. No prompt, source code, or file content is sent anywhere.
 
 ## Platform scope
 
 Desktop VS Code on Windows, macOS, and Linux, hand-tested on all three against real installs of both agents. The per-platform paths are covered by tests on all three CI runners as well: the Codex install layouts, the macOS keychain read, and the file watcher against the real `recursive` implementation.
 
-The extension runs on the machine your editor is running on, which is where both agents keep their sign-ins. In a Remote-SSH, WSL, or dev container window it therefore reports the usage of the local account. If your agents run on the remote side, their usage is not what you will see.
+The extension runs on the same machine as the VS Code user interface, where both agents keep their sign-ins. In a Remote-SSH, WSL, or dev container window, it therefore reports usage for the local account. It does not read an agent sign-in that exists only on the remote side.
 
 There is no web build. It reads local files and starts a local process, neither of which exists in a browser.
 
