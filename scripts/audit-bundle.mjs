@@ -35,8 +35,11 @@ if (unexpected.length > 0) {
 
 // Whatever the bundle reaches for in these modules has to be a member that reads. Collecting what
 // is there beats naming what is not: a denylist of spellings misses `writeFileSync` the moment
-// someone writes it that way, and misses every verb nobody thought of. `spawn` is the only way a
-// program is started here, which is what keeps an argument from being read as a command.
+// someone writes it that way, and misses every verb nobody thought of.
+//
+// Members are read off the binding, so only what is written as a property can be seen. A default
+// import puts one hop in the way, which is why `default` is stepped through rather than skipped,
+// and an index expression puts the name out of reach entirely, which is why one fails outright.
 const READ_ONLY_MEMBERS = {
   fs: ["existsSync", "watch"],
   "fs/promises": ["readFile", "readdir", "stat", "lstat"],
@@ -49,9 +52,9 @@ for (const [specifier, allowed] of Object.entries(READ_ONLY_MEMBERS)) {
     continue;
   }
 
-  // The binding is taken from the require that made it, so renaming by the bundler cannot switch
-  // this check off without being noticed: a module that is there with no binding found is a
-  // failure, never a pass.
+  // Taking the binding from the require that made it is what lets the bundler name it anything;
+  // what would switch the check off is a require this cannot read at all, so that fails outright
+  // rather than passing with nothing found.
   const bindings = [
     ...bundle.matchAll(
       new RegExp(String.raw`(?:var|let|const)\s+([\w$]+)\s*=\s*[\w$]*\(?${required.source}`, "g"),
@@ -63,11 +66,16 @@ for (const [specifier, allowed] of Object.entries(READ_ONLY_MEMBERS)) {
 
   const used = new Set();
   for (const binding of bindings) {
-    for (const match of bundle.matchAll(new RegExp(String.raw`\b${binding}\.([\w$]+)`, "g"))) {
+    if (new RegExp(String.raw`\b${binding}\s*\[`).test(bundle)) {
+      fail(`${specifier} is reached by index, which hides the member from this audit`);
+    }
+    const member = new RegExp(String.raw`\b${binding}\.(?:default\.)?([\w$]+)`, "g");
+    for (const match of bundle.matchAll(member)) {
       used.add(match[1]);
     }
   }
 
+  // `default` survives only where nothing follows it, which is the namespace object itself.
   const writes = [...used].filter((member) => !allowed.includes(member) && member !== "default");
   if (writes.length > 0) {
     fail(`Members of ${specifier} outside the read-only set: ${writes.join(", ")}`);
