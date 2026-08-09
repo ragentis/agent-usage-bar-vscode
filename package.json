@@ -56,6 +56,20 @@
           "fontPath": "./assets/agent-usage-bar.woff",
           "fontCharacter": "\\E800"
         }
+      },
+      "agent-usage-bar-claude-hover": {
+        "description": "Claude Code provider mark, aligned for tooltips",
+        "default": {
+          "fontPath": "./assets/agent-usage-bar.woff",
+          "fontCharacter": "\\E802"
+        }
+      },
+      "agent-usage-bar-codex-hover": {
+        "description": "Codex provider mark, aligned for tooltips",
+        "default": {
+          "fontPath": "./assets/agent-usage-bar.woff",
+          "fontCharacter": "\\E803"
+        }
       }
     },
     "commands": [

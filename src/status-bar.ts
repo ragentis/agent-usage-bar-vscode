@@ -10,10 +10,28 @@ import type { ProviderId, ProviderView } from "./usage";
  * would split the pair. These sit just off a round value, a hundredth apart. Priority is a float,
  * so a value between them would still sort between them; the gap makes that unlikely, not
  * impossible.
+ *
+ * Tooltip theme icons use baseline alignment instead of the status bar's centered flex layout, so
+ * these custom marks appear about two pixels too low beside tooltip titles. The Markdown sanitizer
+ * does not allow vertical positioning, so the font provides lifted variants used only by tooltips.
+ * CONTRIBUTING documents how those variants are generated.
  */
-const PROVIDERS: Record<ProviderId, { title: string; icon: string; priority: number }> = {
-  claude: { title: "Claude Code usage", icon: "agent-usage-bar-claude", priority: 100.02 },
-  codex: { title: "Codex usage", icon: "agent-usage-bar-codex", priority: 100.01 },
+const PROVIDERS: Record<
+  ProviderId,
+  { title: string; icon: string; hoverIcon: string; priority: number }
+> = {
+  claude: {
+    title: "Claude Code usage",
+    icon: "agent-usage-bar-claude",
+    hoverIcon: "agent-usage-bar-claude-hover",
+    priority: 100.02,
+  },
+  codex: {
+    title: "Codex usage",
+    icon: "agent-usage-bar-codex",
+    hoverIcon: "agent-usage-bar-codex-hover",
+    priority: 100.01,
+  },
 };
 
 /** A configured label replaces the mark outright, so the two never compete for width. */
@@ -48,10 +66,10 @@ export function showLoading(
   provider: ProviderId,
   configuration: ExtensionConfiguration,
 ): void {
-  const { title, icon } = PROVIDERS[provider];
+  const { title, hoverIcon } = PROVIDERS[provider];
   draw(item, {
     text: `${prefix(provider, configuration)} $(loading~spin)`,
-    tooltip: buildMessageTooltip(title, icon, "Reading usage…"),
+    tooltip: buildMessageTooltip(title, hoverIcon, "Reading usage…"),
     background: undefined,
   });
 }
@@ -63,13 +81,13 @@ export function renderStatusBarItem(
   configuration: ExtensionConfiguration,
   now = new Date(),
 ): void {
-  const { title, icon } = PROVIDERS[provider];
+  const { title, hoverIcon } = PROVIDERS[provider];
   const mark = prefix(provider, configuration);
   const { snapshot } = view;
   if (!snapshot) {
     draw(item, {
       text: `${mark} --`,
-      tooltip: buildMessageTooltip(title, icon, view.message ?? "No reading yet."),
+      tooltip: buildMessageTooltip(title, hoverIcon, view.message ?? "No reading yet."),
       background: undefined,
     });
     return;
@@ -81,7 +99,7 @@ export function renderStatusBarItem(
     text: `${mark} ${blocked}${buildStatusText(snapshot, configuration, now)}${age ? " $(history)" : ""}`,
     tooltip: buildTooltip(
       title,
-      icon,
+      hoverIcon,
       snapshot,
       configuration,
       view.message === null ? null : { message: view.message, verbatim: view.verbatim },
