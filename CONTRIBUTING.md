@@ -110,7 +110,7 @@ The build writes two untracked files. `dist/extension.js` is the shipped extensi
 | Keychain verbs | Any password verb other than `find-generic-password`, and `unlock-keychain`. |
 | Absolute paths | A rooted path outside the pinned list of two programs the extension starts. |
 
-The module checks read the members the bundle actually uses rather than listing forbidden names, because a denylist misses the spelling nobody thought of: `/\bwriteFile\b/` does not match `writeFileSync`. Adding a member to one of those sets is the explicit decision. The binding comes from the `require` that created it, so the bundler may name it anything; what would disable the check is a `require` the script cannot parse, and that fails outright rather than passing with nothing found. An index expression such as `fs["writeFile"]` fails for the same reason — it puts the member name out of reach.
+The module checks used members against an allowlist. This is stricter than rejecting specific write methods: a check for `/\bwriteFile\b/` would not catch `writeFileSync` or another unlisted method. Adding a member to an allowlist is therefore an explicit decision. The audit derives each binding name from the `require` that created it, so bundler renames remain detectable. If it recognizes a `require` but cannot extract its binding, or finds index access such as `fs["writeFile"]`, it fails instead of silently skipping the check.
 
 Three limits are worth stating rather than discovering, because each marks where the audit stops and review begins:
 

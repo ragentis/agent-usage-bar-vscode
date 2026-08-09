@@ -37,9 +37,9 @@ if (unexpected.length > 0) {
 // is there beats naming what is not: a denylist of spellings misses `writeFileSync` the moment
 // someone writes it that way, and misses every verb nobody thought of.
 //
-// Members are read off the binding, so only what is written as a property can be seen. A default
-// import puts one hop in the way, which is why `default` is stepped through rather than skipped,
-// and an index expression puts the name out of reach entirely, which is why one fails outright.
+// Members are read off the binding, so only the member-access forms below can be inspected. A
+// default import adds one hop, which is handled explicitly. Index access hides the member name from
+// this check and therefore fails outright.
 const READ_ONLY_MEMBERS = {
   fs: ["existsSync", "watch"],
   "fs/promises": ["readFile", "readdir", "stat", "lstat"],
@@ -66,7 +66,7 @@ for (const [specifier, allowed] of Object.entries(READ_ONLY_MEMBERS)) {
 
   const used = new Set();
   for (const binding of bindings) {
-    if (new RegExp(String.raw`\b${binding}\s*\[`).test(bundle)) {
+    if (new RegExp(String.raw`\b${binding}(?:\.default)?\s*\[`).test(bundle)) {
       fail(`${specifier} is reached by index, which hides the member from this audit`);
     }
     const member = new RegExp(String.raw`\b${binding}\.(?:default\.)?([\w$]+)`, "g");

@@ -171,9 +171,9 @@ Every automatic read has a minimum interval of thirty seconds per provider, rega
 
 The Anthropic usage endpoint is the extension's only direct network target. The extension opens files only for parsing and performs no direct filesystem writes.
 
-`npm run audit:bundle` checks the shipped code on every build. It permits only read-only members of `node:fs`, so a filesystem write fails the build in any spelling, and only `spawn` from `node:child_process`, with `shell: true` refused outright.
+`npm run audit:bundle` checks the shipped code on every build. For the member-access forms produced by the current build, it rejects `node:fs` members outside the explicit read-only set. It permits only `spawn` from `node:child_process` and rejects literal `shell: true` options.
 
-Two things it cannot establish by reading the shipped text, stated plainly rather than implied. A URL assembled from parts at runtime is outside the allowlist's reach, which covers addresses written out in full. And because the program `spawn` starts is resolved at runtime, the audit constrains how a process is started but cannot prove which one. Those are what code review covers; the audit is there to catch a change that quietly breaks a promise, not to contain one made deliberately.
+The shipped text leaves two things for code review to establish. The URL allowlist can inspect only addresses written out in full; a URL assembled from parts at runtime is outside its reach. Likewise, because the program passed to `spawn` is resolved at runtime, the audit constrains how a process is started but cannot prove which one. The audit catches accidental violations of these promises; code review remains responsible for runtime-computed behavior.
 
 It persists exactly two things, both through VS Code's own APIs:
 
