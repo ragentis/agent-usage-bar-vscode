@@ -1,7 +1,7 @@
 name: Release
 
-# One chain, from a push on main to a published extension: Release Please keeps a release pull
-# request in step with main, and merging it starts everything below.
+# Every push to main runs this. On most of them phase 1 is all that happens, keeping a release pull
+# request in step with the commits; merging that pull request is what lets phases 2 to 4 run.
 on:
   push:
     branches: [main]
@@ -91,7 +91,7 @@ jobs:
           gh release edit "$TARGET_TAG" --draft=false --latest
 
   # Phase 4. Both registries publish the artifact phase 2 built and phase 3 attached, so a store
-  # install and a release download are the same bytes. A failing leg is re-run alone, and both skip
+  # install and a release download are the same bytes. A failed entry is re-run alone, and both skip
   # a version already published, so a repeat costs nothing. No GitHub credential reaches here.
   registries:
     name: Publish to ${{ matrix.registry }}
@@ -124,7 +124,7 @@ jobs:
       - name: Publish
         env:
           TARGET_TAG: ${{ needs.prepare.outputs.tag }}
-          # Each leg is handed the token for its own registry and nothing else.
+          # Each entry is handed the token for its own registry and nothing else.
           VSCE_PAT: ${{ matrix.cli == 'vsce' && secrets.VSCE_PAT || '' }}
           OVSX_PAT: ${{ matrix.cli == 'ovsx' && secrets.OVSX_PAT || '' }}
         # Both tools read their token from the environment and take the same two options here.

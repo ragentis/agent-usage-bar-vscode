@@ -76,9 +76,9 @@ export function keychainOutcome(exitCode: number | null, secret: string): Keycha
  *
  * Spawned rather than shelled, at an absolute path, with arguments as a list: nothing on PATH can
  * stand in for it and no argument can be read as a command. `find-generic-password` only reads;
- * this extension has no keychain verb that writes, and `audit:bundle` fails the build if one ever
- * appears. stderr is discarded rather than reported, since it describes a keychain item; only the
- * exit code is used.
+ * this extension has no keychain verb that writes, and `audit:bundle` refuses a bundle carrying any
+ * password verb but this one. stderr is discarded rather than reported, since it describes a
+ * keychain item; only the exit code is used.
  */
 export function readKeychain(service: string = KEYCHAIN_SERVICE): Promise<KeychainResult> {
   return new Promise((resolve) => {

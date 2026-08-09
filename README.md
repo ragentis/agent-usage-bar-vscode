@@ -145,7 +145,7 @@ The store belongs to Claude Code and is shared by the CLI and the official Claud
 
 #### Reading the macOS keychain
 
-The extension reads the keychain with `/usr/bin/security find-generic-password`, using the absolute system path and a separate argument list. Nothing on `PATH` can replace that executable, and no argument is interpreted as a command. The operation is read-only; `npm run audit:bundle` fails if any keychain-modifying verb appears in the shipped bundle.
+The extension reads the keychain with `/usr/bin/security find-generic-password`, using the absolute system path and a separate argument list. Nothing on `PATH` can replace that executable, and no argument is interpreted as a command. The operation is read-only; `npm run audit:bundle` fails if the bundle carries any password verb other than `find-generic-password`.
 
 The credentials file is checked first on every platform because Claude Code uses it when the keychain is unavailable. A normal macOS keychain read therefore starts one short-lived process; normal reads on other platforms start none.
 
@@ -169,7 +169,9 @@ Every automatic read has a minimum interval of thirty seconds per provider, rega
 
 ### What is stored, and what never leaves
 
-The Anthropic usage endpoint is the extension's only direct network target. `npm run audit:bundle` pins that allowlist and also rejects shell execution and filesystem-write APIs in the bundle. The extension opens files only for parsing and performs no direct filesystem writes.
+The Anthropic usage endpoint is the extension's only direct network target. The extension opens files only for parsing and performs no direct filesystem writes.
+
+`npm run audit:bundle` checks that in the shipped code on every build. It allows only read-only members of `node:fs` and only `spawn` from `node:child_process`, so a write or a shell fails the build even in a spelling nobody listed. The URL allowlist covers addresses written out in the bundle; one assembled from parts at runtime is beyond what reading the shipped text can establish. The audit is there to catch a change that quietly breaks one of these promises, and the review that accompanies it is what covers the rest.
 
 It persists exactly two things, both through VS Code's own APIs:
 

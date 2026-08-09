@@ -103,12 +103,16 @@ The build writes two untracked files. `dist/extension.js` is the shipped extensi
 | --- | --- |
 | Runtime dependencies | Any entry under `dependencies`. |
 | Bundle inputs | An input that did not come from `src/`. |
-| Network targets | Any URL other than the one allowed endpoint. |
-| Shell execution | `execSync`, `execFileSync`, or `shell: true`. |
-| Filesystem writes | `writeFile`, `appendFile`, or `createWriteStream`. |
+| Network targets | Any written-out URL other than the one allowed endpoint. |
+| `node:fs` members | Anything the bundle reaches for beyond `readFile`, `readdir`, `stat`, `lstat`, `existsSync`, and `watch`. |
+| `node:child_process` members | Anything beyond `spawn`, plus a literal `shell: true`. |
 | Codex credentials | The literal `.codex/auth.json` path. |
 | Keychain verbs | Any password verb other than `find-generic-password`, and `unlock-keychain`. |
 | Absolute paths | A rooted path outside the pinned list of two programs the extension starts. |
+
+The module checks read the members the bundle actually uses rather than listing forbidden names, because a denylist misses the spelling nobody thought of: `/\bwriteFile\b/` does not match `writeFileSync`. Adding a member to one of those sets is the explicit decision; the binding is taken from the `require` that created it, so a rename by the bundler fails the audit instead of quietly disabling it.
+
+Two limits are worth stating rather than discovering. The script reads the shipped text, so a URL assembled at runtime is past what it can settle, and packaging proves neither that the VSIX installs nor that it activates. The first is covered by review, the second by the install before approving a release.
 
 If a change requires one of these capabilities, it changes the security boundary described in the README. Update the implementation, audit, and documentation together, or redesign the change to stay inside the existing boundary.
 

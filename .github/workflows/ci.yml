@@ -39,8 +39,8 @@ jobs:
           fetch-depth: 0
 
       # Start at the shared commit so a rewritten push still checks every subject it introduced;
-      # with no reachable base, check the tip. A merge has no subject of its own, so only what it
-      # brings in is checked.
+      # with no reachable base, check the tip. `--no-merges` drops merge commits, whose generated
+      # `Merge …` subject describes no change of its own, leaving only what they bring in.
       - name: Check the subjects added by this event
         env:
           BASE: ${{ github.event.before }}
@@ -99,9 +99,10 @@ jobs:
     name: Package VSIX
     # Not `commits`: that job is skipped on a pull request, and a skipped need skips its dependents.
     needs: [checks, test]
-    # Packaging is a check too: it runs the bundle audit and fails on a manifest that would not
-    # install, neither of which another job would notice. release.yml publishes this exact artifact
-    # to both registries, so nothing rebuilt after the audit can be substituted for it.
+    # Packaging is a check too: it runs the bundle audit, and `vsce` refuses a manifest it cannot
+    # package, neither of which another job would notice. Neither proves the VSIX installs and
+    # activates — that is the manual step before approving a release. release.yml publishes this
+    # exact artifact to both registries, so nothing rebuilt after the audit can stand in for it.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

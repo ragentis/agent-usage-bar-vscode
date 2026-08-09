@@ -6,7 +6,8 @@
 
 subject="$(sed -n '1p' "$1")"
 
-# A merge has no subject of its own, and the fixup forms are rewritten by the rebase that eats them.
+# Skipped, all three generated: a merge subject describes no change of its own, and the fixup forms
+# are rewritten by the rebase that consumes them. CI drops merges for the same reason.
 case "$subject" in
   "Merge "* | "fixup! "* | "squash! "*) exit 0 ;;
 esac

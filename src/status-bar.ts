@@ -6,9 +6,9 @@ import type { ProviderId, ProviderView } from "./usage";
 
 /**
  * Status bar order is priority descending, and there is no API to keep two items together.
- * Round priorities such as 100 are what most extensions pick, so anything landing on one of
- * those would split the pair. These sit just off a round value with almost no gap between
- * them, which leaves no room for a foreign item to be sorted in between.
+ * Round priorities such as 100 are what most extensions pick, so anything landing on one of those
+ * would split the pair. These sit just off a round value, a hundredth apart. Any priority between
+ * them would still sort between them; the point is that no one picks 100.015 by hand.
  */
 const PROVIDERS: Record<ProviderId, { title: string; icon: string; priority: number }> = {
   claude: { title: "Claude Code usage", icon: "agent-usage-bar-claude", priority: 100.02 },

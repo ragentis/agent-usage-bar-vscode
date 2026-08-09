@@ -22,9 +22,11 @@ export interface ExtensionConfiguration {
 }
 
 /**
- * Low enough to feel live, high enough that the account endpoints never rate limit us. It bounds
- * the poll setting and doubles as the floor under every automatic read, so no trigger and no
- * configured interval can put reads closer together than this.
+ * Low enough to feel live, high enough to keep well clear of what either account endpoint is
+ * willing to serve. It bounds the poll setting and doubles as the floor under every automatic read,
+ * so no trigger and no configured interval can put reads closer together than this. It is not a
+ * guarantee against being rate limited — neither limit is published, and a refusal is answered
+ * rather than prevented; see `parseRetryAfter`.
  */
 export const MIN_REFRESH_INTERVAL_SECONDS = 30;
 export const MAX_REFRESH_INTERVAL_SECONDS = 3_600;

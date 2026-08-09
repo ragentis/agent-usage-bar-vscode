@@ -12,8 +12,9 @@ const MAX_RETRY_DELAY_MS = 10 * 60_000;
 const CHANGE_DEBOUNCE_MS = 5_000;
 /**
  * Every window watches the same directory and sees the same write in the same millisecond, so
- * without a spread they would all decide to read at once and no shared lease could tell their
- * arrivals apart. Drawn once per watcher, which is once per window.
+ * without a spread they would all come due at once. `ReadCoordinator` settles that case on its own
+ * through claim slots, but two windows can hash into one slot; arriving apart costs nothing and
+ * leaves fewer ties for it to settle. Drawn once per watcher, which is once per window.
  */
 const CHANGE_JITTER_MS = 2_000;
 
