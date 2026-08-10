@@ -21,7 +21,7 @@ One status bar item per provider, each with its own monochrome glyph:
 | `$(history) 5h 42% (2h 15m)` | The reading is more than ten minutes old. |
 | `--` | No reading yet. The tooltip says why. |
 
-The item turns yellow past the warning threshold and red past the error threshold. Both thresholds use the percentage **used**, regardless of the selected display mode. The item also turns red when a provider reports that the account is stopped by a spend limit or hard rate limit, even when the percentage is low; the tooltip states the reason.
+By default, the item turns yellow when usage reaches the warning threshold and red at the error threshold. Set `agentUsageBar.warnWhen` to `overPace` to show yellow only when the warning threshold is reached ahead of schedule—for example, 80% used before 80% of the window has passed. The red threshold always applies. Colors use the percentage **used**, regardless of the selected display mode. The item also turns red when a provider reports that the account is stopped by a spend limit or hard rate limit, even when the percentage is low; the tooltip states the reason.
 
 Hover to see the plan name, a themed progress bar for each window, exact reset times, pace, any credit balance and when the soonest reset credit expires, and the last refresh error. The bars use the same warning and error thresholds as the status item. The tooltip also links to refresh and settings. Click either status item to toggle that provider, refresh usage, or open settings.
 
@@ -38,6 +38,8 @@ Beside each window's reset time, the tooltip says where that window is heading:
 Only the 5-hour window is forecast. It opens on your first message, so its elapsed time roughly follows working time. The weekly window starts from a calendar anchor and continues through nights and days off. Forecasting from a busy Monday could therefore predict a limit by Thursday even when the rest of the week is quiet. For that window, the tooltip shows elapsed time instead of a forecast.
 
 Pace remains hidden until the window has been open for fifteen minutes, and the 5-hour forecast also requires at least three percent usage. These minimums prevent rounded early values from being presented as a meaningful rate. Set `agentUsageBar.showPace` to `false` to hide pace information.
+
+`warnWhen` works even when `showPace` is off. If a window is too new to compare, the warning threshold applies normally.
 
 ## One reading for every window
 
@@ -82,6 +84,7 @@ Run **Agent Usage Bar: Open settings**, or click either status bar item and pick
 | `agentUsageBar.showPace` | `true` | Show where each window is heading. |
 | `agentUsageBar.warningThreshold` | `80` | Warning color threshold based on used percentage. |
 | `agentUsageBar.errorThreshold` | `95` | Error color threshold; never falls below warning. |
+| `agentUsageBar.warnWhen` | `threshold` | `overPace` warns only when usage reaches the threshold ahead of schedule. |
 | `agentUsageBar.claude.enabled` | `true` | Show Claude Code usage. |
 | `agentUsageBar.codex.enabled` | `true` | Show Codex usage. |
 | `agentUsageBar.claude.label` | `""` | Text to show instead of the Claude mark. |
@@ -89,7 +92,7 @@ Run **Agent Usage Bar: Open settings**, or click either status bar item and pick
 | `agentUsageBar.locale` | `""` | Language tag for dates and times; empty follows VS Code. |
 | `agentUsageBar.refreshIntervalSeconds` | `300` | Background refresh interval, clamped to 30–3600. |
 
-In `compact` mode, the item normally shows the shortest window. If a longer window crosses a warning or error threshold, that window is shown instead so the highlighted state has a visible cause.
+In `compact` mode, the item normally shows the shortest window. If a longer window triggers a warning or error color, it is shown instead so the highlighted state has a visible cause. A warning suppressed by `overPace` does not make the item switch windows.
 
 When the locale setting is empty, dates and times follow VS Code's display language rather than the operating system's regional settings. For example, VS Code in English uses US-style dates even when the operating system uses another region. Set a language tag such as `en-GB`, `de-DE`, or `sr-Latn-RS` to choose the format explicitly. Add `-u-hc-h23` for a 24-hour clock or `-u-hc-h12` for a 12-hour clock, as in `en-US-u-hc-h23`. An unsupported tag is ignored.
 

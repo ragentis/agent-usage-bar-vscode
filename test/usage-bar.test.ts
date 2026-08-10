@@ -24,6 +24,7 @@ const SETTINGS: ExtensionConfiguration = {
   showPace: true,
   warningThreshold: 80,
   errorThreshold: 95,
+  warnWhen: "threshold",
   codexEnabled: true,
   claudeEnabled: true,
   codexLabel: "",

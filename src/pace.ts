@@ -31,8 +31,14 @@ function roundedTo(moment: number, minutes: number): Date {
   return new Date(Math.round(moment / step) * step);
 }
 
-export function paceFor(window: UsageWindow, asOf: Date): Pace | null {
-  const { resetsAt, usedPercent } = window;
+interface Progress {
+  openedAt: number;
+  length: number;
+  elapsed: number;
+}
+
+function progressOf(window: UsageWindow, asOf: Date): Progress | null {
+  const { resetsAt } = window;
   if (!resetsAt) {
     return null;
   }
@@ -40,9 +46,25 @@ export function paceFor(window: UsageWindow, asOf: Date): Pace | null {
   const openedAt = resetsAt.getTime() - length * 60_000;
   const elapsed = (asOf.getTime() - openedAt) / 60_000;
   // Reject readings outside the stated window, including stale readings from before a reset.
-  if (elapsed < MIN_ELAPSED_MINUTES || elapsed >= length) {
+  return elapsed < MIN_ELAPSED_MINUTES || elapsed >= length ? null : { openedAt, length, elapsed };
+}
+
+/**
+ * Whether a window has spent no more of its allowance than of its own time. A window that cannot be
+ * measured is not on pace, so callers keep whatever they do without one.
+ */
+export function onPace(window: UsageWindow, asOf: Date): boolean {
+  const progress = progressOf(window, asOf);
+  return progress !== null && window.usedPercent <= (progress.elapsed / progress.length) * 100;
+}
+
+export function paceFor(window: UsageWindow, asOf: Date): Pace | null {
+  const progress = progressOf(window, asOf);
+  if (!progress) {
     return null;
   }
+  const { usedPercent } = window;
+  const { openedAt, length, elapsed } = progress;
   if (window.kind === "weekly") {
     const percent = Math.round((elapsed / length) * 100);
     return percent >= MIN_ELAPSED_PERCENT ? { kind: "elapsed", percent } : null;
@@ -51,7 +73,7 @@ export function paceFor(window: UsageWindow, asOf: Date): Pace | null {
     return null;
   }
   const full = openedAt + elapsed * (100 / usedPercent) * 60_000;
-  return full < resetsAt.getTime()
+  return full < openedAt + length * 60_000
     ? { kind: "exhausted", at: roundedTo(full, ROUND_TO_MINUTES) }
     : // This branch is reached only when exhaustion occurs at or after reset, so the result is at
       // most 100% without additional clamping.

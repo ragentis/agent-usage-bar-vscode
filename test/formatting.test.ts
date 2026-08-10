@@ -24,6 +24,7 @@ function configure(overrides: Partial<ExtensionConfiguration> = {}): ExtensionCo
     showPace: true,
     warningThreshold: 80,
     errorThreshold: 95,
+    warnWhen: "threshold",
     codexEnabled: true,
     claudeEnabled: true,
     claudeLabel: "",
@@ -89,6 +90,45 @@ test("a window past its reset reads as empty, marked stale, and never colored", 
   );
   expect(pickSeverity(snapshot, configure({ warningThreshold: 10 }), expired)).toBe("warning");
   expect(pickSeverity(snapshot, configure({ warningThreshold: 50 }), expired)).toBe("normal");
+});
+
+const WEEK_MINUTES = 10_080;
+
+function weekly(usedPercent: number, elapsedPercent: number): UsageSnapshot {
+  const remaining = WEEK_MINUTES * (1 - elapsedPercent / 100);
+  return {
+    ...snapshot,
+    windows: [
+      { kind: "session", usedPercent: 22, resetsAt: new Date("2026-08-01T13:12:00Z") },
+      { kind: "weekly", usedPercent, resetsAt: new Date(now.getTime() + remaining * 60_000) },
+    ],
+  };
+}
+
+test("a window still inside its own pace raises neither the warning nor the swap", () => {
+  const paced = weekly(80, 90);
+  const setting = configure({ warnWhen: "overPace" });
+
+  expect(pickSeverity(paced, configure(), now)).toBe("warning");
+  expect(buildStatusText(paced, configure(), now)).toBe("7d 80% (16h 48m)");
+  expect(pickSeverity(paced, setting, now)).toBe("normal");
+  expect(buildStatusText(paced, setting, now)).toBe("5h 22% (3h 12m)");
+});
+
+test("the same percentage reached far too early still warns and still takes the item", () => {
+  const early = weekly(80, 50);
+  const setting = configure({ warnWhen: "overPace" });
+
+  expect(pickSeverity(early, setting, now)).toBe("warning");
+  expect(buildStatusText(early, setting, now)).toBe("7d 80% (3d 12h)");
+});
+
+test("a nearly empty window is an error at any pace", () => {
+  const spent = weekly(96, 99);
+  const setting = configure({ warnWhen: "overPace" });
+
+  expect(pickSeverity(spent, setting, now)).toBe("error");
+  expect(buildStatusText(spent, setting, now)).toBe("7d 96% (1h 40m)");
 });
 
 test("a blocked account is an error however low the percentage is", () => {

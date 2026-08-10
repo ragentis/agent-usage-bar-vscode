@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { formatPace, paceFor, type Pace } from "../src/pace";
+import { formatPace, onPace, paceFor, type Pace } from "../src/pace";
 import type { UsageWindow } from "../src/usage";
 
 /**
@@ -79,6 +79,24 @@ test("a window with nothing to measure against is not paced", () => {
   expect(paceFor(window("session", 100, 60), asOf)).toBeNull();
   expect(paceFor(window("session", 40, 301), asOf)).toBeNull();
   expect(paceFor(window("session", 40, -20), asOf)).toBeNull();
+});
+
+test("a window is on pace while no more of its allowance is gone than of its time", () => {
+  expect(onPace(window("weekly", 80, 9_072), asOf)).toBe(true);
+  expect(onPace(window("weekly", 80, 5_040), asOf)).toBe(false);
+  expect(onPace(window("session", 20, 60), asOf)).toBe(true);
+  expect(onPace(window("session", 21, 60), asOf)).toBe(false);
+});
+
+test("a session window is on pace exactly while it is forecast to survive its reset", () => {
+  expect(onPace(window("session", 50, 150), asOf)).toBe(true);
+  expect(onPace(window("session", 50, 149), asOf)).toBe(false);
+});
+
+test("a window with nothing to measure against is not on pace", () => {
+  expect(onPace({ kind: "session", usedPercent: 0, resetsAt: null }, asOf)).toBe(false);
+  expect(onPace(window("session", 0, 6), asOf)).toBe(false);
+  expect(onPace(window("session", 0, 301), asOf)).toBe(false);
 });
 
 test("a stated window length is used over the one the kind implies", () => {

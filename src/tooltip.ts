@@ -195,7 +195,7 @@ function windowBlock(
   const pace = configuration.showPace ? paceFor(window, asOf) : null;
   const percent = formatPercent(window.usedPercent, configuration.percentageMode);
   const label = configuration.percentageMode === "remaining" ? "remaining" : "used";
-  const meter = `${bar(window.usedPercent, severityFor(window.usedPercent, configuration))}${INDENT}`;
+  const meter = `${bar(window.usedPercent, severityFor(window, configuration, asOf))}${INDENT}`;
   return [
     `<h3>${INDENT}${dim(WINDOW_TITLES[window.kind])}${INDENT}${percent} <small>${dim(label)}</small>`,
     `<br>${INDENT}${meter}</h3>`,

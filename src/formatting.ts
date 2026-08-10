@@ -1,4 +1,5 @@
 import type { ExtensionConfiguration, PercentageMode } from "./configuration";
+import { onPace } from "./pace";
 import type { UsageSnapshot, UsageWindow, WindowKind } from "./usage";
 
 export type Severity = "normal" | "warning" | "error";
@@ -90,22 +91,36 @@ export function buildStatusText(
     );
   }
   // Compact normally shows the shortest window, but switches to whichever window drives the
-  // warning color so a highlighted status bar always explains itself.
+  // warning color so a highlighted status bar always explains itself. Asking for the color rather
+  // than the threshold keeps the swap and the color under one rule.
   const alarming = windows
-    .filter((window) => window.usedPercent >= configuration.warningThreshold)
+    .filter((window) => severityFor(window, configuration, snapshot.fetchedAt) !== "normal")
     .toSorted((left, right) => right.usedPercent - left.usedPercent)[0];
   return prefix + formatWindow(alarming ?? primary, configuration.percentageMode, now);
 }
 
 /**
  * Shared by per-window tooltip bars and the worst-window status item so colors mean the same thing.
+ * `asOf` is the reading timestamp rather than the clock, keeping any pace judgement aligned with the
+ * percentage it is made about.
  */
-export function severityFor(usedPercent: number, configuration: ExtensionConfiguration): Severity {
-  if (usedPercent >= configuration.errorThreshold) {
+export function severityFor(
+  window: UsageWindow,
+  configuration: ExtensionConfiguration,
+  asOf: Date,
+): Severity {
+  if (window.usedPercent >= configuration.errorThreshold) {
     return "error";
   }
-  return usedPercent >= configuration.warningThreshold ? "warning" : "normal";
+  if (window.usedPercent < configuration.warningThreshold) {
+    return "normal";
+  }
+  // Spending no faster than the window's own clock is a threshold crossed on schedule, not a
+  // problem. The error threshold still applies, because a nearly empty window is one at any pace.
+  return configuration.warnWhen === "overPace" && onPace(window, asOf) ? "normal" : "warning";
 }
+
+const RANK: Record<Severity, number> = { normal: 0, warning: 1, error: 2 };
 
 export function pickSeverity(
   snapshot: UsageSnapshot,
@@ -116,8 +131,7 @@ export function pickSeverity(
   if (snapshot.blocked) {
     return "error";
   }
-  return severityFor(
-    Math.max(0, ...resolveWindows(snapshot, now).map((window) => window.usedPercent)),
-    configuration,
-  );
+  return resolveWindows(snapshot, now)
+    .map((window) => severityFor(window, configuration, snapshot.fetchedAt))
+    .reduce<Severity>((worst, next) => (RANK[next] > RANK[worst] ? next : worst), "normal");
 }

@@ -142,34 +142,48 @@
           "order": 5,
           "description": "Used-percentage threshold for the error background. This cannot be lower than the warning threshold."
         },
+        "agentUsageBar.warnWhen": {
+          "type": "string",
+          "enum": [
+            "threshold",
+            "overPace"
+          ],
+          "enumDescriptions": [
+            "Warn whenever usage reaches the warning threshold.",
+            "Warn only when usage reaches the warning threshold ahead of schedule."
+          ],
+          "default": "threshold",
+          "order": 6,
+          "markdownDescription": "Controls the yellow warning. Choose `overPace` to show it only when usage has reached the warning threshold ahead of schedule—for example, 80% used before 80% of the window has passed. The red error threshold always applies."
+        },
         "agentUsageBar.claude.enabled": {
           "type": "boolean",
           "default": true,
-          "order": 6,
+          "order": 7,
           "markdownDescription": "Show Claude Code usage in the status bar. The sign-in token Claude Code already stores in `~/.claude/.credentials.json` is read and used for a single request to `api.anthropic.com` that asks for your account usage. The token is never stored, logged, refreshed, or sent anywhere else, and no prompts, code, or file contents leave your machine."
         },
         "agentUsageBar.codex.enabled": {
           "type": "boolean",
           "default": true,
-          "order": 7,
+          "order": 8,
           "markdownDescription": "Show Codex usage in the status bar. Your local Codex CLI is asked for the limits it already knows for your account. Codex keeps its own sign-in, so this extension never reads or stores your Codex credentials. Nothing is shown when Codex is not installed or is signed out."
         },
         "agentUsageBar.claude.label": {
           "type": "string",
           "default": "",
-          "order": 8,
+          "order": 9,
           "markdownDescription": "Replace the Claude mark in the status bar with your own text. Leave empty for the icon. A codicon reference such as `$(sparkle)` also works."
         },
         "agentUsageBar.codex.label": {
           "type": "string",
           "default": "",
-          "order": 9,
+          "order": 10,
           "markdownDescription": "Replace the Codex mark in the status bar with your own text. Leave empty for the icon. A codicon reference such as `$(hubot)` also works."
         },
         "agentUsageBar.locale": {
           "type": "string",
           "default": "",
-          "order": 10,
+          "order": 11,
           "examples": [
             "en-GB",
             "de-DE",
@@ -182,7 +196,7 @@
           "default": 300,
           "minimum": 30,
           "maximum": 3600,
-          "order": 11,
+          "order": 12,
           "description": "How often to re-read usage in the background, so this mainly covers usage spent on other machines or in other clients. Local agent activity also triggers a refresh, and no automatic read happens less than thirty seconds after the last one."
         }
       }

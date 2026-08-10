@@ -4,6 +4,7 @@
 
 export type DisplayMode = "compact" | "full";
 export type PercentageMode = "used" | "remaining";
+export type WarnWhen = "threshold" | "overPace";
 
 export interface ExtensionConfiguration {
   displayMode: DisplayMode;
@@ -12,6 +13,7 @@ export interface ExtensionConfiguration {
   showPace: boolean;
   warningThreshold: number;
   errorThreshold: number;
+  warnWhen: WarnWhen;
   codexEnabled: boolean;
   claudeEnabled: boolean;
   codexLabel: string;
@@ -78,6 +80,7 @@ export function resolveConfiguration(read: SettingReader): ExtensionConfiguratio
       warningThreshold,
       bounded(read("errorThreshold", DEFAULT_ERROR_THRESHOLD), DEFAULT_ERROR_THRESHOLD, 0, 100),
     ),
+    warnWhen: read<WarnWhen>("warnWhen", "threshold"),
     codexEnabled: read("codex.enabled", true),
     claudeEnabled: read("claude.enabled", true),
     codexLabel: label(read("codex.label", "")),
@@ -98,6 +101,7 @@ const PRESENTATION_KEYS = [
   "showPace",
   "warningThreshold",
   "errorThreshold",
+  "warnWhen",
   "claudeLabel",
   "codexLabel",
 ] as const satisfies readonly (keyof ExtensionConfiguration)[];

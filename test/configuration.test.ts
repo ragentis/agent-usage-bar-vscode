@@ -20,6 +20,7 @@ function configure(overrides: Partial<ExtensionConfiguration> = {}): ExtensionCo
     showPace: true,
     warningThreshold: 80,
     errorThreshold: 95,
+    warnWhen: "threshold",
     codexEnabled: true,
     claudeEnabled: false,
     claudeLabel: "",
@@ -34,6 +35,7 @@ test("only source settings trigger a provider read", () => {
   expect(configurationEffect(configure(), configure({ warningThreshold: 50 }))).toBe("redraw");
   expect(configurationEffect(configure(), configure({ displayMode: "full" }))).toBe("redraw");
   expect(configurationEffect(configure(), configure({ showPace: false }))).toBe("redraw");
+  expect(configurationEffect(configure(), configure({ warnWhen: "overPace" }))).toBe("redraw");
   expect(configurationEffect(configure(), configure({ claudeEnabled: true }))).toBe("refresh");
   expect(configurationEffect(configure(), configure({ codexLabel: "CX" }))).toBe("redraw");
   expect(configurationEffect(configure(), configure({ locale: "de-DE" }))).toBe("redraw");
@@ -64,6 +66,10 @@ test("the manifest states the same settings bounds the code enforces", () => {
     minimum: 0,
     maximum: 100,
   });
+  expect(property("warnWhen")).toMatchObject({
+    default: "threshold",
+    enum: ["threshold", "overPace"],
+  });
 });
 
 /**
@@ -85,6 +91,7 @@ test("an unset section is the manifest's defaults, whole", () => {
     showPace: true,
     warningThreshold: DEFAULT_WARNING_THRESHOLD,
     errorThreshold: DEFAULT_ERROR_THRESHOLD,
+    warnWhen: "threshold",
     codexEnabled: true,
     claudeEnabled: true,
     codexLabel: "",
