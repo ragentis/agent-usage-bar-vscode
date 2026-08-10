@@ -2,20 +2,14 @@ import { existsSync, watch, type FSWatcher } from "node:fs";
 
 const RETRY_DELAY_MS = 15_000;
 /**
- * Watching can fail for something that will pass — the agent has not run yet, so its directory is
- * not there — or for something that will not: recursive watching costs one inotify handle per
- * directory, and a machine at its limit will refuse every attempt. The two are indistinguishable
- * from here, so the wait doubles up to a ceiling rather than giving up on a directory that may yet
- * appear or retrying forever at full price.
+ * Missing directories and persistent watcher failures look alike here, so retries back off to a
+ * ceiling instead of giving up or retrying continuously.
  */
 const MAX_RETRY_DELAY_MS = 10 * 60_000;
 const CHANGE_DEBOUNCE_MS = 5_000;
 /**
- * Every window watches the same directory and sees the same write in the same millisecond, so
- * without a spread they would all come due at once. `ReadCoordinator` settles that case on its own
- * through claim slots, but two windows can hash into one slot, and arriving apart leaves it fewer
- * ties to settle. The cost is up to `CHANGE_JITTER_MS` of extra delay on a refresh that already
- * waits out the debounce. Drawn once per watcher, which is once per window.
+ * Per-window jitter spreads the same filesystem event before `ReadCoordinator` resolves any
+ * remaining claim collisions.
  */
 const CHANGE_JITTER_MS = 2_000;
 
@@ -25,15 +19,10 @@ export interface WatchTarget {
   recursive: boolean;
 }
 
-/**
- * Reports settled bursts of writes to matching files.
- * Retries quietly because a provider directory may not exist until that agent first runs.
- */
 export class FileWatcher {
   private watcher: FSWatcher | null = null;
   private retryTimer: NodeJS.Timeout | null = null;
   private debounceTimer: NodeJS.Timeout | null = null;
-  /** Doubles as the record of whether this is running: there is nothing to watch for without it. */
   private onChange: (() => void) | null = null;
   private retryDelayMs: number;
 
@@ -47,8 +36,6 @@ export class FileWatcher {
 
   start(onChange: () => void): void {
     this.stop();
-    // Reset only here: a run of failures backs off monotonically, and a fresh start is the one
-    // signal that the answer might have changed for a reason other than waiting.
     this.retryDelayMs = this.baseRetryDelayMs;
     this.onChange = onChange;
     this.open();
@@ -70,11 +57,8 @@ export class FileWatcher {
     if (!this.onChange) {
       return;
     }
-    // A directory that is not there is answered here rather than left to `watch` to complain
-    // about, because on Linux it does not complain: a recursive watch of a missing path returns a
-    // watcher that neither reports nor errs, and nothing would ever arm the retry. Windows and
-    // macOS throw instead, which the catch below still covers — as it covers this path being taken
-    // away between the two calls.
+    // Linux may return a silent watcher for a missing path instead of throwing, so check first to
+    // guarantee that retry is armed everywhere. The catch still covers removal between calls.
     if (!existsSync(target.directory)) {
       this.scheduleRetry();
       return;

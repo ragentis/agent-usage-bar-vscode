@@ -17,16 +17,14 @@ on:
 permissions:
   contents: read
 
-# The release commit runs CI twice, from its own push and from release.yml; `github.workflow` reads
-# as the caller's name under `workflow_call`, which keeps those two in separate groups, not a queue.
+# `github.workflow` identifies the caller under `workflow_call`, keeping release verification
+# separate from the same commit's push run.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # A subject Release Please cannot parse is silent, so it is refused here; the shape and the reason
-  # are in `scripts/check-commit-subject.mjs`, which pr-title.yml and the `commit-msg` hook run too.
-  # A pull request's own subjects are squashed away, so this job has nothing to check on one.
+  # Reject pushed subjects Release Please would silently ignore. PR branch subjects are squashed away.
   commits:
     name: Commit Convention
     if: github.event_name != 'pull_request'
@@ -38,9 +36,7 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
           fetch-depth: 0
 
-      # Start at the shared commit so a rewritten push still checks every subject it introduced;
-      # with no reachable base, check the tip. `--no-merges` drops merge commits, whose generated
-      # `Merge …` subject describes no change of its own, leaving only what they bring in.
+      # Check every non-merge subject introduced since the shared commit, or the tip without a base.
       - name: Check the subjects added by this event
         env:
           BASE: ${{ github.event.before }}
@@ -57,7 +53,6 @@ jobs:
 
   checks:
     name: Static Checks
-    # Typecheck, lint and format read the same files whatever the runner is, so once is enough.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -76,8 +71,7 @@ jobs:
 
   test:
     name: Tests (${{ matrix.os }})
-    # Every supported desktop OS, so filesystem, process and watcher behavior is exercised natively
-    # rather than inferred from one platform.
+    # Exercise filesystem, process, and watcher behavior on every supported desktop OS.
     strategy:
       fail-fast: false
       matrix:
@@ -99,10 +93,8 @@ jobs:
     name: Package VSIX
     # Not `commits`: that job is skipped on a pull request, and a skipped need skips its dependents.
     needs: [checks, test]
-    # Packaging is a check too: it runs the bundle audit, and `vsce` refuses a manifest it cannot
-    # package, neither of which another job would notice. Neither proves the VSIX installs and
-    # activates — that is the manual step before approving a release. release.yml publishes this
-    # exact artifact to both registries, so nothing rebuilt after the audit can stand in for it.
+    # Packaging runs the bundle audit and validates the manifest. Installation and activation remain
+    # a manual release-approval step; release.yml publishes this exact artifact without rebuilding it.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

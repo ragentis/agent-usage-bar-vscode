@@ -6,15 +6,10 @@ interface MenuItem extends vscode.QuickPickItem {
   action?: "toggleClaude" | "toggleCodex" | "settings" | "refresh";
 }
 
-/** Derived rather than written down: a hard-coded publisher stops matching when it changes. */
 export function openSettings(extensionId: string): Thenable<unknown> {
   return vscode.commands.executeCommand("workbench.action.openSettings", `@ext:${extensionId}`);
 }
 
-/**
- * The toggles are written straight to settings rather than held here, so the change event is the
- * single path back into the status bar however the setting was edited.
- */
 export async function showMenu(
   configuration: ExtensionConfiguration,
   extensionId: string,

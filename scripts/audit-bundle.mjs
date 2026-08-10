@@ -1,13 +1,7 @@
 import { readFile } from "node:fs/promises";
 
-// The README makes four promises about an extension that reads an OAuth token: it ships only this
-// repository's own code, reaches one host, starts no shell, and writes nothing to disk. Those are
-// the claims a reader cannot verify by looking at the status bar, and the ones that decay silently
-// as code changes. This script is their machine-checkable form; nothing else belongs here.
-//
-// It reads the shipped text, so it holds for what the bundle spells out and not for what it could
-// assemble at runtime. That is worth stating rather than implying: the point is to catch a change
-// that quietly breaks a promise, not to contain an author who means to.
+// Machine-check the bundle claims readers cannot observe: project-owned inputs, one remote host, no
+// shell, and no disk writes. This audits literal shipped text, not values assembled at runtime.
 
 const manifest = JSON.parse(await readFile("package.json", "utf8"));
 if (Object.keys(manifest.dependencies ?? {}).length > 0) {
@@ -23,9 +17,7 @@ if (foreign.length > 0) {
 
 const bundle = await readFile("dist/extension.js", "utf8");
 
-// One remote, to read the signed-in user's own usage. The list is pinned rather than shaped, so a
-// second endpoint fails the build even if it looks harmless. Literal URLs only — a target built
-// from parts at runtime is past what reading the text can settle.
+// Pin the one literal remote; runtime-assembled targets are outside this text audit.
 const ALLOWED_URLS = new Set(["https://api.anthropic.com/api/oauth/usage"]);
 const urls = [...new Set(bundle.match(/https?:\/\/[^\s"'`\\]+/g) ?? [])];
 const unexpected = urls.filter((url) => !ALLOWED_URLS.has(url));
@@ -33,13 +25,8 @@ if (unexpected.length > 0) {
   fail(`Network targets outside the allowlist: ${unexpected.join(", ")}`);
 }
 
-// Whatever the bundle reaches for in these modules has to be a member that reads. Collecting what
-// is there beats naming what is not: a denylist of spellings misses `writeFileSync` the moment
-// someone writes it that way, and misses every verb nobody thought of.
-//
-// Members are read off the binding, so only the member-access forms below can be inspected. A
-// default import adds one hop, which is handled explicitly. Index access hides the member name from
-// this check and therefore fails outright.
+// Allowlist readable module members instead of guessing write-like names. Only explicit member
+// access can be inspected; default imports are followed and indexed access fails closed.
 const READ_ONLY_MEMBERS = {
   fs: ["existsSync", "watch"],
   "fs/promises": ["readFile", "readdir", "stat", "lstat"],
@@ -52,9 +39,7 @@ for (const [specifier, allowed] of Object.entries(READ_ONLY_MEMBERS)) {
     continue;
   }
 
-  // Taking the binding from the require that made it is what lets the bundler name it anything;
-  // what would switch the check off is a require this cannot read at all, so that fails outright
-  // rather than passing with nothing found.
+  // Follow the binding assigned by the bundler; fail closed when a require cannot be inspected.
   const bindings = [
     ...bundle.matchAll(
       new RegExp(String.raw`(?:var|let|const)\s+([\w$]+)\s*=\s*[\w$]*\(?${required.source}`, "g"),
@@ -75,31 +60,27 @@ for (const [specifier, allowed] of Object.entries(READ_ONLY_MEMBERS)) {
     }
   }
 
-  // `default` survives only where nothing follows it, which is the namespace object itself.
   const writes = [...used].filter((member) => !allowed.includes(member) && member !== "default");
   if (writes.length > 0) {
     fail(`Members of ${specifier} outside the read-only set: ${writes.join(", ")}`);
   }
 }
 
-// What the module allowlists cannot say: that `spawn` is never handed a shell, and that the Codex
-// credential file is none of our business.
+// Module allowlists cannot express spawn options or the Codex credential boundary.
 for (const pattern of [/\bshell\s*:\s*true/, /\.codex[\\/]auth\.json/, /\bunlock-keychain\b/]) {
   if (pattern.test(bundle)) {
     fail(`Forbidden pattern in the bundle: ${pattern}`);
   }
 }
 
-// The macOS sign-in lives in the login keychain, and only the verb that reads may reach it.
+// Only the read-only keychain verb may ship.
 const keychainVerbs = [...new Set(bundle.match(/\b[a-z]+-(?:generic|internet)-password\b/g) ?? [])];
 const writeVerbs = keychainVerbs.filter((verb) => verb !== "find-generic-password");
 if (writeVerbs.length > 0) {
   fail(`Keychain verbs other than find-generic-password: ${writeVerbs.join(", ")}`);
 }
 
-// Three rooted paths belong here: the keychain tool, and the two system locations `codex` may sit
-// in. Its other candidates are built from the home directory, so they never reach the bundle as
-// literals. Pinning what does is what keeps the list from growing quietly.
+// Pin the keychain tool and system Codex locations; home-relative candidates are assembled at runtime.
 const ALLOWED_ROOTED_PATHS = new Set([
   "/usr/bin/security",
   "/usr/local/bin/codex",

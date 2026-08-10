@@ -1,14 +1,13 @@
 export type ProviderId = "claude" | "codex";
 export type WindowKind = "session" | "weekly";
 
-/** Account-wide source of a usage reading. */
 export type SnapshotSource = "claude-account-api" | "codex-app-server";
 
 export interface UsageWindow {
   kind: WindowKind;
   usedPercent: number;
   resetsAt: Date | null;
-  /** Provider-supplied duration used by `pace.ts`; the window kind supplies a fallback. */
+  /** Provider duration; `pace.ts` falls back to the window kind when absent. */
   windowMinutes?: number | null;
 }
 
@@ -30,7 +29,6 @@ export type ProviderResult =
   | { status: "ok"; snapshot: UsageSnapshot }
   | { status: "unavailable"; message: string; retryAt?: Date; verbatim?: boolean };
 
-/** Latest usable snapshot and, when present, the reason it could not be refreshed. */
 export interface ProviderView {
   snapshot: UsageSnapshot | null;
   message: string | null;
@@ -38,7 +36,6 @@ export interface ProviderView {
   verbatim?: boolean;
 }
 
-/** Retains the last good snapshot when a local or shared refresh fails. */
 export function mergeView(
   previous: ProviderView | null | undefined,
   next: ProviderView,
@@ -55,16 +52,14 @@ export function mergeView(
 const SESSION_WINDOW_MAX_MINUTES = 360;
 const MAX_LABEL_LENGTH = 80;
 
-/** Storage bound; tooltip layout applies its own shorter display limit. */
 const MAX_MESSAGE_LENGTH = 500;
 
 /**
- * Caps an external retry delay at the longest configurable refresh interval. This prevents a bad
- * value from suppressing reads indefinitely and stays well below `setTimeout` overflow behavior.
+ * Caps external retry delays so a bad value cannot suppress reads indefinitely or overflow
+ * `setTimeout`.
  */
 export const MAX_RETRY_WAIT_MS = 60 * 60_000;
 
-/** Applies the retry cap to provider responses and waits adopted from another window. */
 export function cappedRetryAt(retryAt: Date, now = new Date()): Date {
   const cap = now.getTime() + MAX_RETRY_WAIT_MS;
   return retryAt.getTime() > cap ? new Date(cap) : retryAt;
@@ -80,7 +75,6 @@ export function validUsedPercent(value: unknown): number | null {
     : null;
 }
 
-/** Rejects durations beyond the supported monthly upper bound. */
 const MAX_WINDOW_MINUTES = 31 * 24 * 60;
 
 export function validWindowMinutes(value: unknown): number | null {
@@ -92,7 +86,6 @@ export function validWindowMinutes(value: unknown): number | null {
     : null;
 }
 
-/** Accepts an ISO string or a Unix timestamp in seconds, which is what both providers emit. */
 export function validDate(value: unknown): Date | null {
   if (typeof value !== "string" && typeof value !== "number") {
     return null;
@@ -109,7 +102,6 @@ export function validLabel(value: unknown): string | null {
   return trimmed && trimmed.length <= MAX_LABEL_LENGTH ? trimmed : null;
 }
 
-/** Validates sentence-length messages independently from the shorter label limit. */
 export function validMessage(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;

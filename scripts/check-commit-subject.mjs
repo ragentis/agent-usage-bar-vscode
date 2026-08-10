@@ -1,16 +1,9 @@
-// Both the version and the changelog are read out of commit subjects, so one that does not parse is
-// silent: no changelog entry, no bump, no complaint. This is that shape, in one copy, run by the
-// `commit-msg` hook before a commit exists, by pr-title.yml on the pull request title that a squash
-// merge turns into the subject, and by CI on the subjects a push adds to `main`.
-//
-// Subjects arrive as arguments, or one per line on standard input.
+// Keep one commit-subject contract for the local hook, PR titles, and pushed commits. Release Please
+// otherwise ignores an invalid subject without producing a version or changelog entry.
 
 import { readFile } from "node:fs/promises";
 
-// The types come from `release-please-config.json`, which is what acts on them, because the two
-// drifting apart is the failure this check exists to prevent: a type known here and not to Release
-// Please parses, bumps nothing, and never reaches the changelog. Resolved against this file, so the
-// working directory cannot matter.
+// Read types from Release Please so validation cannot accept a commit that produces no release note.
 const config = JSON.parse(
   await readFile(new URL("../release-please-config.json", import.meta.url), "utf8"),
 );
@@ -18,8 +11,7 @@ const types = config["changelog-sections"].map((section) => section.type);
 
 const SUBJECT = new RegExp(String.raw`^(${types.join("|")})(\([a-z0-9./-]+\))?!?: .+`);
 
-// A blank line is what splitting the input leaves behind and means nothing; a blank argument is a
-// subject that is empty, which is refused like any other that does not parse.
+// Ignore split-input blank lines, but reject an explicitly empty argument.
 const subjects =
   process.argv.length > 2
     ? process.argv.slice(2)

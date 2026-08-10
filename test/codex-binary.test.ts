@@ -5,21 +5,15 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { resolveCodexBinary } from "../src/codex-appserver";
 
 /**
- * Where Codex installs itself is the only part of this extension that differs per platform, and a
- * layout only one machine can check is a layout nobody checks. The home and the platform are both
- * parameters, so every runner in the CI matrix walks all three sets of candidates.
- *
- * The absolute Unix candidates — `/usr/local/bin`, `/opt/homebrew/bin` — belong to the machine and
- * cannot be staged, so nothing here asserts what happens when no candidate exists on Unix. What is
- * asserted is the order, which is the part that decides between two installs.
+ * Injectable home and platform let every CI runner exercise all layouts. Absolute Unix candidates
+ * cannot be staged, so those cases assert search order rather than a machine-dependent miss.
  */
 
 let home = "";
 
 beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "agent-usage-bar-home-"));
-  // Pinned into the temp home, so the Windows candidates do not reach the real one on a Windows
-  // runner and do exist at all on the other two.
+  // Keep Windows candidates inside the temporary home on every runner.
   vi.stubEnv("LOCALAPPDATA", path.join(home, "AppData", "Local"));
 });
 
@@ -49,7 +43,6 @@ test("the newest versioned install wins, because the directory name carries no o
   await aged(alphabeticallyLast, new Date());
   expect(await resolveCodexBinary(home, "win32")).toBe(alphabeticallyLast);
 
-  // Reversed, so what decides is proven to be the timestamp rather than the name it sorts under.
   await aged(alphabeticallyFirst, new Date());
   await aged(alphabeticallyLast, new Date(1));
   expect(await resolveCodexBinary(home, "win32")).toBe(alphabeticallyFirst);

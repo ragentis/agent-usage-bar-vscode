@@ -14,31 +14,18 @@ import {
 } from "./usage";
 
 /**
- * The version rides in the key, so a differing shape is simply not found rather than misread.
- *
- * Bump it when an entry this version writes would be read wrongly by the last one — a field
- * renamed, a unit changed, a value given a new meaning. Adding a field is none of those: the older
- * build drops what it does not know and the newer one reads its absence as absence, which is what
- * every field here is already parsed for.
- *
- * The cost of a bump is that through an update the two shapes cannot see each other, so each reads
- * on a lease of its own — twice the requests, and a rate-limit wait honoured on one side only,
- * until the last window of the old build closes. The cost of not bumping when it was called for is
- * two builds disagreeing about what `v1` means, which is the failure this whole file exists to
- * prevent. The tests beside it write the shape out by hand so the choice cannot be made silently.
+ * The version lives in the key so incompatible shapes are ignored instead of misread. Bump it when
+ * a field is renamed or changes unit or meaning, but not for an optional additive field. During a
+ * version transition each shape uses its own lease, so unnecessary bumps briefly duplicate reads.
+ * Wire-format tests make compatible changes explicit.
  */
 const KEY_PREFIX = "sharedUsage.v1.";
 
-/**
- * The slice of `vscode.Memento` this needs, named here rather than imported, so the rules below can
- * be tested against a store the test stands up.
- */
 export interface SharedStore {
   get(key: string): unknown;
   update(key: string, value: unknown): PromiseLike<void>;
 }
 
-/** What one window last learned about a provider, and when it set out to learn it. */
 export interface SharedEntry {
   /** When the read was started, not when it answered: the lease every window measures against. */
   readAt: number;
@@ -47,7 +34,6 @@ export interface SharedEntry {
    * the reading inside it: "not signed in" carries no reading at all, and is still news.
    */
   publishedAt: number;
-  /** Which window read last. Only ever compared for equality against our own id. */
   owner: string;
   retryAt: Date | null;
   view: ProviderView;
@@ -58,10 +44,8 @@ function millis(value: unknown): number | null {
 }
 
 /**
- * A wait reaching further ahead than this extension will ever sit out is dropped like any other
- * unreadable field. Every version that writes one caps it first; this guards the stretch of an
- * update where the other window runs a version this one has never seen. An unbounded wait here is
- * one no window can outlive, since each would keep renewing it from the entry.
+ * Reject waits beyond this version's cap. A newer or malformed entry must not renew an unbounded
+ * delay in every window.
  */
 function retryMillis(value: unknown): number | null {
   const retryAt = millis(value);
@@ -164,14 +148,9 @@ function serialize(entry: SharedEntry): Record<string, unknown> {
 }
 
 /**
- * The last reading, shared by every window of this profile. VS Code keeps each extension host's
- * copy of global state current when another window writes a key it has read, which makes this both
- * the transport for the numbers and the lease deciding who reads: an entry states that some window
- * set out to read at that moment, so the others need not.
- *
- * Nothing read back is trusted. During an update two windows briefly run different versions and the
- * stored shape is whatever the other one wrote, so anything unrecognized is dropped. Dates cross as
- * epoch milliseconds, because a `Date` does not survive the round trip.
+ * Global state transports readings and the lease between extension hosts. Stored values are fully
+ * validated because another window may briefly run a different version; dates cross as epoch
+ * milliseconds because `Date` does not survive storage.
  */
 export class SharedUsageState {
   constructor(private readonly store: SharedStore) {}
@@ -192,15 +171,13 @@ export class SharedUsageState {
     return this.write(provider, { publishedAt: Date.now(), ...update });
   }
 
-  /** Moves the lease without disturbing the reading, for a read that never reached publishing. */
   rewind(provider: ProviderId, readAt: number): PromiseLike<void> {
     return this.write(provider, { readAt });
   }
 
   /**
-   * Every write changes part of an entry and the rest carries over. The defaults are what an absent
-   * entry starts as, which matters for exactly one field: a `readAt` of now, because an entry
-   * claiming to have been read at the beginning of time is one every window reads over at once.
+   * Writes preserve the rest of the entry. A missing entry starts with `readAt` now so simultaneous
+   * windows do not all treat it as an ancient lease.
    */
   private write(provider: ProviderId, change: Partial<SharedEntry>): PromiseLike<void> {
     const entry: SharedEntry = {

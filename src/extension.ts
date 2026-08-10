@@ -17,7 +17,6 @@ import { UsageBar, type ProviderDisplay, type ProviderPort } from "./usage-bar";
 import type { ProviderId } from "./usage";
 import { FileWatcher } from "./watcher";
 
-/** Everything that reaches for vscode or for the machine lives here, and nowhere above it. */
 function display(provider: ProviderId): ProviderDisplay {
   const item = createStatusBarItem(provider);
   return {
@@ -29,7 +28,6 @@ function display(provider: ProviderId): ProviderDisplay {
 }
 
 function providers(onCodexPush: () => void): ProviderPort[] {
-  // Transcript writes are only a "the agent just ran" signal; the numbers come from the services.
   const claudeWatcher = new FileWatcher({
     directory: claudeSessionsPath(),
     fileSuffix: ".jsonl",
@@ -52,12 +50,10 @@ function providers(onCodexPush: () => void): ProviderPort[] {
     {
       id: "codex",
       display: display("codex"),
-      // Built on the first read rather than up front, so a window that never reads Codex — because
-      // another one is doing the reading — never starts the process either.
+      // Lazy startup avoids a Codex process in windows that only adopt another window's readings.
       read: () => (codexAppServer ??= new CodexAppServer(onCodexPush)).readUsage(),
       watcher: codexWatcher,
       isEnabled: (configuration) => configuration.codexEnabled,
-      // A hidden item must not cost a running child process, and a stopped one sends no updates.
       stop: () => codexAppServer?.stop(),
       dispose: () => codexAppServer?.dispose(),
     },
@@ -66,8 +62,7 @@ function providers(onCodexPush: () => void): ProviderPort[] {
 
 export function activate(context: vscode.ExtensionContext): void {
   const reads = new ReadCoordinator(new SharedUsageState(context.globalState));
-  // Codex pushes rate-limit updates of its own, so a port needs the bar that is built from the
-  // ports. Closing over the binding is the whole of that knot, and the closure runs long after.
+  // Codex push updates need the UsageBar constructed from this port.
   // oxlint-disable-next-line prefer-const -- assigned on the next line, read only from the closure
   let usageBar: UsageBar;
   const ports = providers(() => void usageBar.refresh({ only: "codex" }));
@@ -96,5 +91,5 @@ export function activate(context: vscode.ExtensionContext): void {
 }
 
 export function deactivate(): void {
-  // Everything is released through the extension context subscriptions.
+  // Resources are owned by extension context subscriptions.
 }

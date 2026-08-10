@@ -21,7 +21,6 @@ const response = {
 
 test("classifies by window duration rather than by primary or secondary position", () => {
   const snapshot = parseRateLimitsResponse(response, fetchedAt);
-  // `primary` is the weekly bucket here; reading it as a session window would be wrong.
   expect(snapshot?.windows.map(({ kind, usedPercent }) => ({ kind, usedPercent }))).toEqual([
     { kind: "weekly", usedPercent: 7 },
   ]);

@@ -1,13 +1,10 @@
 #!/bin/sh
-# Refuse a subject Release Please cannot read while it is still being written, rather than once it
-# has landed on `main`, where nothing takes it back. `--no-verify` skips this; CI does not.
-#
-# `npm install` points `core.hooksPath` here; by hand, `git config core.hooksPath .githooks`.
+# Reject subjects Release Please cannot read before they reach `main`; CI covers `--no-verify`.
+# `npm install` configures this hook path.
 
 subject="$(sed -n '1p' "$1")"
 
-# Skipped, all three generated: a merge subject describes no change of its own, and the fixup forms
-# are rewritten by the rebase that consumes them. CI drops merges for the same reason.
+# Generated merge and fixup subjects are either descriptive of no change or rewritten later.
 case "$subject" in
   "Merge "* | "fixup! "* | "squash! "*) exit 0 ;;
 esac

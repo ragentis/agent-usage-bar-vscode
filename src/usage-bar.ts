@@ -10,13 +10,11 @@ import {
   type ProviderView,
 } from "./usage";
 
-/** Shared cadence for adopting published state, starting due reads, and updating countdowns. */
 const TICK_INTERVAL_MS = 5_000;
 /** How long an unused provider process is kept before it is stopped; see `stopIfIdle`. */
 const IDLE_STOP_MS = 10 * 60_000;
 const HOLD_JITTER_MS = 2_000;
 
-/** Rendering boundary for one provider, independent of VS Code types. */
 export interface ProviderDisplay {
   render(view: ProviderView, configuration: ExtensionConfiguration): void;
   loading(configuration: ExtensionConfiguration): void;
@@ -24,29 +22,23 @@ export interface ProviderDisplay {
   dispose(): void;
 }
 
-/** Reports local provider activity after provider-specific watching and debouncing. */
 export interface ProviderWatcher {
   start(onChange: () => void): void;
   stop(): void;
   dispose(): void;
 }
 
-/** Provider boundary that keeps VS Code, filesystem, and process details out of this coordinator. */
 export interface ProviderPort {
   id: ProviderId;
   display: ProviderDisplay;
   read: () => Promise<ProviderResult>;
   watcher: ProviderWatcher;
   isEnabled: (configuration: ExtensionConfiguration) => boolean;
-  /** Releases resources while allowing a later restart. */
   stop?: () => void;
-  /** Permanently releases provider resources. */
   dispose?: () => void;
 }
 
-/** Active rate-limit delay and its scheduled retry. */
 interface Hold {
-  /** Capped time at which this window retries. */
   until: Date;
   /**
    * Input deadline before this window reapplies the cap. Equality prevents an adopted deadline
@@ -56,14 +48,12 @@ interface Hold {
   timer: NodeJS.Timeout;
 }
 
-/** Per-provider state kept together so lifecycle operations cannot leave parallel maps out of sync. */
 interface ProviderState {
   view: ProviderView | null;
   hold: Hold | null;
   inFlight: Promise<ProviderResult> | null;
   /** Last local read; used only for process idling, not refresh coordination. */
   usedAt: number | null;
-  /** Newest shared publication already applied by this window. */
   adoptedAt: number;
 }
 
@@ -89,7 +79,6 @@ export class UsageBar {
     this.configuration = readConfiguration();
   }
 
-  /** Current settings snapshot, updated by the configuration change event. */
   get settings(): ExtensionConfiguration {
     return this.configuration;
   }
@@ -115,7 +104,6 @@ export class UsageBar {
     }
   }
 
-  /** `force` lets a user-requested refresh skip the shared floor and claim race. */
   async refresh(
     options: { only?: ProviderId; showLoading?: boolean; force?: boolean } = {},
   ): Promise<void> {
@@ -151,7 +139,6 @@ export class UsageBar {
     }
   }
 
-  /** Applies provider state, rate-limit, interval, and shared-claim gates before reading. */
   private async refreshProvider(provider: Provider, force: boolean): Promise<void> {
     if (!provider.isEnabled(this.configuration)) {
       this.forget(provider);
@@ -204,8 +191,8 @@ export class UsageBar {
   }
 
   /**
-   * Applies a provider retry deadline to every trigger, including manual refresh. The deadline
-   * schedules its own read so a short rate-limit delay is not followed by a full refresh interval.
+   * A provider retry deadline applies even to manual refresh and schedules its own read, avoiding a
+   * full refresh interval after a short refusal.
    */
   private hold(provider: Provider, stated: Date): void {
     clearTimeout(provider.state.hold?.timer);
@@ -243,9 +230,8 @@ export class UsageBar {
   }
 
   /**
-   * Applies newer shared publications, including failures without a snapshot. Publication time is
-   * used because a window showing its initial loading state must also adopt a no-sign-in result.
-   * `mergeView` preserves the same last-good-reading rule used for local results.
+   * Publication time also carries failures without a snapshot, allowing an initially loading window
+   * to adopt a no-sign-in result. `mergeView` preserves the last good reading.
    */
   private adopt(provider: Provider): SharedEntry | null {
     const shared = this.reads.latest(provider.id);
@@ -270,7 +256,6 @@ export class UsageBar {
     return shared;
   }
 
-  /** Adopts shared state, starts due reads, and redraws time-dependent text on one interval. */
   private tick(): void {
     for (const provider of this.providers) {
       if (provider.isEnabled(this.configuration)) {
@@ -286,7 +271,6 @@ export class UsageBar {
     }
   }
 
-  /** Stops a provider process after this window has not used it for the idle interval. */
   private stopIfIdle(provider: Provider): void {
     const { usedAt } = provider.state;
     if (provider.stop && usedAt !== null && Date.now() - usedAt > IDLE_STOP_MS) {
@@ -296,9 +280,8 @@ export class UsageBar {
   }
 
   /**
-   * Overlays the active rate-limit message at render time instead of storing it in the view. This
-   * removes the message automatically after the hold expires. The absolute retry time remains
-   * stable across redraws.
+   * Rate-limit text is overlaid at render time so it disappears with the hold. The absolute retry
+   * time remains stable across redraws.
    */
   private paint(provider: Provider): void {
     const view = provider.state.view ?? { snapshot: null, message: null };
@@ -324,7 +307,6 @@ export class UsageBar {
     }
   }
 
-  /** Clears local presentation state while preserving a shared rate-limit hold. */
   private forget(provider: Provider): void {
     provider.state.view = null;
     provider.state.adoptedAt = 0;
@@ -332,7 +314,6 @@ export class UsageBar {
     provider.display.hide();
   }
 
-  /** Shares one in-flight read per provider within this window, as required by the claim token. */
   private fetchOnce(provider: Provider): Promise<ProviderResult> {
     const pending = provider.state.inFlight;
     if (pending) {

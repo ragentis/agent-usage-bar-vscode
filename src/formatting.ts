@@ -10,8 +10,7 @@ export interface ResolvedWindow extends UsageWindow {
 }
 
 /**
- * A window whose reset time has passed means the snapshot predates a refill: the recorded
- * percentage is no longer true, and the real one stays unknown until the agent runs again.
+ * A window past reset is stale: its recorded percentage no longer describes the current window.
  */
 export function resolveWindows(snapshot: UsageSnapshot, now = new Date()): ResolvedWindow[] {
   return snapshot.windows.map((window) =>
@@ -43,17 +42,13 @@ export function formatRemaining(resetsAt: Date | null, now = new Date()): string
 }
 
 /**
- * The moment a wait ends, stated rather than counted down. A countdown would be the more natural
- * thing to write and is the reason this is not one: it would move under a reader — the tooltip is
- * redrawn every few seconds, and the workbench answers a tooltip that has changed by rebuilding
- * the hover it is showing, which closes it. No wait outlives an hour here, so the time of day says
- * it all without a date beside it.
+ * Retry waits use a fixed clock time because changing countdown text rebuilds and closes an open
+ * hover. No wait outlives an hour, so the date is unnecessary.
  */
 export function formatMoment(moment: Date, locale?: string): string {
   return moment.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit" });
 }
 
-/** Null while the reading is still current, so the tooltip only mentions age once it matters. */
 export function formatAge(fetchedAt: Date, staleAfterMs: number, now = new Date()): string | null {
   const elapsed = now.getTime() - fetchedAt.getTime();
   if (elapsed < staleAfterMs) {
@@ -103,9 +98,7 @@ export function buildStatusText(
 }
 
 /**
- * One percentage against the two thresholds. The item colors itself from the worst window it has,
- * while the tooltip colors each window's bar from that window alone, and both mean the same thing
- * by a color only because they ask this.
+ * Shared by per-window tooltip bars and the worst-window status item so colors mean the same thing.
  */
 export function severityFor(usedPercent: number, configuration: ExtensionConfiguration): Severity {
   if (usedPercent >= configuration.errorThreshold) {

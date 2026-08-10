@@ -26,13 +26,12 @@
     "eslint/eqeqeq": "error",
     "eslint/no-var": "error",
     "eslint/no-console": "error",
-    // Small helpers are declared where they read best; hoisting them out scatters the code.
+    // Keep small helpers near their use sites.
     "unicorn/consistent-function-scoping": "off"
   },
   "overrides": [
     {
-      // Build scripts are untyped JavaScript that prints on purpose: `JSON.parse` and the esbuild
-      // plugin hooks hand back `any`, so the rules that guard typed code have nothing to stand on.
+      // Build scripts are untyped JavaScript and intentionally write CLI output.
       "files": ["scripts/**/*.mjs"],
       "rules": {
         "eslint/no-console": "off",

@@ -33,21 +33,15 @@ test("only source settings trigger a provider read", () => {
   expect(configurationEffect(configure(), configure())).toBe("none");
   expect(configurationEffect(configure(), configure({ warningThreshold: 50 }))).toBe("redraw");
   expect(configurationEffect(configure(), configure({ displayMode: "full" }))).toBe("redraw");
-  // The pace is drawn from the reading already in hand, so switching it on asks no provider.
   expect(configurationEffect(configure(), configure({ showPace: false }))).toBe("redraw");
   expect(configurationEffect(configure(), configure({ claudeEnabled: true }))).toBe("refresh");
-  // A relabelled item is repainted, never re-read.
   expect(configurationEffect(configure(), configure({ codexLabel: "CX" }))).toBe("redraw");
-  // The reading is unchanged by a new locale; only the way its dates are written is.
   expect(configurationEffect(configure(), configure({ locale: "de-DE" }))).toBe("redraw");
-  // A new interval is consulted at the next tick; there is no timer left for it to restart.
   expect(configurationEffect(configure(), configure({ refreshIntervalSeconds: 60 }))).toBe("none");
 });
 
 /**
- * The manifest cannot be generated and the code cannot read it at runtime, so the bounds exist
- * twice over. Drifting apart is silent in both directions: the settings UI would offer a value the
- * code clamps away, or clamp one the code would have taken.
+ * Manifest and runtime bounds are separate declarations; this catches silent drift between them.
  */
 test("the manifest states the same settings bounds the code enforces", () => {
   const manifest = JSON.parse(readFileSync("package.json", "utf8")) as unknown;
@@ -73,17 +67,11 @@ test("the manifest states the same settings bounds the code enforces", () => {
 });
 
 /**
- * The settings UI enforces the manifest's bounds, and nothing else does: a value typed into
- * `settings.json` by hand arrives here exactly as written, as does one left behind by a version
- * whose bounds were different. What `resolveConfiguration` hands back is what the rest of the
- * extension treats as already checked, so every way a stored value can be wrong is answered here.
+ * Hand-edited or legacy settings bypass manifest validation, so runtime resolution must bound them.
  */
 
-/** Settings as they are stored, read the way the host reads them: a key, and a default. */
 function stored(values: Record<string, unknown> = {}): ExtensionConfiguration {
   return resolveConfiguration(<T>(key: string, fallback: T): T =>
-    // The assertion is the seam itself: `get<T>` hands back whatever JSON is on disk under the type
-    // that was asked for, checking nothing. Values that do not match are the point of these tests.
     // oxlint-disable-next-line no-unsafe-type-assertion -- modelling what the host actually does
     key in values ? (values[key] as T) : fallback,
   );
@@ -108,7 +96,6 @@ test("an unset section is the manifest's defaults, whole", () => {
 test("a threshold outside the manifest's range is pulled back into it", () => {
   expect(stored({ warningThreshold: 140 }).warningThreshold).toBe(100);
   expect(stored({ warningThreshold: -20 }).warningThreshold).toBe(0);
-  // Not a number at all, which is what a hand-edited file or an older shape can hold.
   expect(stored({ warningThreshold: Number.NaN }).warningThreshold).toBe(DEFAULT_WARNING_THRESHOLD);
   expect(stored({ refreshIntervalSeconds: 5 }).refreshIntervalSeconds).toBe(
     MIN_REFRESH_INTERVAL_SECONDS,
@@ -119,37 +106,24 @@ test("a threshold outside the manifest's range is pulled back into it", () => {
 });
 
 test("the error background never appears before the warning one, however the two were set", () => {
-  // Both are in range and each is valid alone, so nothing but this rule catches the pair. The
-  // manifest states it in prose to the user; here it is the only place it is enforced.
   expect(stored({ warningThreshold: 90, errorThreshold: 50 }).errorThreshold).toBe(90);
-  // Raised past its own ceiling first, the warning threshold still carries the error one with it.
   expect(stored({ warningThreshold: 200, errorThreshold: 50 }).errorThreshold).toBe(100);
-  // An order that already holds is left exactly as it was written.
   expect(stored({ warningThreshold: 60, errorThreshold: 75 }).errorThreshold).toBe(75);
 });
 
 test("a label is trimmed to something that cannot push the item off the bar", () => {
   expect(stored({ "claude.label": "  CC  " }).claudeLabel).toBe("CC");
-  // A newline in the text of a status bar item breaks the item, not the line.
   expect(stored({ "codex.label": "one\ntwo\t three" }).codexLabel).toBe("one two three");
   expect(stored({ "claude.label": "x".repeat(400) }).claudeLabel).toHaveLength(24);
-  // Anything that is not text at all reads as no label, which is the icon.
   expect(stored({ "codex.label": 42 }).codexLabel).toBe("");
   expect(stored({ "claude.label": null }).claudeLabel).toBe("");
 });
 
-/**
- * `toLocaleString` throws on a tag it cannot parse, and it is called while a tooltip is being
- * drawn — so a tag that would throw has to become no tag here, where the setting is read.
- */
 test("a locale is either one the runtime can format with or none at all", () => {
   expect(stored({ locale: "en-GB" }).locale).toBe("en-GB");
-  // Canonical spelling, so the same locale written two ways is one value to compare redraws by.
   expect(stored({ locale: "EN-gb" }).locale).toBe("en-GB");
   expect(stored({ locale: "  de-DE  " }).locale).toBe("de-DE");
-  // The hour cycle rides along on the tag, which is what spares this setting a format of its own.
   expect(stored({ locale: "en-US-u-hc-h23" }).locale).toBe("en-US-u-hc-h23");
-  // Unset, malformed, unknown, and not a string at all: every one of them leaves the host's own.
   expect(stored().locale).toBeUndefined();
   expect(stored({ locale: "" }).locale).toBeUndefined();
   expect(stored({ locale: "d.M.yyyy. HH:mm" }).locale).toBeUndefined();

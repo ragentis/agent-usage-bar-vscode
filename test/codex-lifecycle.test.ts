@@ -3,10 +3,8 @@ import { CodexAppServer, type CodexProcess } from "../src/codex-appserver";
 import { isRecord } from "../src/usage";
 
 /**
- * The parsing of a reply lives beside the response shape in `codex-appserver.test.ts`. What is here
- * is the half a reply never reaches: framing, a server that stops answering, a teardown landing on
- * a request already in flight. None of it can be provoked through a real Codex install, so the
- * process is stood up here instead — the class takes its launch as a seam for exactly this reason.
+ * A controllable process covers framing, timeouts, and teardown races that a real Codex install
+ * cannot reproduce deterministically.
  */
 
 const RATE_LIMITS = {
@@ -17,7 +15,6 @@ const RATE_LIMITS = {
   },
 };
 
-/** A `codex app-server` that says only what the test tells it to, when the test tells it to. */
 class FakeCodex implements CodexProcess {
   readonly written: string[] = [];
   killed = 0;
@@ -53,7 +50,6 @@ class FakeCodex implements CodexProcess {
     this.killed += 1;
   }
 
-  /** What the process writes to stdout, arriving exactly as the test hands it over. */
   says(...chunks: string[]): void {
     for (const chunk of chunks) {
       this.data?.(chunk);
@@ -64,14 +60,12 @@ class FakeCodex implements CodexProcess {
     this.listeners.get(event)?.();
   }
 
-  /** Every request it has been sent, in order. */
   get requests(): Record<string, unknown>[] {
     return this.written
       .map((line) => JSON.parse(line) as unknown)
       .filter((message) => isRecord(message));
   }
 
-  /** Answers whatever it was asked last; `splitAt` delivers that answer in two chunks. */
   answers(result: unknown, splitAt?: number): void {
     const frame = `${JSON.stringify({ jsonrpc: "2.0", id: this.requests.at(-1)?.id, result })}\n`;
     this.says(
@@ -108,18 +102,15 @@ function harness(onPush: () => void = () => {}) {
       return child;
     },
     attempts: (): number => launches,
-    /** Makes the next launch hang, so a stop can land in the middle of one. */
     hold: (): void => void (holdNext = true),
     release: (child: CodexProcess): void => finishHeld?.(child),
   };
 }
 
-/** Lets whatever is queued run, without letting any timer come due. */
 async function flush(): Promise<void> {
   await vi.advanceTimersByTimeAsync(0);
 }
 
-/** Carries the handshake as far as the read request, which is where each test takes over. */
 async function handshake(codex: FakeCodex): Promise<void> {
   await flush();
   codex.answers({});
@@ -148,8 +139,6 @@ test("a reply split across two chunks is read as the one message it is", async (
     "account/rateLimits/read",
   ]);
 
-  // A pipe splits where it likes, and JSON-RPC frames carry no length: only the newline says where
-  // a message ends. Split mid-number, which is where a naive reader would parse half a reading.
   codex.answers(RATE_LIMITS, 40);
 
   await expect(reading).resolves.toMatchObject({ status: "ok" });
@@ -178,8 +167,6 @@ test("an error the server names is what the item says", async () => {
 
   codex.says(`${JSON.stringify({ jsonrpc: "2.0", id: 2, error: { message: "Not signed in" } })}\n`);
 
-  // Marked as the server's own words, which is what keeps the tooltip from reading them for a
-  // remedy: what looks like one in a sentence nobody here wrote is whatever it happened to be.
   await expect(reading).resolves.toEqual({
     status: "unavailable",
     message: "Not signed in",
@@ -208,8 +195,6 @@ test("a server that stops answering is dropped, and the next read starts a fresh
   const codex = world.latest();
   await handshake(codex);
 
-  // Never answered. Dropping only the request would leave every later read queued behind the same
-  // silent process for as long as the window stayed open.
   await vi.advanceTimersByTimeAsync(60_000);
   await expect(reading).resolves.toMatchObject({ status: "unavailable" });
   expect(codex.killed).toBe(1);
@@ -239,7 +224,6 @@ test("a stream that never breaks into messages is dropped rather than held", asy
   const codex = world.latest();
   await handshake(codex);
 
-  // No newline, so nothing can ever be parsed out of it: the buffer is all that would grow.
   codex.says("x".repeat(5 * 1024 * 1024));
 
   await expect(reading).resolves.toMatchObject({ status: "unavailable" });
@@ -257,7 +241,6 @@ test("a provider stopped part way through starting leaves nothing running behind
   world.release(orphan);
 
   await expect(reading).resolves.toMatchObject({ status: "unavailable" });
-  // Started after the only thing that would have owned it gave up: nothing else would ever stop it.
   expect(orphan.killed).toBe(1);
 });
 
@@ -270,8 +253,6 @@ test("being stopped is not failing to start, and does not cost the respawn coold
   world.release(new FakeCodex());
   await reading;
 
-  // Switching the provider back on has to answer at once; the cooldown is for a machine that
-  // cannot start Codex, not for one that was told to stop.
   const second = world.app.readUsage();
   await handshake(world.latest());
   world.latest().answers(RATE_LIMITS);
@@ -294,7 +275,6 @@ test("a machine with no Codex is not asked again on every read", async () => {
   await expect(app.readUsage()).resolves.toMatchObject({ status: "unavailable" });
   expect(attempts).toBe(1);
 
-  // The cooldown is a pause, not a verdict: an install that lands later is picked up.
   await vi.advanceTimersByTimeAsync(60_000);
   await expect(app.readUsage()).resolves.toMatchObject({ status: "unavailable" });
   expect(attempts).toBe(2);

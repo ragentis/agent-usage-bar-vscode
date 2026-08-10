@@ -22,15 +22,9 @@ const REQUEST_TIMEOUT_MS = 5_000;
 const RATE_LIMIT_FALLBACK_MS = 60_000;
 
 /**
- * `Retry-After` is either a delta in seconds or an HTTP date, and the endpoint is undocumented, so
- * both forms are accepted. Null says the service rate limits without stating for how long, which
- * leaves the caller to assume a wait. The result is capped before it is passed on, because it is
- * republished to the other windows and becomes a timer in each.
- *
- * A moment that is not in the future is read as no statement at all. This service answers a refusal
- * with `Retry-After: 0`, and a wait of nothing is not a wait: taken at its word it would set a hold
- * that has already expired, which is a refusal nobody waits out and a second refusal on the next
- * read. The same holds for a date already past.
+ * Accepts both standard `Retry-After` forms. Missing or non-future values, including the service's
+ * observed `Retry-After: 0`, mean no stated wait; treating zero as immediate retry would create a
+ * refusal loop. Valid waits are capped before becoming shared timers.
  */
 export function parseRetryAfter(header: string | null, now: Date): Date | null {
   if (!header) {
@@ -60,10 +54,7 @@ function windowKind(entry: Record<string, unknown>): WindowKind | null {
   return kind?.startsWith("weekly") ? "weekly" : null;
 }
 
-/**
- * The account can carry several weekly buckets at once (overall, Opus, Sonnet). The status bar
- * shows one number per kind, so the fullest bucket wins: that is the one that stops work first.
- */
+/** Keeps the fullest of several weekly scopes because it is the first one that stops work. */
 export function parseUsageLimits(value: unknown): UsageWindow[] {
   if (!isRecord(value) || !Array.isArray(value.limits)) {
     return [];
@@ -157,9 +148,7 @@ export async function fetchClaudeUsage(
         Authorization: `Bearer ${credentials.accessToken}`,
         "anthropic-beta": OAUTH_BETA,
       },
-      // The bundle audit pins the one URL this extension may call, and a followed redirect would
-      // reach a second host without ever appearing in the bundle. Refusing them keeps the audit
-      // an honest description of where the token can travel.
+      // Refuse redirects so the bundle audit remains an honest bound on where the token can travel.
       redirect: "error",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
@@ -176,13 +165,11 @@ export async function fetchClaudeUsage(
   }
   if (response.status === 429) {
     const now = new Date();
-    // Without a stated window the wait is a guess, and a minute is short enough to stay responsive
-    // while still being long enough to stop a watcher-triggered burst from making things worse.
+    // A one-minute fallback prevents a watcher burst without making an unknown wait feel stalled.
     const retryAt =
       parseRetryAfter(response.headers.get("retry-after"), now) ??
       new Date(now.getTime() + RATE_LIMIT_FALLBACK_MS);
-    // No countdown in the message: `retryAt` carries the wait and `UsageBar.paint` states the time
-    // left at draw time.
+    // `retryAt` carries the wait; embedding it in the message would leave stale countdown text.
     return {
       status: "unavailable",
       message: "Rate limited by the usage service.",

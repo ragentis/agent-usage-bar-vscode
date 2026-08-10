@@ -33,16 +33,9 @@ test("with nothing held, a message is all there is to show", () => {
   });
 });
 
-/**
- * Every string that reaches the tooltip — a plan, a stop reason, a balance, an error the Codex
- * server named — passes through here first, from a service or from another window's stored entry.
- * The length is the whole of the guarantee: what is drawn cannot outgrow what a tooltip can hold,
- * however long the thing that was said.
- */
 test("a label longer than a tooltip line can carry is not a label", () => {
   expect(validLabel("x".repeat(80))).toHaveLength(80);
   expect(validLabel("x".repeat(81))).toBeNull();
-  // Measured after trimming, so trailing whitespace cannot push a usable value over the edge.
   expect(validLabel(`  ${"x".repeat(80)}  `)).toHaveLength(80);
 });
 

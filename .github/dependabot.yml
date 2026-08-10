@@ -19,13 +19,11 @@ updates:
       development:
         dependency-type: development
         update-types: [minor, patch]
-    # Keep compatibility types aligned with the supported VS Code and Node runtimes.
+    # Keep compatibility types aligned with supported runtimes.
     ignore:
-      # `vsce` requires this major/minor version not to exceed `engines.vscode`. Update both when
-      # raising the minimum supported VS Code version.
+      # Update with `engines.vscode`; `vsce` requires matching major/minor compatibility.
       - dependency-name: "@types/vscode"
-      # The extension bundle targets Node 20, while CI executes on Node 24. A newer types major could
-      # therefore expose APIs that the target extension host does not provide.
+      # The bundle targets Node 20 even though CI executes on Node 24.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
     commit-message:

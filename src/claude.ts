@@ -6,10 +6,8 @@ export function claudeDirectory(): string {
 }
 
 /**
- * Claude Code appends to a session transcript on every turn, which makes this directory a reliable
- * "the agent just did something" signal. Nothing is read out of these files: the usage numbers come
- * from the account API, and local token counts do not map onto plan percentages once caching,
- * thinking, and model mix are involved.
+ * Transcript writes signal local activity only; account percentages come from the API because local
+ * token counts do not capture caching, thinking, or model mix.
  */
 export function claudeSessionsPath(): string {
   return path.join(claudeDirectory(), "projects");

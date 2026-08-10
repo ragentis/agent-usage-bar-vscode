@@ -11,15 +11,9 @@ import { formatPace, paceFor } from "./pace";
 import type { SnapshotSource, UsageSnapshot, WindowKind } from "./usage";
 
 /**
- * Builds trusted tooltip Markdown from provider-supplied text. Every external value is escaped
- * because trusted Markdown enables HTML, theme icons, and command links.
- *
- * The tooltip uses one HTML element to avoid uncontrollable paragraph margins. Its layout depends
- * on VS Code's sanitizer and hover styles:
- *
- *   - A `<span>` may retain `color`, `background-color`, and `border-radius`, in that order.
- *   - All lines inherit the hover's fixed line height, so empty block margins provide small gaps.
- *   - `h3` is the largest heading with a predictable workbench margin.
+ * Tooltip Markdown is trusted to enable HTML, theme icons, and command links, so every external
+ * value must be escaped. The layout stays in one HTML block and uses only markup retained by VS
+ * Code's sanitizer.
  */
 
 const WINDOW_TITLES: Record<WindowKind, string> = { session: "5-hour", weekly: "Weekly" };
@@ -29,13 +23,10 @@ const SOURCE_TITLES: Record<SnapshotSource, string> = {
   "codex-app-server": "Codex account",
 };
 
-/** The tooltip's only links. Escaping prevents provider text from adding another command link. */
+/** The only command links trusted tooltip Markdown may contain. */
 export const TOOLTIP_COMMANDS = ["agentUsageBar.refresh", "agentUsageBar.openSettings"] as const;
 
-/**
- * Chart colors are intended for filled shapes on widget backgrounds. `focusBorder` is avoided
- * because themes may mute it as an outline color.
- */
+// Chart colors are intended for filled shapes; outline colors may be muted by themes.
 const COLOR = {
   dim: "var(--vscode-descriptionForeground)",
   track: "var(--vscode-editorWidget-border)",
@@ -44,42 +35,31 @@ const COLOR = {
   error: "var(--vscode-charts-red)",
 } as const;
 
-/** Seven nested `<small>` elements produce an approximately four-pixel bar inside an `h3`. */
+/** Nested `<small>` elements reduce the bar to roughly four pixels inside an `h3`. */
 const BAR_SCALE = 7;
 
 /**
- * The scaled non-breaking spaces make the bar the tooltip's widest line. Text wraps to the related
- * `COLUMNS` limit so provider messages cannot widen the tooltip beyond the fixed bar.
+ * The scaled cells make the bar the widest line. Wrapped text uses a conservative width for
+ * proportional glyphs; failure lines may use the measured wider limit.
  */
 const BAR_CELLS = 320;
 
-/** Approximate text width of the bar, with margin for proportional glyphs. */
 const COLUMNS = 52;
 
-/**
- * Maximum length kept on one line before explicit wrapping. It is larger than `COLUMNS` because
- * measured proportional text normally fits about sixty characters under the bar.
- */
 const LINE_COLUMNS = 60;
 
-/** Adds horizontal padding that the hover container does not provide. */
 const INDENT = "&nbsp;&nbsp;";
 
 /**
- * Empty blocks provide three predictable vertical gaps through their existing margins. Adjacent
- * margins collapse to the larger value, and an `<hr>` reduces the following gap by four pixels.
+ * Sanitized CSS cannot provide the required spacing, so retained empty elements form a small gap
+ * scale through their native margins and line heights.
  */
 const GAP = "<h6></h6>";
 const PAD = "<p></p>";
 const EDGE = "<h1></h1>";
 
-/** A non-empty heading adds line height when a margin alone is not enough separation. */
 const AIR = "<h6>&nbsp;</h6>";
 
-/**
- * An empty table contributes about six pixels without margin collapse, providing an intermediate
- * gap between the block-margin sizes above.
- */
 const STEP = "<table><tr><td></td></tr></table>";
 
 const RULE = "<hr>";
@@ -104,21 +84,15 @@ export function escapeHtml(value: string): string {
     .replace(/[&<>"'()]/g, (character) => ENTITIES[character] ?? character);
 }
 
-/** Normalizes whitespace before measuring and rendering text. */
 function flattened(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-/** Wraps visible characters before escaping; `taken` is the space already used on the first line. */
 function wrapped(text: string, taken = 0): string {
   const flat = flattened(text);
   return (atSentences(flat, taken) ?? atWords(flat, taken)).map(escapeHtml).join(`<br>${INDENT}`);
 }
 
-/**
- * Prefers sentence boundaries when every sentence fits on its own line. Otherwise word wrapping
- * handles the complete message consistently.
- */
 function atSentences(text: string, taken: number): string[] | null {
   if (taken + text.length <= COLUMNS) {
     return null;
@@ -129,12 +103,10 @@ function atSentences(text: string, taken: number): string[] | null {
   return parts.length > 1 && parts.every(fits) ? parts : null;
 }
 
-/** Splits at sentence-ending punctuation while preserving the punctuation. */
 function sentences(text: string): string[] {
   return text.split(/(?<=[.!?])\s+/);
 }
 
-/** Wraps at spaces and leaves oversized words, including URLs, for the renderer to break. */
 function atWords(text: string, taken: number): string[] {
   const broken: string[] = [];
   let line = "";
@@ -187,7 +159,6 @@ function formatDate(date: Date, locale?: string): string {
   });
 }
 
-/** Joins inline content without a trailing `<br>`, which would add an empty line before a block. */
 function lines(...content: string[]): string {
   return content.map((line) => `${INDENT}${line}`).join("<br>");
 }
@@ -207,12 +178,8 @@ function detailRow(left: string, right: string): string {
 }
 
 /**
- * Renders a usage window as a two-line heading followed by reset and pace details. The heading owns
- * the percentage and bar because it provides a compact line height. Details stay outside it to
- * avoid inherited bold text.
- *
- * Reset and pace values are fixed to the reading timestamp. Updating them with the clock would
- * rebuild an open tooltip and would separate the pace calculation from its measured percentage.
+ * Reset and pace values use the reading timestamp. Updating them with the clock would detach the
+ * forecast from its measured percentage and rebuild an open hover.
  */
 function windowBlock(
   window: ResolvedWindow,
@@ -228,9 +195,7 @@ function windowBlock(
   const pace = configuration.showPace ? paceFor(window, asOf) : null;
   const percent = formatPercent(window.usedPercent, configuration.percentageMode);
   const label = configuration.percentageMode === "remaining" ? "remaining" : "used";
-  // Right padding belongs on the bar because it determines the tooltip width.
   const meter = `${bar(window.usedPercent, severityFor(window.usedPercent, configuration))}${INDENT}`;
-  // Keep reset time and projected pace on the same row for direct comparison.
   return [
     `<h3>${INDENT}${dim(WINDOW_TITLES[window.kind])}${INDENT}${percent} <small>${dim(label)}</small>`,
     `<br>${INDENT}${meter}</h3>`,
@@ -243,16 +208,12 @@ function windowBlock(
 
 const FAILURE_LABEL = "Last refresh failed:";
 
-/** Width occupied by the failure label and its following space. */
 const LABEL_COLUMNS = FAILURE_LABEL.length + 1;
 
-/** Marks a second failure sentence as suggested action without adding another warning color. */
 const HINT_ICON = "$(lightbulb)";
 
-/** Width occupied by the hint icon and following space. */
 const HINT_COLUMNS = 1 + 1;
 
-/** Failure text and whether it came directly from a provider. */
 export interface Failure {
   message: string;
   verbatim?: boolean;
@@ -274,7 +235,6 @@ function footerBlock(
   if (!failure) {
     return source;
   }
-  // Separate snapshot provenance from the reason it is not newer.
   return [source, GAP, failureBlock(failure)].join("");
 }
 
@@ -285,28 +245,23 @@ function footerBlock(
  */
 function failureBlock({ message: failure, verbatim }: Failure): string {
   const label = span(FAILURE_LABEL, `color:${COLOR.warning};`);
-  // Do not interpret a provider's second sentence as advice.
   if (verbatim) {
     return lines(`${label} ${dim(whole(cut(flattened(failure)), LABEL_COLUMNS))}`);
   }
   const [cause = "", ...rest] = sentences(flattened(failure));
   const hint = rest.join(" ");
-  // A small non-collapsing gap separates the optional remedy from the cause.
   return [
     lines(`${label} ${dim(whole(cause, LABEL_COLUMNS))}`),
     ...(hint ? [STEP, lines(`${dim(HINT_ICON)}&nbsp;${dim(whole(hint, HINT_COLUMNS))}`)] : []),
   ].join("");
 }
 
-/** Keeps short failure text on one line and wraps it when it exceeds the measured line width. */
 function whole(text: string, taken: number): string {
   return taken + text.length <= LINE_COLUMNS ? escapeHtml(text) : wrapped(text, taken);
 }
 
-/** Maximum provider failure text that fits across two wrapped lines. */
 const MESSAGE_COLUMNS = COLUMNS - LABEL_COLUMNS + COLUMNS;
 
-/** Truncates provider failures to two lines so actions remain visible in the non-scrolling hover. */
 function cut(text: string): string {
   if (text.length <= MESSAGE_COLUMNS) {
     return text;
@@ -319,13 +274,11 @@ function cut(text: string): string {
 function actionsBlock(): string {
   const link = (command: string, label: string): string =>
     `<a href="command:${command}">${label}</a>`;
-  // Two spaces on each side keep the separator visually distinct from both actions.
   return lines(
     `${link(TOOLTIP_COMMANDS[0], "$(refresh) Refresh")}${INDENT}${dim("·")}${INDENT}${link(TOOLTIP_COMMANDS[1], "$(settings-gear) Settings")}`,
   );
 }
 
-/** Keeps all blocks inside one HTML element; a blank line would resume Markdown parsing. */
 function tooltip(...blocks: string[]): string {
   return `<div>${blocks.join("")}</div>`;
 }
@@ -339,7 +292,6 @@ export function buildTooltip(
   age: string | null,
   now = new Date(),
 ): string {
-  // Account for the icon and title when wrapping the plan on the same line.
   const plan = snapshot.plan ? ` ${dim(`· ${wrapped(snapshot.plan, title.length + 5)}`)}` : "";
   const windows = resolveWindows(snapshot, now);
   // EDGE supplies outer padding; GAP plus STEP compensates for the rule's negative bottom margin.
@@ -358,7 +310,6 @@ export function buildTooltip(
     );
   }
   for (const [index, window] of windows.entries()) {
-    // AIR adds non-collapsing space between window headings.
     if (index > 0) {
       blocks.push(AIR);
     }
@@ -381,7 +332,6 @@ export function buildTooltip(
   return tooltip(...blocks);
 }
 
-/** Builds the same frame without usage data while preserving refresh and settings actions. */
 export function buildMessageTooltip(title: string, icon: string, message: string): string {
   return tooltip(
     EDGE,

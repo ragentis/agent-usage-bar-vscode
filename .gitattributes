@@ -1,5 +1,4 @@
-# `oxfmt` is configured for LF, and `format:check` runs on the Windows runner too. Without this a
-# checkout there converts on the way in and the whole tree reads as misformatted.
+# Preserve LF so Windows `format:check` sees the same tree.
 * text=auto eol=lf
 
 *.png binary

@@ -18,14 +18,12 @@ import {
 
 const REQUEST_TIMEOUT_MS = 10_000;
 const RESPAWN_COOLDOWN_MS = 30_000;
-// JSON-RPC frames are small, so an unsplit buffer this large means the stream is not what we
-// expect. Counted in characters, not bytes: stdout is decoded as UTF-8 before it reaches here.
+// An unsplit buffer this large is not a plausible JSON-RPC stream; stdout is already decoded text.
 const MAX_BUFFER_CHARS = 4 * 1024 * 1024;
 
 /**
- * Replaced by the bundler from `package.json`. Typed as `unknown` and read through `typeof` because
- * the unit tests import this module with no define in place, where the name is absent and any other
- * access would throw.
+ * Replaced by the bundler. Tests import this module without that substitution, so access must remain
+ * guarded by `typeof`.
  */
 // oxlint-disable-next-line no-underscore-dangle -- the dunder marks a build-time substitution
 declare const __EXTENSION_VERSION__: unknown;
@@ -34,9 +32,7 @@ const VERSION = typeof __EXTENSION_VERSION__ === "string" ? __EXTENSION_VERSION_
 const CLIENT_INFO = { name: "agent-usage-bar", title: "Agent Usage Bar", version: VERSION };
 
 /**
- * An error carrying the app server's own words, which the tooltip draws rather than reads for a
- * remedy. Every other failure in this file is a sentence this extension wrote. The class is the
- * whole of the marker: nothing is put into the text, so nothing has to be taken back out.
+ * Marks app-server-authored text so the tooltip does not interpret a second sentence as a remedy.
  */
 class CodexSaid extends Error {}
 
@@ -46,11 +42,6 @@ interface PendingRequest {
   timer: NodeJS.Timeout;
 }
 
-/**
- * The slice of a spawned process this needs, named here rather than imported: the lifecycle below —
- * framing, timeouts, teardown — is the part worth testing, and it only ever needs a process the
- * test can stand up.
- */
 export interface CodexProcess {
   stdin: { write(chunk: string, callback?: (error?: Error | null) => void): void };
   stdout: {
@@ -63,7 +54,6 @@ export interface CodexProcess {
   kill(): void;
 }
 
-/** Finding the binary and starting it, as one seam the tests can replace. */
 export type LaunchCodex = () => Promise<CodexProcess>;
 
 /** Newest install wins: the versioned directory name carries no ordering of its own. */
@@ -102,11 +92,9 @@ async function exists(candidate: string): Promise<boolean> {
 }
 
 /**
- * Codex installs itself under a content-hashed directory that changes on every update, so the
- * path cannot be hard coded. Falling back to the bare name lets a PATH install still work.
- *
- * Home directory and platform are parameters so every CI runner can walk all three layouts, rather
- * than each one only checking its own.
+ * Codex extension installs use changing content-hashed directories, so candidates must be searched.
+ * A bare-name fallback still supports PATH installs; injectable home and platform cover every layout
+ * on each CI runner.
  */
 export async function resolveCodexBinary(
   home: string = os.homedir(),
@@ -129,11 +117,9 @@ export async function resolveCodexBinary(
     path.join(home, ".local", "bin", "codex"),
     "/usr/local/bin/codex",
     "/opt/homebrew/bin/codex",
-    // Last resort, mirroring Windows: the IDE plugin ships its own copy when no CLI is installed.
     path.join(home, ".codex", "plugins", ".plugin-appserver", "codex"),
   ]) {
-    // Sequential on purpose: the first hit wins, so running these in parallel would stat paths
-    // that never needed looking at.
+    // Preserve candidate priority without probing paths after the first match.
     // oxlint-disable-next-line no-await-in-loop
     if (await exists(candidate)) {
       return candidate;
@@ -176,8 +162,6 @@ function parseWindow(value: unknown, fallback: "session" | "weekly"): UsageWindo
     kind: classifyWindow(value.windowDurationMins, fallback),
     usedPercent,
     resetsAt: validDate(value.resetsAt),
-    // Kept as well as classified with: the same number that sorts the window into a kind is what
-    // says when it opened, and a kind only implies a length that Codex here states outright.
     windowMinutes: validWindowMinutes(value.windowDurationMins),
   };
 }
@@ -217,10 +201,7 @@ export function parseRateLimitsResponse(value: unknown, fetchedAt: Date): UsageS
   };
 }
 
-/**
- * Long-lived `codex app-server` process speaking JSON-RPC over stdio. Codex owns the account
- * credentials and their refresh, so no token is ever read or held here.
- */
+/** Long-lived JSON-RPC process; Codex retains ownership of credentials and their refresh. */
 async function launchCodex(): Promise<CodexProcess> {
   const binary = await resolveCodexBinary();
   return spawn(binary, ["app-server"], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
@@ -239,14 +220,11 @@ export class CodexAppServer {
 
   constructor(
     private readonly onExternalUpdate: () => void,
-    /** Injected so the lifecycle can be exercised without a Codex install on the machine. */
     private readonly launch: LaunchCodex = launchCodex,
   ) {}
 
   /**
-   * Ends the process without ruling out a later one: switching the provider off is not the same as
-   * being done with it, and the next read starts a fresh server rather than paying for one that
-   * idled in the meantime.
+   * Stops the current process while allowing a later read to start a fresh one.
    */
   stop(): void {
     this.teardown(new Error("The Codex app server was stopped."));
@@ -287,8 +265,7 @@ export class CodexAppServer {
     }
     const generation = this.generation;
     this.ready = this.start().catch((error: unknown) => {
-      // Being stopped part way through starting is not a failure to start, and must not cost the
-      // respawn cooldown: switching the provider back on should answer at once.
+      // A stop during startup must not consume the respawn cooldown.
       if (this.generation === generation) {
         this.lastSpawnFailedAt = Date.now();
         this.teardown(
@@ -303,9 +280,7 @@ export class CodexAppServer {
   private async start(): Promise<void> {
     const generation = this.generation;
     const child = await this.launch();
-    // Finding the binary and starting it walks the disk; a provider switched off in the meantime
-    // has already torn down everything there was. Keeping this child would leave one that nothing
-    // owns and nothing ever stops.
+    // A stop during async launch leaves the returned child unowned, so tear it down immediately.
     if (this.generation !== generation) {
       child.kill();
       throw new Error("The Codex app server was stopped.");
@@ -372,8 +347,7 @@ export class CodexAppServer {
       }
       return;
     }
-    // A rolling update is documented as sparse, so merging it by hand risks clearing good values
-    // with absent ones. Re-reading the full snapshot is both simpler and always correct.
+    // Rolling updates are sparse; re-read the full snapshot instead of clearing omitted values.
     if (message.method === "account/rateLimits/updated") {
       this.onExternalUpdate();
     }
@@ -386,9 +360,7 @@ export class CodexAppServer {
     }
     const id = this.nextId++;
     return new Promise<unknown>((resolve, reject) => {
-      // A server that misses one answer has stopped speaking; dropping only the request would leave
-      // every later read behind the same silent process until the window is reloaded. Tearing it
-      // down here is what makes the next read start a fresh one.
+      // Replace a silent server so later reads do not queue behind the same timed-out process.
       const timer = setTimeout(
         () => this.teardown(new Error("The Codex app server timed out.")),
         REQUEST_TIMEOUT_MS,

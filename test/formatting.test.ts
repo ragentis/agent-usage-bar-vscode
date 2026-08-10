@@ -55,27 +55,17 @@ test("formats reset countdown boundaries", () => {
   expect(formatRemaining(null, now)).toBeNull();
 });
 
-/**
- * A retry is stated as the moment it happens, not as the time until it does. The seconds of a
- * countdown would be a new tooltip every tick, and a tooltip that changes is a hover the workbench
- * closes and does not reopen — the same rule the window resets are drawn under.
- */
 test("a retry states the moment it comes due, to the minute", () => {
   const moment = new Date("2026-08-01T10:00:45Z");
 
   expect(formatMoment(moment)).toBe(
     moment.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
   );
-  // Nothing of the second survives, so every drawing between two minutes says the same thing.
   expect(formatMoment(new Date("2026-08-01T10:00:01Z"))).toBe(
     formatMoment(new Date("2026-08-01T10:00:59Z")),
   );
 });
 
-/**
- * Asserted through the hour cycle a tag carries, that being the one difference here which does not
- * depend on the locale data the runtime happens to hold.
- */
 test("a configured locale decides how a moment is written", () => {
   const moment = new Date("2026-08-01T18:56:00Z");
   const at = (locale: string): string => formatMoment(moment, locale);

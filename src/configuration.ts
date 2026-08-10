@@ -1,6 +1,5 @@
 /**
- * Settings as plain values, plus the rules that read them. Nothing here imports `vscode` — that
- * lives in `settings.ts` — which is what lets these rules be tested without an extension host.
+ * Settings and validation stay independent of `vscode`; only `settings.ts` crosses the host boundary.
  */
 
 export type DisplayMode = "compact" | "full";
@@ -9,7 +8,6 @@ export type PercentageMode = "used" | "remaining";
 export interface ExtensionConfiguration {
   displayMode: DisplayMode;
   percentageMode: PercentageMode;
-  /** A language tag for dates and times, or undefined to leave the host's own default in place. */
   locale: string | undefined;
   showPace: boolean;
   warningThreshold: number;
@@ -22,11 +20,8 @@ export interface ExtensionConfiguration {
 }
 
 /**
- * Thirty seconds keeps the display reasonably current while limiting automatic reads to two per
- * minute for each provider. It bounds the poll setting and doubles as the floor under every
- * automatic read, so no trigger and no configured interval can put reads closer together than
- * this. Neither endpoint publishes its limit, so this cannot guarantee that a request will not be
- * rate limited; `parseRetryAfter` handles a refusal when one occurs.
+ * This bounds both the setting and every automatic trigger. Neither provider publishes its limit,
+ * so `Retry-After` still controls any refusal.
  */
 export const MIN_REFRESH_INTERVAL_SECONDS = 30;
 export const MAX_REFRESH_INTERVAL_SECONDS = 3_600;
@@ -35,10 +30,8 @@ export const DEFAULT_REFRESH_INTERVAL_SECONDS = 300;
 export const DEFAULT_WARNING_THRESHOLD = 80;
 export const DEFAULT_ERROR_THRESHOLD = 95;
 
-/** Long enough for a word or two, short enough that the item cannot be pushed off the bar. */
 const MAX_LABEL_LENGTH = 24;
 
-/** Keeps a hand-edited setting from stretching the status bar or smuggling in newlines. */
 function label(value: unknown): string {
   return typeof value === "string"
     ? value.replace(/\s+/g, " ").trim().slice(0, MAX_LABEL_LENGTH)
@@ -46,13 +39,8 @@ function label(value: unknown): string {
 }
 
 /**
- * The setting exists because leaving the locale unnamed asks the wrong thing: the extension host
- * resolves its default from the workbench display language, not from the regional settings the
- * machine holds, so an English editor writes US dates wherever it runs.
- *
- * `supportedLocalesOf` is both the check and the answer — it throws on a malformed tag, returns
- * nothing for one it has no data for, and otherwise hands back the canonical spelling, extensions
- * and all. Anything else would reach `toLocaleString`, which throws on a tag it cannot parse.
+ * VS Code's default follows its display language rather than OS regional settings.
+ * `supportedLocalesOf` validates and canonicalizes before the value reaches `toLocaleString`.
  */
 function locale(value: unknown): string | undefined {
   const tag = typeof value === "string" ? value.trim() : "";
@@ -70,10 +58,6 @@ function bounded(value: number, fallback: number, minimum: number, maximum: numb
   return Number.isFinite(value) ? Math.min(maximum, Math.max(minimum, value)) : fallback;
 }
 
-/**
- * One setting read, as `vscode.WorkspaceConfiguration.get` performs it. Taking the reader as an
- * argument is what keeps the bounding of hand-edited settings on this side of the vscode line.
- */
 export type SettingReader = <T>(key: string, fallback: T) => T;
 
 export function resolveConfiguration(read: SettingReader): ExtensionConfiguration {
@@ -119,9 +103,8 @@ const PRESENTATION_KEYS = [
 ] as const satisfies readonly (keyof ExtensionConfiguration)[];
 
 /**
- * Presentation-only edits must never trigger a provider read. Neither does the interval: it is
- * read afresh every time the due date of the next read is weighed, so a new one applies by being
- * written down and needs nothing done about it.
+ * Only source changes require fresh provider data. The interval is read again whenever due time is
+ * calculated, so changing it needs no immediate refresh.
  */
 export function configurationEffect(
   previous: ExtensionConfiguration,

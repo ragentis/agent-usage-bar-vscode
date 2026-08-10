@@ -18,9 +18,7 @@ import {
 import { validMessage } from "../src/usage";
 
 /**
- * Where the sign-in is kept is the one thing about this extension that differs per platform, and
- * the macOS half is a child process holding a secret. Everything below is written so that neither
- * the secret nor anything the keychain says about it can end up somewhere it was not meant to be.
+ * Platform stores are exercised without exposing the keychain secret or its diagnostic output.
  */
 
 let directory = "";
@@ -65,7 +63,6 @@ test("the stored sign-in is read, and nothing unusable is mistaken for one", () 
   expect(parseCredentials("not json")).toBeNull();
   expect(parseCredentials(JSON.stringify({ claudeAiOauth: { expiresAt: 1 } }))).toBeNull();
   expect(parseCredentials(JSON.stringify({ claudeAiOauth: { accessToken: "" } }))).toBeNull();
-  // An unreadable expiry is not an expiry: the token is tried, and the service decides.
   expect(parseCredentials(stored({ expiresAt: "soon" }))?.expiresAt).toBeNull();
 });
 
@@ -86,7 +83,6 @@ test("the keychain is asked only when the file has nothing to say", async () => 
 
   const credentials = await readClaudeCredentials([fileSource(directory), asked.source]);
 
-  // The cheaper question first, and a child process not started at all where it is not needed.
   expect(credentials?.plan).toBe("max");
   expect(asked.asked()).toBe(0);
 });
@@ -101,9 +97,6 @@ test("a sign-in the file no longer holds is found in the keychain", async () => 
 });
 
 test("a file left behind by an older sign-in does not mask the live one", async () => {
-  // The macOS case worth getting right: Claude Code moved to the keychain and the file it wrote
-  // before that is still on disk, expired. Answering "expired" there sends the user to renew a
-  // sign-in that is not the one being used.
   await write(stored({ expiresAt: Date.now() - 1 }));
   const asked = keychain({ status: "found", secret: stored({ subscriptionType: "pro" }) });
 
@@ -118,14 +111,11 @@ test("an expired sign-in is still a better answer than none", async () => {
 
   const credentials = await readClaudeCredentials([fileSource(directory)]);
 
-  // "Expired" and "never signed in" ask different things of whoever is reading the status bar.
   expect(credentials).not.toBeNull();
   expect(hasExpired(credentials!)).toBe(true);
 });
 
 test("a keychain that never answers is not asked again on the next interval", async () => {
-  // An unanswered authorization prompt is what a read that does not come back looks like from
-  // here. Asking again five minutes later would put the same prompt up again, and again.
   const asked = keychain({ status: "blocked" }, { status: "found", secret: stored() });
 
   expect(await readClaudeCredentials([asked.source])).toBeNull();
@@ -152,7 +142,6 @@ test("on macOS the keychain is the second question, and elsewhere there is none"
 
   expect(onDarwin).toHaveLength(2);
   expect((await readClaudeCredentials(onDarwin))?.plan).toBe("max");
-  // Answered by the file, so the child process was never started.
   expect(asked).toBe(0);
 
   expect(credentialSources("linux", directory)).toHaveLength(1);
@@ -162,10 +151,7 @@ test("on macOS the keychain is the second question, and elsewhere there is none"
 test.skipIf(process.platform !== "darwin")(
   "the real security tool reports an item that is not there as missing, not refused",
   async () => {
-    // The assumption this whole reading rests on, checked against the tool itself rather than
-    // asserted: an item that certainly does not exist must come back as code 44, so that a machine
-    // with no Claude Code sign-in keeps asking cheaply instead of backing off for half an hour.
-    // A service nobody has stored, so the answer does not turn on what this machine has installed.
+    // Verify the OSStatus mapping against the real macOS tool with a guaranteed-missing service.
     const outcome = await readKeychain(`agent-usage-bar-absent-${Date.now()}`);
 
     expect(outcome).toEqual({ status: "missing" });
@@ -173,9 +159,6 @@ test.skipIf(process.platform !== "darwin")(
 );
 
 test("only the code for a missing item is a missing item", () => {
-  // `security` exits with the OSStatus it got, masked to a byte: -25300 modulo 256 is 44. Reading
-  // that one and treating every other refusal alike is what keeps a denied dialog — whichever code
-  // it happens to carry — from being asked again, and again, on the next interval.
   expect(keychainOutcome(44, "")).toEqual({ status: "missing" });
   expect(keychainOutcome(128, "")).toEqual({ status: "blocked" });
   expect(keychainOutcome(51, "")).toEqual({ status: "blocked" });
@@ -184,31 +167,20 @@ test("only the code for a missing item is a missing item", () => {
 
   const secret = JSON.stringify({ ok: true });
   expect(keychainOutcome(0, ` ${secret}\n`)).toEqual({ status: "found", secret });
-  // Success with nothing in it is not success, and is not a refusal either.
   expect(keychainOutcome(0, "   ")).toEqual({ status: "missing" });
 });
 
 test("what nothing found means is stated in terms the platform can act on", () => {
-  // A declined prompt arrives here as nothing found, but only on macOS, so only there does the
-  // remedy carry the clause about allowing it.
   expect(noSignInMessage("darwin")).toMatch(/allow the prompt/);
   expect(noSignInMessage("win32")).not.toMatch(/allow the prompt/);
   expect(noSignInMessage("linux")).not.toMatch(/allow the prompt/);
   for (const platform of ["darwin", "win32", "linux"] as const) {
-    // The same statement of what happened on every platform, and the same remedy after it: what
-    // holds the sign-in is Claude Code rather than the desktop app, and either way in writes it.
     expect(noSignInMessage(platform)).toMatch(
       /^No Claude Code sign-in was found\. Sign in to the CLI or extension[.,]/,
     );
   }
 });
 
-/**
- * A message reaches other windows through the shared entry, which validates what it reads back. It
- * is validated as a message rather than as a label — a label is a word or two and is refused when
- * it is longer, and a message refused there is a window that adopted the reading with no failure to
- * state. The macOS one is the longest this extension writes, so it is the one that would go first.
- */
 test("a message says its piece inside what another window can read back", () => {
   for (const platform of ["darwin", "win32", "linux"] as const) {
     expect(validMessage(noSignInMessage(platform))).toBe(noSignInMessage(platform));

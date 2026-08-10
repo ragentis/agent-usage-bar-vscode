@@ -7,7 +7,6 @@ import { isRecord, validLabel } from "./usage";
 const CREDENTIALS_FILE = ".credentials.json";
 const MAX_SECRET_CHARS = 64 * 1024;
 
-/** Reads credential JSON from a platform-specific store. */
 export type CredentialSource = () => Promise<string | null>;
 
 export interface ClaudeCredentials {
@@ -32,7 +31,6 @@ export function fileSource(directory: string = claudeDirectory()): CredentialSou
   };
 }
 
-/** `blocked` includes an unanswered or denied macOS keychain authorization prompt. */
 export type KeychainResult =
   | { status: "found"; secret: string }
   | { status: "missing" }
@@ -42,7 +40,6 @@ export type KeychainRead = () => Promise<KeychainResult>;
 
 const KEYCHAIN_SERVICE = "Claude Code-credentials";
 const KEYCHAIN_TIMEOUT_MS = 5_000;
-/** Avoids repeated authorization prompts while allowing a later retry after an accidental denial. */
 const KEYCHAIN_BLOCKED_COOLDOWN_MS = 30 * 60_000;
 /**
  * `/usr/bin/security` exposes OSStatus through an eight-bit exit code. `errSecItemNotFound`
@@ -51,7 +48,6 @@ const KEYCHAIN_BLOCKED_COOLDOWN_MS = 30 * 60_000;
  */
 const ITEM_NOT_FOUND = 44;
 
-/** Converts process output into a platform-independent result. */
 export function keychainOutcome(exitCode: number | null, secret: string): KeychainResult {
   const trimmed = secret.trim();
   if (exitCode === 0) {
@@ -61,10 +57,8 @@ export function keychainOutcome(exitCode: number | null, secret: string): Keycha
 }
 
 /**
- * Reads Claude Code's login-keychain item with the system `security` tool. The absolute executable
- * path, argument array, and absence of a shell prevent PATH substitution and command parsing.
- * `find-generic-password` is read-only, and the bundle audit rejects other password verbs.
- * Keychain details from stderr are discarded; only stdout and the exit code are interpreted.
+ * Uses the absolute system tool without a shell. Only the read-only password verb is allowed by the
+ * bundle audit, and keychain details from stderr are discarded.
  */
 export function readKeychain(service: string = KEYCHAIN_SERVICE): Promise<KeychainResult> {
   return new Promise((resolve) => {
@@ -77,8 +71,7 @@ export function readKeychain(service: string = KEYCHAIN_SERVICE): Promise<Keycha
     let secret = "";
     let settled = false;
     /**
-     * Settles on the first process result, size limit, or timeout. The flag also guards against a
-     * stream chunk already in flight after process listeners are removed.
+     * Settles once across process, size, and timeout paths, including stream chunks already in flight.
      */
     const finish = (result: KeychainResult): void => {
       if (settled) {
@@ -91,7 +84,6 @@ export function readKeychain(service: string = KEYCHAIN_SERVICE): Promise<Keycha
       // oxlint-disable-next-line promise/no-multiple-resolved -- guarded above, one call site
       resolve(result);
     };
-    // Bound an unanswered authorization prompt so extension refresh does not wait indefinitely.
     const timer = setTimeout(() => finish({ status: "blocked" }), KEYCHAIN_TIMEOUT_MS);
     child.stdout?.setEncoding("utf8");
     child.stdout?.on("data", (chunk: string) => {
@@ -122,9 +114,8 @@ export function keychainSource(read: KeychainRead = readKeychain): CredentialSou
 }
 
 /**
- * Checks the file before the macOS keychain because Claude Code can use the file when no login
- * keychain is available, such as over SSH. `DEFAULT_SOURCES` retains the returned keychain source
- * so its blocked-prompt cooldown survives between reads.
+ * Checks the file before the macOS keychain for environments such as SSH. The retained keychain
+ * source keeps its blocked-prompt cooldown between reads.
  */
 export function credentialSources(
   platform: NodeJS.Platform,
@@ -164,11 +155,6 @@ export function parseCredentials(raw: string | null): ClaudeCredentials | null {
   };
 }
 
-/**
- * Names Claude Code rather than the unrelated desktop-app sign-in. Both Claude Code CLI and its VS
- * Code extension use this credential store. On macOS, the same result can also mean that keychain
- * access was not allowed, so the message includes that condition.
- */
 export function noSignInMessage(platform: NodeJS.Platform = process.platform): string {
   const remedy = "Sign in to the CLI or extension";
   return platform === "darwin"

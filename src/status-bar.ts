@@ -5,16 +5,11 @@ import { buildMessageTooltip, buildTooltip } from "./tooltip";
 import type { ProviderId, ProviderView } from "./usage";
 
 /**
- * Status bar order is priority descending, and there is no API to keep two items together.
- * Round priorities such as 100 are what most extensions pick, so anything landing on one of those
- * would split the pair. These sit just off a round value, a hundredth apart. Priority is a float,
- * so a value between them would still sort between them; the gap makes that unlikely, not
- * impossible.
+ * Priorities just above the commonly used 100 keep the provider items adjacent when possible;
+ * VS Code offers no grouping API.
  *
- * Tooltip theme icons use baseline alignment instead of the status bar's centered flex layout, so
- * these custom marks appear about two pixels too low beside tooltip titles. The Markdown sanitizer
- * does not allow vertical positioning, so the font provides lifted variants used only by tooltips.
- * CONTRIBUTING documents how those variants are generated.
+ * Tooltip icons use lifted font variants because Markdown baseline alignment places the status-bar
+ * glyphs too low and the sanitizer disallows vertical positioning.
  */
 const PROVIDERS: Record<
   ProviderId,
@@ -34,13 +29,11 @@ const PROVIDERS: Record<
   },
 };
 
-/** A configured label replaces the mark outright, so the two never compete for width. */
 function prefix(provider: ProviderId, configuration: ExtensionConfiguration): string {
   const label = provider === "claude" ? configuration.claudeLabel : configuration.codexLabel;
   return label || `$(${PROVIDERS[provider].icon})`;
 }
 
-/** Past this the reading is old enough that its age is worth showing. */
 const STALE_AFTER_MS = 10 * 60_000;
 
 const BACKGROUNDS: Record<Severity, vscode.ThemeColor | undefined> = {
@@ -110,7 +103,6 @@ export function renderStatusBarItem(
   });
 }
 
-/** Everything about one item that a redraw could change, as the strings it was last given. */
 interface Drawn {
   text: string;
   tooltip: string;
@@ -120,11 +112,8 @@ interface Drawn {
 const drawn = new WeakMap<vscode.StatusBarItem, Drawn>();
 
 /**
- * Writing any property of a status bar item publishes the whole item, and the workbench answers a
- * published item by rebuilding its hover — which takes the tooltip out from under whoever is
- * reading it and does not put it back, because the pointer never left the item to ask again. The
- * countdowns are redrawn every few seconds and almost always come out identical, so what is drawn
- * last is remembered and an identical drawing is not a drawing at all.
+ * Updating any item property rebuilds and closes an open hover. Cache the last drawing because the
+ * frequent countdown tick usually produces identical output.
  */
 function draw(item: vscode.StatusBarItem, next: Drawn): void {
   const previous = drawn.get(item);
@@ -143,22 +132,16 @@ function draw(item: vscode.StatusBarItem, next: Drawn): void {
   item.show();
 }
 
-/** Hiding disposes the item's entry, so the next drawing has to be a real one whatever it says. */
 export function hideStatusBarItem(item: vscode.StatusBarItem): void {
   drawn.delete(item);
   item.hide();
 }
 
 /**
- * The three things the renderer will not do unasked: draw `$(icon)` as a codicon, keep the html the
- * bars and the dimmed text are made of, and follow a `command:` link.
- *
- * The first two are escaped against in `tooltip.ts`, which leaves every provider value as text
- * content — brackets, parentheses and angle brackets included, so no value can become a link of any
- * kind. That escaping is what the third rests on, because the narrower `{ enabledCommands }` form of
- * trust cannot be used here: it is a fresh object on every drawing, the workbench compares tooltips
- * by identity for that field, and an item whose tooltip never compares equal is an item whose hover
- * is torn down every time the minute on its countdown changes.
+ * Trusted Markdown is required for command links, HTML, and theme icons. `tooltip.ts` escapes all
+ * provider values before they reach this boundary, so only extension-authored commands remain.
+ * Using a fresh `{ enabledCommands }` object would also defeat tooltip equality and close the hover
+ * on redraw.
  */
 function markdown(value: string): vscode.MarkdownString {
   const tooltip = new vscode.MarkdownString(value);

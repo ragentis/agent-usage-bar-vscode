@@ -121,25 +121,17 @@ test("reads Retry-After in both of its documented forms", () => {
   expect(parseRetryAfter("Mon, 03 Aug 2026 12:05:00 GMT", now)?.toISOString()).toBe(
     "2026-08-03T12:05:00.000Z",
   );
-  // A missing or unusable header must read as "unknown", never as "retry now".
   expect(parseRetryAfter(null, now)).toBeNull();
   expect(parseRetryAfter("", now)).toBeNull();
   expect(parseRetryAfter("soon", now)).toBeNull();
   expect(parseRetryAfter("-30", now)).toBeNull();
 });
 
-/**
- * What this service actually answers a refusal with, observed against the live endpoint. Read
- * literally it is a wait of nothing: the hold it would set has expired before it is stored, so no
- * window ever waits and the next read earns the same refusal. Unknown is the truthful reading, and
- * it is the reading the caller has a wait of its own for.
- */
 test("a wait that is already over is no statement of a wait at all", () => {
   const now = new Date("2026-08-03T12:00:00Z");
 
   expect(parseRetryAfter("0", now)).toBeNull();
   expect(parseRetryAfter("Mon, 03 Aug 2026 11:59:59 GMT", now)).toBeNull();
-  // A second either side of the line, so the boundary is the one being tested.
   expect(parseRetryAfter("1", now)?.toISOString()).toBe("2026-08-03T12:00:01.000Z");
 });
 
@@ -147,21 +139,15 @@ test("a wait longer than the cap is shortened to it rather than taken at its wor
   const now = new Date("2026-08-03T12:00:00Z");
   const capped = new Date(now.getTime() + MAX_RETRY_WAIT_MS).toISOString();
 
-  // Both forms, because both are published to the other windows and become a timer in each, and a
-  // timer this far out silently fires at once instead of waiting.
   expect(parseRetryAfter(String(10 ** 9), now)?.toISOString()).toBe(capped);
   expect(parseRetryAfter("Sat, 03 Aug 2030 12:00:00 GMT", now)?.toISOString()).toBe(capped);
-  // A wait inside the cap is passed through exactly as stated.
   expect(parseRetryAfter(String(MAX_RETRY_WAIT_MS / 1_000 - 1), now)?.toISOString()).toBe(
     new Date(now.getTime() + MAX_RETRY_WAIT_MS - 1_000).toISOString(),
   );
 });
 
 /**
- * `fetchClaudeUsage` is where the token is actually spent, and the one place a promise the README
- * makes can be checked rather than read: one host, three headers, no redirect. Everything below it
- * is parsing, tested above; everything around it is the five different things it can say instead of
- * a number.
+ * These tests pin the request boundary: one host, the expected headers, and no redirect.
  */
 
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
@@ -189,7 +175,6 @@ async function signedIn(expiresAt: number = Date.now() + 3_600_000) {
   return [fileSource(directory)];
 }
 
-/** Enough of a `Response` for the branches under test, which read four things off it. */
 function answered(status: number, body: unknown, headers: Record<string, string> = {}): unknown {
   return {
     status,
@@ -200,8 +185,6 @@ function answered(status: number, body: unknown, headers: Record<string, string>
   };
 }
 
-/** Stands in for the service and records exactly what it was asked. An `Error` is the request not
- *  arriving at all; anything else is what came back. */
 function service(reply: unknown): { url: unknown; init: Record<string, unknown> }[] {
   const calls: { url: unknown; init: Record<string, unknown> }[] = [];
   vi.stubGlobal("fetch", (url: unknown, init: Record<string, unknown>) => {
@@ -211,7 +194,6 @@ function service(reply: unknown): { url: unknown; init: Record<string, unknown> 
   return calls;
 }
 
-/** Narrows, so the wait and the words can be read off a result rather than asserted around. */
 function refusal(result: ProviderResult): { message: string; retryAt?: Date } {
   if (result.status !== "unavailable") {
     throw new Error(`expected no reading, got ${result.status}`);
@@ -227,13 +209,11 @@ test("the token goes to the one pinned endpoint, and carries nothing else with i
   expect(result).toMatchObject({ status: "ok" });
   expect(calls).toHaveLength(1);
   expect(calls[0]?.url).toBe(USAGE_URL);
-  // Stated exactly rather than by containment: an extra header is the thing worth failing over.
   expect(calls[0]?.init.headers).toEqual({
     "Content-Type": "application/json",
     Authorization: "Bearer secret-token",
     "anthropic-beta": "oauth-2025-04-20",
   });
-  // A followed redirect would carry the token to a host the bundle audit never sees.
   expect(calls[0]?.init.redirect).toBe("error");
   expect(calls[0]?.init.signal).toBeInstanceOf(AbortSignal);
 });
@@ -253,8 +233,6 @@ test("a refusal carries the wait as a moment, not as words that go stale", async
   const result = refusal(await fetchClaudeUsage(await signedIn()));
 
   expect(result.retryAt?.getTime()).toBeGreaterThanOrEqual(before + 45_000);
-  // The countdown belongs to whoever draws it; written in here it would be the number the refusal
-  // was born with, still on screen long after the wait it describes had run out.
   expect(result.message).not.toMatch(/\d/);
 });
 
@@ -280,7 +258,6 @@ test("each way the service can decline says which one it was", async () => {
   service(answered(200, { limits: [] }));
   expect(refusal(await fetchClaudeUsage(await signedIn())).message).toMatch(/held no windows/);
 
-  // None of these carries a wait: only the service naming one produces a wait.
   service(answered(500, {}));
   expect(refusal(await fetchClaudeUsage(await signedIn())).retryAt).toBeUndefined();
 });

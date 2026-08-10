@@ -1,11 +1,10 @@
 name: Release
 
-# Every push to main runs this. On most of them phase 1 is all that happens, keeping a release pull
-# request in step with the commits; merging that pull request is what lets phases 2 to 4 run.
+# Main pushes update the release PR; merging it enables verification and publishing phases.
 on:
   push:
     branches: [main]
-  # Recomputes the release pull request without waiting for a commit, after a config change.
+  # Recompute the release PR after a configuration change.
   workflow_dispatch:
 
 # Nothing here needs write access by default; the two phases that do ask for it themselves.
@@ -18,13 +17,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Phase 1. On an ordinary push this only refreshes the release pull request. On the push that
-  # merges it, it tags the commit and drafts the release instead, so the phases below can verify
-  # it before its page and package are public.
+  # Update the release PR, or tag and draft the release when that PR is merged.
   prepare:
     name: Prepare the release
-    # Not redundant with `target-branch`: phase 2 calls ci.yml by relative path, which GitHub
-    # resolves from the caller's commit, and phase 3 publishes before any environment policy runs.
+    # The reusable workflow path and pre-environment publication both resolve from this ref.
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -42,8 +38,7 @@ jobs:
         with:
           target-branch: main
 
-  # Phase 2. The same CI `main` runs, at the SHA phase 1 reports — a commit, so no tag to resolve.
-  # This is also where the VSIX the later phases publish is built.
+  # Verify the reported release commit and build the VSIX used by every later phase.
   verify:
     name: Verify the release
     needs: prepare
@@ -52,9 +47,7 @@ jobs:
     with:
       ref: ${{ needs.prepare.outputs.sha }}
 
-  # Phase 3. GitHub is the canonical, reversible home for the exact VSIX that passed verification.
-  # `force-tag-creation` already laid the tag down with the draft, so the next run finds this
-  # release rather than replaying the whole history; the release itself stays hidden until here.
+  # Publish the verified VSIX to its existing draft; GitHub remains the canonical reversible source.
   publish-release:
     name: Publish the release
     needs: [prepare, verify]
@@ -68,8 +61,7 @@ jobs:
           name: vsix
           path: release-artifact
 
-      # Nothing else ties the version the package was built from to the tag it is published under,
-      # and the file name carries that version, so the check is free.
+      # Tie the packaged version to the release tag before publishing.
       - name: Check the package against the tag
         env:
           TARGET_TAG: ${{ needs.prepare.outputs.tag }}
@@ -90,9 +82,8 @@ jobs:
           gh release upload "$TARGET_TAG" "$VSIX" --clobber
           gh release edit "$TARGET_TAG" --draft=false --latest
 
-  # Phase 4. Both registries publish the artifact phase 2 built and phase 3 attached, so a store
-  # install and a release download are the same bytes. A failed entry is re-run alone, and both skip
-  # a version already published, so a repeat costs nothing. No GitHub credential reaches here.
+  # Publish the same verified bytes to both registries. Entries rerun independently and skip versions
+  # already present; no GitHub credential reaches the registry environment.
   registries:
     name: Publish to ${{ matrix.registry }}
     needs: [prepare, publish-release]
@@ -115,7 +106,6 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      # Only to put `vsce` and `ovsx` on the path at the versions the lockfile pins.
       - run: npm ci --ignore-scripts
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -127,7 +117,6 @@ jobs:
           # Each entry is handed the token for its own registry and nothing else.
           VSCE_PAT: ${{ matrix.cli == 'vsce' && secrets.VSCE_PAT || '' }}
           OVSX_PAT: ${{ matrix.cli == 'ovsx' && secrets.OVSX_PAT || '' }}
-        # Both tools read their token from the environment and take the same two options here.
         run: |
           npx --no-install ${{ matrix.cli }} publish \
             --packagePath "release-artifact/agent-usage-bar-${TARGET_TAG#v}.vsix" --skip-duplicate
