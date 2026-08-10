@@ -17,6 +17,8 @@ export interface UsageSnapshot {
   /** Reason the account is stopped regardless of percentage, or null when it is running. */
   blocked: string | null;
   credits: string | null;
+  /** Expiry of the soonest credit that can still be spent; the summary carries how many there are. */
+  creditsExpireAt?: Date | null;
   fetchedAt: Date;
   source: SnapshotSource;
 }

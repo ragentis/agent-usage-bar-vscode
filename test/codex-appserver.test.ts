@@ -60,6 +60,30 @@ test("reports available reset credits and a usable balance", () => {
   ).toBeNull();
 });
 
+test("dates the soonest reset credit that can still be spent", () => {
+  const withCredits = (credits: unknown[]) =>
+    parseRateLimitsResponse(
+      {
+        rateLimits: response.rateLimits,
+        rateLimitResetCredits: { availableCount: 2, credits },
+      },
+      fetchedAt,
+    );
+
+  expect(
+    withCredits([
+      { status: "available", expiresAt: 1_786_555_916 },
+      { status: "available", expiresAt: 1_786_300_000 },
+      { status: "used", expiresAt: 1_786_100_000 },
+    ])?.creditsExpireAt?.toISOString(),
+  ).toBe("2026-08-09T18:26:40.000Z");
+  expect(withCredits([{ status: "used", expiresAt: 1_786_300_000 }])?.creditsExpireAt).toBeNull();
+  expect(
+    withCredits([{ status: "available", expiresAt: 1_754_000_000 }])?.creditsExpireAt,
+  ).toBeNull();
+  expect(parseRateLimitsResponse(response, fetchedAt)?.creditsExpireAt).toBeNull();
+});
+
 test("surfaces a stopped account", () => {
   expect(
     parseRateLimitsResponse(

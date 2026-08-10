@@ -332,6 +332,19 @@ test("each optional line appears only when there is something to say", () => {
   expect(stopped).toContain("· 3 reset credits");
 });
 
+test("credits say when the soonest of them expires", () => {
+  const text = tooltip(
+    { credits: "2 reset credits", creditsExpireAt: new Date("2026-08-12T17:31:00Z") },
+    null,
+    { locale: "en-US-u-hc-h23" },
+  );
+
+  expect(drawnLines(text)).toContainEqual(
+    expect.stringMatching(/^ {2}Credits · 2 reset credits · expires \w+ \d+, \d\d:\d\d$/),
+  );
+  expect(tooltip({ credits: "2 reset credits" })).not.toContain("expires");
+});
+
 test("a failed refresh is stated beside the reading it failed to replace", () => {
   const text = tooltip({}, "connection refused");
 

@@ -23,7 +23,7 @@ One status bar item per provider, each with its own monochrome glyph:
 
 The item turns yellow past the warning threshold and red past the error threshold. Both thresholds use the percentage **used**, regardless of the selected display mode. The item also turns red when a provider reports that the account is stopped by a spend limit or hard rate limit, even when the percentage is low; the tooltip states the reason.
 
-Hover to see the plan name, a themed progress bar for each window, exact reset times, pace, any credit balance, and the last refresh error. The bars use the same warning and error thresholds as the status item. The tooltip also links to refresh and settings. Click either status item to toggle that provider, refresh usage, or open settings.
+Hover to see the plan name, a themed progress bar for each window, exact reset times, pace, any credit balance and when the soonest reset credit expires, and the last refresh error. The bars use the same warning and error thresholds as the status item. The tooltip also links to refresh and settings. Click either status item to toggle that provider, refresh usage, or open settings.
 
 ## Pace
 

@@ -166,15 +166,34 @@ function parseWindow(value: unknown, fallback: "session" | "weekly"): UsageWindo
   };
 }
 
-function creditSummary(rateLimits: Record<string, unknown>, resetCredits: unknown): string | null {
+/** Only an available credit can still be spent, so a spent or lapsed grant must not set the date. */
+function nearestExpiry(resetCredits: Record<string, unknown>, now: Date): Date | null {
+  if (!Array.isArray(resetCredits.credits)) {
+    return null;
+  }
+  const expiries = resetCredits.credits
+    .map((credit: unknown) =>
+      isRecord(credit) && credit.status === "available" ? validDate(credit.expiresAt) : null,
+    )
+    .filter((expiry) => expiry !== null)
+    .map((expiry) => expiry.getTime())
+    .filter((expiry) => expiry > now.getTime());
+  return expiries.length === 0 ? null : new Date(Math.min(...expiries));
+}
+
+function parseCredits(
+  rateLimits: Record<string, unknown>,
+  value: unknown,
+  now: Date,
+): { summary: string | null; expiresAt: Date | null } {
   const balance = creditBalance(rateLimits.credits);
-  const available =
-    isRecord(resetCredits) &&
-    typeof resetCredits.availableCount === "number" &&
-    resetCredits.availableCount > 0
-      ? `${resetCredits.availableCount} reset credit${resetCredits.availableCount === 1 ? "" : "s"}`
-      : null;
-  return [balance, available].filter((part) => part !== null).join(" · ") || null;
+  const resetCredits = isRecord(value) ? value : null;
+  const count = typeof resetCredits?.availableCount === "number" ? resetCredits.availableCount : 0;
+  const available = count > 0 ? `${count} reset credit${count === 1 ? "" : "s"}` : null;
+  return {
+    summary: [balance, available].filter((part) => part !== null).join(" · ") || null,
+    expiresAt: resetCredits && available ? nearestExpiry(resetCredits, now) : null,
+  };
 }
 
 export function parseRateLimitsResponse(value: unknown, fetchedAt: Date): UsageSnapshot | null {
@@ -191,11 +210,13 @@ export function parseRateLimitsResponse(value: unknown, fetchedAt: Date): UsageS
   if (windows.length === 0) {
     return null;
   }
+  const credits = parseCredits(rateLimits, value.rateLimitResetCredits, fetchedAt);
   return {
     windows,
     plan: validLabel(rateLimits.planType),
     blocked: blockedReason(rateLimits),
-    credits: creditSummary(rateLimits, value.rateLimitResetCredits),
+    credits: credits.summary,
+    creditsExpireAt: credits.expiresAt,
     fetchedAt,
     source: "codex-app-server",
   };

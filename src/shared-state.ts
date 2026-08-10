@@ -88,6 +88,7 @@ function parseSnapshot(value: unknown): UsageSnapshot | null {
     return null;
   }
   const windows = value.windows.map(parseWindow).filter((window) => window !== null);
+  const creditsExpireAt = millis(value.creditsExpireAt);
   return windows.length === 0
     ? null
     : {
@@ -95,6 +96,7 @@ function parseSnapshot(value: unknown): UsageSnapshot | null {
         plan: validLabel(value.plan),
         blocked: validLabel(value.blocked),
         credits: validLabel(value.credits),
+        creditsExpireAt: creditsExpireAt === null ? null : new Date(creditsExpireAt),
         fetchedAt: new Date(fetchedAt),
         source,
       };
@@ -141,6 +143,7 @@ function serialize(entry: SharedEntry): Record<string, unknown> {
       plan: snapshot.plan,
       blocked: snapshot.blocked,
       credits: snapshot.credits,
+      creditsExpireAt: snapshot.creditsExpireAt?.getTime() ?? null,
       fetchedAt: snapshot.fetchedAt.getTime(),
       source: snapshot.source,
     },

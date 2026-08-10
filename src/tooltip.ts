@@ -316,7 +316,13 @@ export function buildTooltip(
     blocks.push(windowBlock(window, configuration, snapshot.fetchedAt));
   }
   if (snapshot.credits) {
-    blocks.push(GAP, lines(`<b>Credits</b> ${dim(`· ${wrapped(snapshot.credits, 10)}`)}`));
+    const expiry = snapshot.creditsExpireAt
+      ? ` · expires ${formatDate(snapshot.creditsExpireAt, configuration.locale)}`
+      : "";
+    blocks.push(
+      GAP,
+      lines(`<b>Credits</b> ${dim(`· ${wrapped(`${snapshot.credits}${expiry}`, 10)}`)}`),
+    );
   }
   // PAD plus STEP creates the larger gap above the footer rule.
   blocks.push(
