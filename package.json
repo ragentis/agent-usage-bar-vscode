@@ -124,7 +124,7 @@
           "type": "boolean",
           "default": true,
           "order": 3,
-          "description": "Show where each window is heading, beside its reset time. The 5-hour window is forecast: when it runs out, or where it lands by the reset. The weekly window is only clocked — its hours run through nights and days off, so forecasting it would mislead."
+          "description": "Show where each window is heading, beside its reset time. The 5-hour window is forecast: when it runs out, or where it lands by the reset. The weekly window is only clocked. Its hours run through nights and days off, so forecasting it would mislead."
         },
         "agentUsageBar.warningThreshold": {
           "type": "number",
@@ -154,7 +154,7 @@
           ],
           "default": "threshold",
           "order": 6,
-          "markdownDescription": "Controls the yellow warning. Choose `overPace` to show it only when usage has reached the warning threshold ahead of schedule—for example, 80% used before 80% of the window has passed. The red error threshold always applies."
+          "markdownDescription": "Controls the yellow warning. Choose `overPace` to show it only when usage has reached the warning threshold ahead of schedule. For example, 80% used before 80% of the window has passed. The red error threshold always applies."
         },
         "agentUsageBar.claude.enabled": {
           "type": "boolean",
