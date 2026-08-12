@@ -24,9 +24,14 @@
   "keywords": [
     "claude code",
     "codex",
+    "openai codex",
+    "account usage",
+    "usage limits",
     "rate limits",
-    "status bar",
-    "usage"
+    "quota",
+    "reset time",
+    "usage monitor",
+    "status bar"
   ],
   "activationEvents": [
     "onStartupFinished"
