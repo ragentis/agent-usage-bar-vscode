@@ -2,6 +2,14 @@
 
 Notable changes to Agent Usage Bar. Release Please builds this file from the [commit subjects](.github/commit-instructions.md) that land on `main`, and the versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.2.0...v0.3.0) (2026-08-12)
+
+
+### Added
+
+* **codex:** show when the soonest reset credit expires ([df02e6b](https://github.com/ragentis/agent-usage-bar-vscode/commit/df02e6b8e6c5f07d12afc6b38f84584cc6a911a4))
+* **status-bar:** add pace-aware warning mode ([4b1fa7d](https://github.com/ragentis/agent-usage-bar-vscode/commit/4b1fa7de4641a27c2de1d79d3c3c83b96b4f5bc8))
+
 ## [0.2.0](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.1.0...v0.2.0) (2026-08-09)
 
 
