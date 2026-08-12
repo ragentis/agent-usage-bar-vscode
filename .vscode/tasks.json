@@ -3,8 +3,13 @@
   "tasks": [
     {
       "type": "npm",
-      "script": "bundle:dev",
-      "group": "build",
+      "script": "format",
+      "options": {
+        "statusbar": {
+          "label": "Format",
+          "detail": "Format the repository with Oxfmt"
+        }
+      },
       "problemMatcher": []
     },
     {
@@ -12,6 +17,11 @@
       "script": "bundle:watch",
       "isBackground": true,
       "presentation": { "reveal": "never" },
+      "options": {
+        "statusbar": {
+          "hide": true
+        }
+      },
       "problemMatcher": {
         "owner": "esbuild",
         "source": "esbuild",
@@ -35,6 +45,52 @@
       "type": "npm",
       "script": "test",
       "group": "test",
+      "options": {
+        "statusbar": {
+          "label": "Test",
+          "detail": "Run the test suite"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "type": "npm",
+      "script": "verify",
+      "options": {
+        "statusbar": {
+          "label": "Verify",
+          "detail": "Run typecheck, lint, format check, and tests"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "type": "npm",
+      "script": "package:local",
+      "group": "build",
+      "options": {
+        "statusbar": {
+          "label": "Build VSIX",
+          "detail": "Build a local VSIX package"
+        }
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Install VSIX",
+      "type": "process",
+      "command": "powershell.exe",
+      "args": [
+        "-NoProfile",
+        "-Command",
+        "$vsix = Get-ChildItem -LiteralPath '${workspaceFolder}' -Filter 'agent-usage-bar-*.vsix' -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if (-not $vsix) { throw 'No local VSIX found. Run Build VSIX first.' }; & '${execPath}' --install-extension $vsix.FullName --force"
+      ],
+      "options": {
+        "statusbar": {
+          "label": "Install VSIX",
+          "detail": "Install the newest locally built VSIX"
+        }
+      },
       "problemMatcher": []
     }
   ]
