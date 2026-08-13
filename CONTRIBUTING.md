@@ -140,9 +140,9 @@ Mark provider-supplied text as `verbatim`. It is displayed unchanged, is never p
 
 VS Code renders status bar icons through the codicon pipeline, which requires an icon font. The provider marks therefore ship in `assets/agent-usage-bar.woff` and are registered through `contributes.icons`. The font is generated with [Fontello](https://fontello.com) from `assets/fontello-config.json`; open that configuration in Fontello to edit or rebuild the marks.
 
-The font contains a regular and a tooltip-aligned variant of each mark. The status bar centers the regular glyph with flexbox. Tooltip theme icons use baseline alignment, which places these custom marks about two pixels too low beside the title. Trusted Markdown does not preserve a CSS declaration that could correct the position, so tooltips use dedicated `-hover` glyphs shifted upward in the font.
+The font contains a regular and a tooltip-aligned variant of each mark. The status bar centers the regular glyph with flexbox. Tooltip theme icons use baseline alignment, which places these custom marks about one pixel too low beside the title. Trusted Markdown does not preserve a CSS declaration that could correct the position, so tooltips use dedicated `-hover` glyphs shifted upward in the font.
 
-The tooltip variants move every SVG y-coordinate upward by 77 font units and leave x-coordinates unchanged. Fontello converts SVG coordinates with `ascent - y`, so generate the shifted path by subtracting 77 from each y-coordinate. At 1,000 units per em and a 13px tooltip icon, 77 units is approximately one CSS pixel; font hinting and grid fitting make the visible correction closer to two pixels. Verify alignment visually against a codicon. If it needs adjustment, use 77-unit increments to keep grid fitting consistent.
+The tooltip variants move every SVG y-coordinate upward by 39 font units and leave x-coordinates unchanged. Fontello converts SVG coordinates with `ascent - y`, so generate the shifted path by subtracting 39 from each y-coordinate. At 1,000 units per em and a 13px tooltip icon, 39 units is about half a CSS pixel, which grid fitting renders as a one-pixel lift. Verify alignment visually against a codicon, and at more than one display scale.
 
 Keep the pinned code points on re-import, because `contributes.icons` addresses the glyphs by exactly those characters:
 
