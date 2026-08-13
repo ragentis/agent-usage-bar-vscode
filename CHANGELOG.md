@@ -2,6 +2,13 @@
 
 Notable changes to Agent Usage Bar. Release Please builds this file from the [commit subjects](.github/commit-instructions.md) that land on `main`, and the versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.3.0...v0.3.1) (2026-08-13)
+
+
+### Fixed
+
+* **status-bar:** adjust tooltip icon alignment for better visibility ([d2ea6f1](https://github.com/ragentis/agent-usage-bar-vscode/commit/d2ea6f1a3c6c82f4d7c2c16e64c81f6c22aab1d7))
+
 ## [0.3.0](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.2.0...v0.3.0) (2026-08-12)
 
 
