@@ -83,7 +83,7 @@
       "args": [
         "-NoProfile",
         "-Command",
-        "$vsix = Get-ChildItem -LiteralPath '${workspaceFolder}' -Filter 'agent-usage-bar-*.vsix' -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if (-not $vsix) { throw 'No local VSIX found. Run Build VSIX first.' }; & '${execPath}' --install-extension $vsix.FullName --force"
+        "$vsix = Get-ChildItem -LiteralPath '${workspaceFolder}' -Filter 'agent-usage-bar-*.vsix' -File | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if (-not $vsix) { throw 'No local VSIX found. Run Build VSIX first.' }; $cli = Get-ChildItem -LiteralPath (Join-Path (Split-Path -Parent '${execPath}') 'bin') -Filter '*.cmd' -File | Select-Object -First 1; if (-not $cli) { throw 'VS Code CLI wrapper not found next to ${execPath}.' }; & $cli.FullName --install-extension $vsix.FullName --force"
       ],
       "options": {
         "statusbar": {
