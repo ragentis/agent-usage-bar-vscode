@@ -75,6 +75,48 @@
           "fontPath": "./assets/agent-usage-bar.woff",
           "fontCharacter": "\\E803"
         }
+      },
+      "agent-usage-bar-day-none": {
+        "description": "Daily activity bar, a day with no activity",
+        "default": {
+          "fontPath": "./assets/agent-usage-bar.woff",
+          "fontCharacter": "\\E810"
+        }
+      },
+      "agent-usage-bar-day-one": {
+        "description": "Daily activity bar, step 1 of 5",
+        "default": {
+          "fontPath": "./assets/agent-usage-bar.woff",
+          "fontCharacter": "\\E811"
+        }
+      },
+      "agent-usage-bar-day-two": {
+        "description": "Daily activity bar, step 2 of 5",
+        "default": {
+          "fontPath": "./assets/agent-usage-bar.woff",
+          "fontCharacter": "\\E812"
+        }
+      },
+      "agent-usage-bar-day-three": {
+        "description": "Daily activity bar, step 3 of 5",
+        "default": {
+          "fontPath": "./assets/agent-usage-bar.woff",
+          "fontCharacter": "\\E813"
+        }
+      },
+      "agent-usage-bar-day-four": {
+        "description": "Daily activity bar, step 4 of 5",
+        "default": {
+          "fontPath": "./assets/agent-usage-bar.woff",
+          "fontCharacter": "\\E814"
+        }
+      },
+      "agent-usage-bar-day-five": {
+        "description": "Daily activity bar, step 5 of 5",
+        "default": {
+          "fontPath": "./assets/agent-usage-bar.woff",
+          "fontCharacter": "\\E815"
+        }
       }
     },
     "commands": [
@@ -131,12 +173,18 @@
           "order": 3,
           "description": "Show where each window is heading, beside its reset time. The 5-hour window is forecast: when it runs out, or where it lands by the reset. The weekly window is only clocked. Its hours run through nights and days off, so forecasting it would mislead."
         },
+        "agentUsageBar.showHistory": {
+          "type": "boolean",
+          "default": true,
+          "order": 4,
+          "markdownDescription": "Show a strip of the last thirty days of activity in the tooltip. Days are counted from the session transcripts the agents already write on this machine, so work done outside VS Code is included. Only recorded numbers and times are read from those files, and nothing is sent anywhere; see [Agent transcripts](https://github.com/ragentis/agent-usage-bar-vscode#agent-transcripts) for exactly what is taken."
+        },
         "agentUsageBar.warningThreshold": {
           "type": "number",
           "default": 80,
           "minimum": 0,
           "maximum": 100,
-          "order": 4,
+          "order": 5,
           "description": "Used-percentage threshold for the warning background."
         },
         "agentUsageBar.errorThreshold": {
@@ -144,7 +192,7 @@
           "default": 95,
           "minimum": 0,
           "maximum": 100,
-          "order": 5,
+          "order": 6,
           "description": "Used-percentage threshold for the error background. This cannot be lower than the warning threshold."
         },
         "agentUsageBar.warnWhen": {
@@ -158,37 +206,37 @@
             "Warn only when usage reaches the warning threshold ahead of schedule."
           ],
           "default": "threshold",
-          "order": 6,
+          "order": 7,
           "markdownDescription": "Controls the yellow warning. Choose `overPace` to show it only when usage has reached the warning threshold ahead of schedule. For example, 80% used before 80% of the window has passed. The red error threshold always applies."
         },
         "agentUsageBar.claude.enabled": {
           "type": "boolean",
           "default": true,
-          "order": 7,
+          "order": 8,
           "markdownDescription": "Show Claude Code usage in the status bar. The sign-in token Claude Code already stores in `~/.claude/.credentials.json` is read and used for a single request to `api.anthropic.com` that asks for your account usage. The token is never stored, logged, refreshed, or sent anywhere else, and no prompts, code, or file contents leave your machine."
         },
         "agentUsageBar.codex.enabled": {
           "type": "boolean",
           "default": true,
-          "order": 8,
+          "order": 9,
           "markdownDescription": "Show Codex usage in the status bar. Your local Codex CLI is asked for the limits it already knows for your account. Codex keeps its own sign-in, so this extension never reads or stores your Codex credentials. Nothing is shown when Codex is not installed or is signed out."
         },
         "agentUsageBar.claude.label": {
           "type": "string",
           "default": "",
-          "order": 9,
+          "order": 10,
           "markdownDescription": "Replace the Claude mark in the status bar with your own text. Leave empty for the icon. A codicon reference such as `$(sparkle)` also works."
         },
         "agentUsageBar.codex.label": {
           "type": "string",
           "default": "",
-          "order": 10,
+          "order": 11,
           "markdownDescription": "Replace the Codex mark in the status bar with your own text. Leave empty for the icon. A codicon reference such as `$(hubot)` also works."
         },
         "agentUsageBar.locale": {
           "type": "string",
           "default": "",
-          "order": 11,
+          "order": 12,
           "examples": [
             "en-GB",
             "de-DE",
@@ -201,7 +249,7 @@
           "default": 300,
           "minimum": 30,
           "maximum": 3600,
-          "order": 12,
+          "order": 13,
           "description": "How often to re-read usage in the background, so this mainly covers usage spent on other machines or in other clients. Local agent activity also triggers a refresh, and no automatic read happens less than thirty seconds after the last one."
         }
       }
@@ -209,6 +257,7 @@
   },
   "scripts": {
     "clean": "rimraf --glob dist \"*.vsix\"",
+    "font": "node scripts/build-font.mjs",
     "bundle": "node scripts/build.mjs",
     "bundle:dev": "node scripts/build.mjs --dev",
     "bundle:watch": "node scripts/build.mjs --dev --watch",

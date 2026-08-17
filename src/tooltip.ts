@@ -1,4 +1,4 @@
-import type { ExtensionConfiguration } from "./configuration";
+import type { ExtensionConfiguration, ThemeKind } from "./configuration";
 import {
   formatMoment,
   formatPercent,
@@ -7,6 +7,14 @@ import {
   severityFor,
   type Severity,
 } from "./formatting";
+import {
+  dayStart,
+  HISTORY_DAYS,
+  historyStrip,
+  localDay,
+  type DailyTotals,
+  type HistoryStrip,
+} from "./history";
 import { formatPace, paceFor } from "./pace";
 import type { SnapshotSource, UsageSnapshot, WindowKind } from "./usage";
 
@@ -40,14 +48,24 @@ const COLOR = {
   markOnTrack: "#ffffff40",
 } as const;
 
-/** Nested `<small>` elements reduce the bar to roughly four pixels inside an `h3`. */
-const BAR_SCALE = 7;
+/**
+ * The bar is drawn in the 13px type of a plain block, not the 15.2px of a heading; see `section`.
+ * Nested `<small>` elements reduce it from there to roughly four pixels.
+ */
+const BAR_SCALE = 6;
 
 /**
  * The scaled cells make the bar the widest line. Wrapped text uses a conservative width for
  * proportional glyphs; failure lines may use the measured wider limit.
+ *
+ * Measured rather than derived. `<small>` does not scale by an exact factor in this renderer, and
+ * across six nestings the arithmetic drifts about a percent — four pixels of a bar that has to end
+ * where the line of text above it ends.
  */
-const BAR_CELLS = 320;
+const BAR_CELLS = 314;
+
+/** The indent beside a bar, in the bar's own cells: a full-size space is a fifth too narrow here. */
+const BAR_INDENT_CELLS = 7;
 
 const COLUMNS = 52;
 
@@ -156,12 +174,12 @@ interface Mark {
 }
 
 /** The mark centred on the elapsed position, or nothing when the bar cannot show it there. */
-function markFor(elapsedPercent: number | null, filled: number): Mark | null {
+function markFor(elapsedPercent: number | null, filled: number, cells: number): Mark | null {
   if (elapsedPercent === null) {
     return null;
   }
-  const at = Math.round((elapsedPercent / 100) * BAR_CELLS) - Math.floor(MARK_CELLS / 2);
-  if (at < MARK_MARGIN || at + MARK_CELLS > BAR_CELLS - MARK_MARGIN) {
+  const at = Math.round((elapsedPercent / 100) * cells) - Math.floor(MARK_CELLS / 2);
+  if (at < MARK_MARGIN || at + MARK_CELLS > cells - MARK_MARGIN) {
     return null;
   }
   const clear = at >= filled + MARK_CLEARANCE || at + MARK_CELLS + MARK_CLEARANCE <= filled;
@@ -184,9 +202,14 @@ function marked(count: number, mark: Mark | null): string {
 }
 
 /** Nests the fill inside the track so both retain rounded ends without a seam between segments. */
-function bar(usedPercent: number, severity: Severity, elapsedPercent: number | null): string {
-  const filled = Math.min(BAR_CELLS, Math.max(0, Math.round((usedPercent / 100) * BAR_CELLS)));
-  const mark = markFor(elapsedPercent, filled);
+function bar(
+  usedPercent: number,
+  severity: Severity,
+  elapsedPercent: number | null,
+  cells = BAR_CELLS,
+): string {
+  const filled = Math.min(cells, Math.max(0, Math.round((usedPercent / 100) * cells)));
+  const mark = markFor(elapsedPercent, filled, cells);
   const onFill = mark !== null && mark.at < filled;
   const fill =
     filled > 0
@@ -195,11 +218,20 @@ function bar(usedPercent: number, severity: Severity, elapsedPercent: number | n
           `background-color:${COLOR[severity]};border-radius:4px;`,
         )
       : "";
-  const rest = marked(
-    BAR_CELLS - filled,
-    mark && !onFill ? { ...mark, at: mark.at - filled } : null,
-  );
-  return scaled(span(`${fill}${rest}`, `background-color:${COLOR.track};border-radius:4px;`));
+  const rest = marked(cells - filled, mark && !onFill ? { ...mark, at: mark.at - filled } : null);
+  return span(`${fill}${rest}`, `background-color:${COLOR.track};border-radius:4px;`);
+}
+
+const ROW_INDENT = CELL.repeat(BAR_INDENT_CELLS);
+
+/** The bar and the indent beside it, scaled together because the bar is drawn in these same cells. */
+function barRow(run: string): string {
+  return scaled(`${ROW_INDENT}${run}${ROW_INDENT}`);
+}
+
+/** The same indent for a row drawn at full size, where only the spacing is scaled. */
+function glyphRow(run: string): string {
+  return `${scaled(ROW_INDENT)}${run}${scaled(ROW_INDENT)}`;
 }
 
 function formatDate(date: Date, locale?: string): string {
@@ -209,6 +241,84 @@ function formatDate(date: Date, locale?: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatDay(day: string, locale?: string): string {
+  return new Date(dayStart(day)).toLocaleDateString(locale, { month: "short", day: "numeric" });
+}
+
+/**
+ * A day is one glyph from the extension's own icon font: a bar of its step's height, standing on the
+ * text baseline, carrying the gap to the next day inside its advance width. Nothing here draws with
+ * cells, because a cell's width and height both follow the one font size and a taller day would only
+ * be a wider one. See `scripts/build-font.mjs`, which generates the bars and their metrics.
+ */
+const HEAT_GLYPH = "agent-usage-bar-day";
+
+/**
+ * Steps are named, never numbered. An icon whose id contains a digit registers and gets its CSS
+ * rule, but the Markdown sanitizer keeps a codicon class only when it matches
+ * `/^codicon codicon-[a-z-]+( codicon-modifier-[a-z-]+)?$/`. A digit fails that, the class is
+ * stripped, and the day draws as an empty element with nothing reported.
+ */
+const HEAT_NAMES = ["none", "one", "two", "three", "four", "five"];
+
+/**
+ * One hue at five opacities, applied as text color to that glyph. A severity ramp would read a busy
+ * day as a failing one. The hue is written out rather than taken from `--vscode-charts-blue` because
+ * a theme color cannot carry an opacity; these are the values that variable holds in the default
+ * themes, and every step below full blends toward whatever the hover behind it actually is.
+ */
+const HEAT_HUE: Record<ThemeKind, string> = { dark: "#3794ff", light: "#1a85ff" };
+
+const HEAT_STEPS = ["59", "80", "a6", "d0", "ff"];
+
+function heatDay(level: number, theme: ThemeKind): string {
+  const name = HEAT_NAMES[level];
+  const step = HEAT_STEPS[level - 1];
+  if (!name || !step) {
+    return span(`$(${HEAT_GLYPH}-none)`, `color:${COLOR.track};`);
+  }
+  return span(`$(${HEAT_GLYPH}-${name})`, `color:${HEAT_HUE[theme]}${step};`);
+}
+
+function heatRow(strip: HistoryStrip, theme: ThemeKind): string {
+  return strip.days.map((day) => heatDay(day.level, theme)).join("");
+}
+
+function formatCount(value: number): string {
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toFixed(1)}M`;
+  }
+  return value >= 1_000 ? `${Math.round(value / 1_000)}K` : `${Math.round(value)}`;
+}
+
+/**
+ * Codex records the account's own percentages, so its days are absolute. Claude records only tokens,
+ * which are shown as a count and scaled against the busiest day rather than against any limit.
+ */
+function historyBlock(
+  totals: DailyTotals,
+  configuration: ExtensionConfiguration,
+  now: Date,
+): string {
+  const strip = historyStrip(totals, HISTORY_DAYS, localDay(now));
+  const first = strip?.days[0];
+  if (!strip || !first) {
+    return "";
+  }
+  const busiest =
+    strip.unit === "percent"
+      ? `${Math.round(strip.busiest.value)}%`
+      : `${formatCount(strip.busiest.value)} tokens`;
+  const title = `${INDENT}${dim("Daily activity")}${INDENT}${busiest} <small>${dim("busiest day")}</small>`;
+  // The tallest day rises past its line box, so the strip is set one step lower than a bar.
+  return section(
+    title,
+    STEP,
+    glyphRow(heatRow(strip, configuration.theme)),
+    detailRow(escapeHtml(formatDay(first.day, configuration.locale)), "today"),
+  );
 }
 
 function lines(...content: string[]): string {
@@ -227,6 +337,15 @@ function detailRow(left: string, right: string): string {
     `<table width="100%"><tr><td>${INDENT}${dim(left)}</td>`,
     `<td align="right">${dim(right)}${INDENT}</td></tr></table>`,
   ].join("");
+}
+
+/**
+ * A title is a heading and what it describes is not. A heading carries 8px of margin under itself,
+ * and that space belongs above the drawing rather than between the drawing and the line explaining
+ * it, so the two share a plain block. Sanitized CSS offers no other way to place the space.
+ */
+function section(title: string, ...body: string[]): string {
+  return `<h3>${title}</h3><div>${body.join("")}</div>`;
 }
 
 function windowTitle(window: ResolvedWindow): string {
@@ -255,15 +374,13 @@ function windowBlock(
   // Only a weekly window is clocked rather than forecast, so only that bar carries the mark, and it
   // stands exactly where the elapsed percentage beside it says.
   const elapsed = pace?.kind === "elapsed" ? pace.percent : null;
-  const meter = `${bar(window.usedPercent, severityFor(window, configuration, asOf), elapsed)}${INDENT}`;
-  return [
-    `<h3>${INDENT}${dim(windowTitle(window))}${INDENT}${percent} <small>${dim(label)}</small>`,
-    `<br>${INDENT}${meter}</h3>`,
-    detailRow(
-      reset,
-      pace ? escapeHtml(formatPace(pace, (at) => formatMoment(at, configuration.locale))) : "",
-    ),
-  ].join("");
+  const severity = severityFor(window, configuration, asOf);
+  const title = `${INDENT}${dim(windowTitle(window))}${INDENT}${percent} <small>${dim(label)}</small>`;
+  const details = detailRow(
+    reset,
+    pace ? escapeHtml(formatPace(pace, (at) => formatMoment(at, configuration.locale))) : "",
+  );
+  return section(title, barRow(bar(window.usedPercent, severity, elapsed)), details);
 }
 
 const FAILURE_LABEL = "Last refresh failed:";
@@ -351,6 +468,7 @@ export function buildTooltip(
   failure: Failure | null,
   age: string | null,
   now = new Date(),
+  history: DailyTotals | null = null,
 ): string {
   const plan = snapshot.plan ? ` ${dim(`· ${wrapped(snapshot.plan, title.length + 5)}`)}` : "";
   const windows = resolveWindows(snapshot, now);
@@ -374,6 +492,11 @@ export function buildTooltip(
       blocks.push(AIR);
     }
     blocks.push(windowBlock(window, configuration, snapshot.fetchedAt));
+  }
+  const activity =
+    history && configuration.showHistory ? historyBlock(history, configuration, now) : "";
+  if (activity) {
+    blocks.push(AIR, activity);
   }
   if (snapshot.credits) {
     const expiry = snapshot.creditsExpireAt

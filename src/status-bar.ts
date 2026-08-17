@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { ExtensionConfiguration } from "./configuration";
 import { buildStatusText, formatAge, pickSeverity, type Severity } from "./formatting";
+import type { DailyTotals } from "./history";
 import { buildMessageTooltip, buildTooltip } from "./tooltip";
 import type { ProviderId, ProviderView } from "./usage";
 
@@ -72,6 +73,7 @@ export function renderStatusBarItem(
   provider: ProviderId,
   view: ProviderView,
   configuration: ExtensionConfiguration,
+  history: DailyTotals | null = null,
   now = new Date(),
 ): void {
   const { title, hoverIcon } = PROVIDERS[provider];
@@ -98,6 +100,7 @@ export function renderStatusBarItem(
       view.message === null ? null : { message: view.message, verbatim: view.verbatim },
       age,
       now,
+      history,
     ),
     background: BACKGROUNDS[pickSeverity(snapshot, configuration, now)],
   });

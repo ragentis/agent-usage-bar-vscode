@@ -26,6 +26,8 @@ function configure(overrides: Partial<ExtensionConfiguration> = {}): ExtensionCo
     claudeLabel: "",
     codexLabel: "",
     refreshIntervalSeconds: 300,
+    showHistory: true,
+    theme: "dark",
     ...overrides,
   };
 }
@@ -97,6 +99,8 @@ test("an unset section is the manifest's defaults, whole", () => {
     codexLabel: "",
     claudeLabel: "",
     refreshIntervalSeconds: DEFAULT_REFRESH_INTERVAL_SECONDS,
+    showHistory: true,
+    theme: "dark",
   });
 });
 

@@ -46,6 +46,21 @@ Pace remains hidden until the window has been open for fifteen minutes, and the 
 
 `warnWhen` works even when `showPace` is off. If a window is too new to compare, the warning threshold applies normally.
 
+## Daily activity
+
+Under the windows, the tooltip draws the last thirty days as one bar per day: the busier the day, the taller and darker the bar; a day the agent was not used is a flat mark on the baseline. Each day is placed in one of five steps relative to the busiest day in view, so a bar says which band a day fell in — twice the height is not twice the work.
+
+The days are counted from the session transcripts both agents already write on this machine, so the strip is complete on the first hover and includes work done outside VS Code. Only recorded numbers and times are read from those files; see [Data access](#data-access).
+
+Each provider is measured in the unit it records, and the two are never compared:
+
+| Provider | What a day counts |
+| --- | --- |
+| Codex | Percent of the weekly limit spent that day. Codex records the account's own percentages, so a day is exact. |
+| Claude Code | Tokens written that day. Claude Code records tokens, not percentages, so its strip shows relative activity only. |
+
+A day from before the first scan is drawn like an unused one. That matters for Claude Code, which deletes its transcripts after `cleanupPeriodDays` (thirty days by default): the oldest cells may stay empty however much work they held. Once a day has been counted it is kept, so the strip fills in from there. Nothing is drawn when no day in view has activity.
+
 ## One reading for every window
 
 Every VS Code window runs its own copy of an extension. Without coordination, six open windows could make the same request six times and briefly show different readings.
@@ -87,6 +102,7 @@ Run **Agent Usage Bar: Open settings**, or click either status bar item and pick
 | `agentUsageBar.displayMode` | `compact` | `compact` shows the shortest active window; `full` shows both. |
 | `agentUsageBar.percentageMode` | `used` | Show the percentage `used` or the percentage `remaining`. |
 | `agentUsageBar.showPace` | `true` | Show where each window is heading. |
+| `agentUsageBar.showHistory` | `true` | Show the thirty-day activity strip in the tooltip. |
 | `agentUsageBar.warningThreshold` | `80` | Warning color threshold based on used percentage. |
 | `agentUsageBar.errorThreshold` | `95` | Error color threshold; never falls below warning. |
 | `agentUsageBar.warnWhen` | `threshold` | `overPace` warns only when usage reaches the threshold ahead of schedule. |
@@ -169,7 +185,18 @@ The extension distinguishes these outcomes through the exit code returned by `se
 
 ### Agent transcripts
 
-The extension watches `~/.codex/sessions` and `~/.claude/projects` only for the fact that a `.jsonl` file changed. After the writes settle, that change requests a usage refresh. Transcript contents are never opened.
+The extension watches `~/.codex/sessions` and `~/.claude/projects` for the fact that a `.jsonl` file changed. After the writes settle, that change requests a usage refresh.
+
+**Those files are also read, for the daily activity strip only.** They contain your prompts and your code, so what is taken out of them is worth stating exactly. Each line is parsed as JSON and one of two things is kept:
+
+| Provider | What is taken |
+| --- | --- |
+| Codex | The timestamp and `used_percent` of the weekly window that Codex records beside every token count. |
+| Claude Code | The timestamp, the message id, and the input, output, and cache-creation token counts of an assistant message. |
+
+Nothing else is read out of a parsed line, and no message, prompt, file path, or file content is kept, stored, logged, or shown. The daily totals that result are numbers per calendar day, and they are the only thing derived from a transcript that outlives the scan. Setting `agentUsageBar.showHistory` to `false` stops the extension from opening these files at all; the watching described above continues, because that is what keeps the live reading current.
+
+A first scan reads every transcript once. Later scans read only files modified since the last one, which is normally the session currently being written, and no scan runs within two minutes of another window's.
 
 Codex also sends an `account/rateLimits/updated` notification while its app server is running. The extension stops an idle app server after ten minutes instead of keeping a child process alive only for that notification. It also drops one whose read produced no reading, because such an app server tends to answer the same way until it is replaced. File watching covers later activity and triggers a fresh app server when another reading is needed.
 
@@ -183,12 +210,13 @@ The Anthropic usage endpoint is the extension's only direct network target. The 
 
 The shipped text leaves two things for code review to establish. The URL allowlist can inspect only addresses written out in full; a URL assembled from parts at runtime is outside its reach. Likewise, because the program passed to `spawn` is resolved at runtime, the audit constrains how a process is started but cannot prove which one. The audit catches accidental violations of these promises; code review remains responsible for runtime-computed behavior.
 
-It persists exactly two things, both through VS Code's own APIs:
+It persists exactly three things, all through VS Code's own APIs:
 
 - Your settings, when you toggle a provider from the menu.
 - The last usage reading, so the other windows can show it — percentages, reset times, window lengths, and the plan name.
+- One number per calendar day per provider, for the daily activity strip, kept for sixty days.
 
-Neither stored value contains a token, prompt, or file content. The extension has no telemetry, runtime dependency, custom credential path, or custom update mechanism. No prompt, source code, or file content is sent anywhere.
+No stored value contains a token, prompt, or file content. The extension has no telemetry, runtime dependency, custom credential path, or custom update mechanism. No prompt, source code, or file content is sent anywhere.
 
 ## Platform scope
 

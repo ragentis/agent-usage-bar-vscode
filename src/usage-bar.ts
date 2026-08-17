@@ -1,5 +1,6 @@
 import { configurationEffect, type ExtensionConfiguration } from "./configuration";
 import { formatMoment } from "./formatting";
+import type { DailyTotals } from "./history";
 import type { ReadCoordinator } from "./read-coordinator";
 import type { SharedEntry } from "./shared-state";
 import {
@@ -16,7 +17,11 @@ const IDLE_STOP_MS = 10 * 60_000;
 const HOLD_JITTER_MS = 2_000;
 
 export interface ProviderDisplay {
-  render(view: ProviderView, configuration: ExtensionConfiguration): void;
+  render(
+    view: ProviderView,
+    configuration: ExtensionConfiguration,
+    history: DailyTotals | null,
+  ): void;
   loading(configuration: ExtensionConfiguration): void;
   hide(): void;
   dispose(): void;
@@ -55,6 +60,8 @@ interface ProviderState {
   /** Last local read; used only for process idling, not refresh coordination. */
   usedAt: number | null;
   adoptedAt: number;
+  /** Derived from transcripts on its own schedule, so it is held beside the reading, not in it. */
+  history: DailyTotals | null;
 }
 
 interface Provider extends ProviderPort {
@@ -71,10 +78,18 @@ export class UsageBar {
     ports: readonly ProviderPort[],
     private readonly reads: ReadCoordinator,
     private readonly readConfiguration: () => ExtensionConfiguration,
+    private readonly onActivity: (provider: ProviderId) => void = () => {},
   ) {
     this.providers = ports.map((port) => ({
       ...port,
-      state: { view: null, hold: null, inFlight: null, usedAt: null, adoptedAt: 0 },
+      state: {
+        view: null,
+        hold: null,
+        inFlight: null,
+        usedAt: null,
+        adoptedAt: 0,
+        history: null,
+      },
     }));
     this.configuration = readConfiguration();
   }
@@ -123,6 +138,17 @@ export class UsageBar {
     await Promise.all(
       targets.map((provider) => this.refreshProvider(provider, options.force ?? false)),
     );
+  }
+
+  setHistory(provider: ProviderId, history: DailyTotals | null): void {
+    const target = this.providers.find((candidate) => candidate.id === provider);
+    if (!target || target.state.history === history) {
+      return;
+    }
+    target.state.history = history;
+    if (target.state.view && target.isEnabled(this.configuration)) {
+      this.paint(target);
+    }
   }
 
   handleConfigurationChange(): void {
@@ -296,6 +322,7 @@ export class UsageBar {
           }
         : view,
       this.configuration,
+      provider.state.history,
     );
   }
 
@@ -330,7 +357,11 @@ export class UsageBar {
     for (const provider of this.providers) {
       provider.watcher.stop();
       if (provider.isEnabled(this.configuration)) {
-        provider.watcher.start(() => void this.refresh({ only: provider.id }));
+        provider.watcher.start(() => {
+          void this.refresh({ only: provider.id });
+          // The same transcript write that proves the account was used moves that day's total.
+          this.onActivity(provider.id);
+        });
       } else {
         provider.stop?.();
       }

@@ -30,6 +30,8 @@ const SETTINGS: ExtensionConfiguration = {
   codexLabel: "",
   claudeLabel: "",
   refreshIntervalSeconds: 300,
+  showHistory: true,
+  theme: "dark",
 };
 
 const LOADING = "…loading";

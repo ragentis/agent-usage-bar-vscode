@@ -59,7 +59,12 @@ The layout follows one rule: **testable modules do not import anything that requ
 | `claude-credentials.ts` | node | Reading token sources: the credentials file and macOS keychain. |
 | `codex-appserver.ts` | node | Discovering the CLI, managing JSON-RPC, and parsing replies. |
 | `watcher.ts` | node | Watching files with debounce and retry backoff. |
+| `transcripts.ts` | node | Walking a transcript tree and handing out its lines. |
 | `claude.ts`, `codex.ts` | node | Resolving provider-specific paths. |
+| `claude-history.ts`, `codex-history.ts` | node | Taking one provider's daily totals out of its transcripts. |
+| `history-service.ts` | — | Deciding when a scan runs and how far back it reaches. |
+| `history-store.ts` | — | Serializing and validating stored daily totals. |
+| `history.ts` | — | Day arithmetic, daily aggregation, and the drawn strip. |
 | `usage-bar.ts` | — | Coordinating provider state and rendering updates. |
 | `read-coordinator.ts` | — | Deciding which window reads and when. |
 | `shared-state.ts` | — | Serializing and validating shared readings. |
@@ -72,7 +77,7 @@ Four small types preserve that boundary: `CodexProcess`, `LaunchCodex`, `SharedS
 
 ## Tests
 
-Tests cover both providers' response parsers, `watcher.ts`, `formatting.ts`, `shared-state.ts`, and `read-coordinator.ts`. The two heaviest are `tooltip.ts` and `usage-bar.ts` — the latter because a rate-limit wait, a lease, a provider toggle, and a window closing all reach for the same state.
+Tests cover both providers' response parsers, `watcher.ts`, `formatting.ts`, `shared-state.ts`, and `read-coordinator.ts`. The history parsers are pinned against the two shapes of Codex rate-limit payload on disk and against Claude Code replaying earlier messages into a resumed session, because either one silently changes the numbers rather than failing. The two heaviest are `tooltip.ts` and `usage-bar.ts` — the latter because a rate-limit wait, a lease, a provider toggle, and a window closing all reach for the same state.
 
 `codex-appserver.ts` starts Codex through `LaunchCodex` for the same reason. Tests can then simulate partial frames, a silent server, or a stop that arrives during startup. A real Codex installation cannot reproduce those cases on demand.
 
@@ -83,6 +88,7 @@ All source and test files are also checked by `tsc --strict`. One `tsconfig.json
 | Script | Purpose |
 | --- | --- |
 | `clean` | Removes `dist/` and any built `.vsix`. |
+| `font` | Regenerates the day glyphs, their manifest entries, and the icon font, through the Fontello API. On demand only; see **Day bars**. |
 | `bundle` | Production esbuild build into `dist/extension.js`, plus `dist/meta.json`. |
 | `bundle:dev` | One development build with source maps. |
 | `bundle:watch` | Development build that watches for edits. This is the `F5` pre-launch task; reload the Extension Development Host with `Ctrl+R`. |
@@ -146,12 +152,40 @@ The tooltip variants move every SVG y-coordinate upward by 39 font units and lea
 
 Keep the pinned code points on re-import, because `contributes.icons` addresses the glyphs by exactly those characters:
 
-| Code point | Glyph          | Drawn in         |
-| ---------- | -------------- | ---------------- |
-| `U+E800`   | Codex          | status bar, menu |
-| `U+E801`   | Claude         | status bar, menu |
-| `U+E802`   | Claude, lifted | tooltips         |
-| `U+E803`   | Codex, lifted  | tooltips         |
+| Code point        | Glyph                 | Drawn in         |
+| ----------------- | --------------------- | ---------------- |
+| `U+E800`          | Codex                 | status bar, menu |
+| `U+E801`          | Claude                | status bar, menu |
+| `U+E802`          | Claude, lifted        | tooltips         |
+| `U+E803`          | Codex, lifted         | tooltips         |
+| `U+E810`          | Idle day              | tooltips         |
+| `U+E811`–`U+E815` | Day, steps one – five | tooltips         |
+
+**An icon id may contain only lowercase letters and hyphens.** That is not the rule the `icons` contribution point enforces: it accepts `[A-Za-z0-9]` segments, so an id carrying a digit registers cleanly and gets its CSS rule like any other. The Markdown renderer is stricter, and keeps a codicon class only when the whole attribute matches
+
+```
+/^codicon codicon-[a-z\-]+( codicon-modifier-[a-z\-]+)?$/
+```
+
+A digit makes the sanitizer strip the class, and the icon draws as an empty element. Nothing reports it anywhere, and every other check still passes: the font loads, the glyph is present and measurable through `measureText`, the rule exists, the registration succeeds. The day steps are named `one` through `five` rather than numbered for exactly this reason, and a test asserts every contributed id against that expression.
+
+## Day bars
+
+The daily activity strip is drawn from `U+E810`–`U+E815`, one glyph per step. They exist because a tooltip cannot size a mark: trusted Markdown keeps no declaration that sets height, and the only lever left, type size, moves width and height together, so a taller day would only ever be a wider one. A glyph settles it — its outline states the height, its advance width states the width and the gap to the next day, and the shade is the text color the surrounding span sets.
+
+Unlike the provider marks these are generated, because their point is a set of exact heights:
+
+```
+npm run font
+```
+
+That regenerates the bars in `assets/fontello-config.json`, posts the whole configuration to the Fontello API, writes the returned font to `assets/agent-usage-bar.woff`, and rewrites the day icons in `package.json`. The provider marks pass through untouched, in the configuration and in the manifest; the script replaces only glyphs named `day-*`. It runs on demand, never as part of a build, and everything it writes is committed.
+
+Two tests keep the manifest and the asset together: one pins every `fontPath` to a file that exists, the other to a file [.vscodeignore](.vscodeignore) actually lets through. The second matters because that file denies everything and then allows what ships, by name: a font no allow line matches is dropped from the package silently, and the extension then installs with no glyphs at all rather than with one missing.
+
+The configuration is reproduced exactly on a re-run, glyph ids included, but the font is not: Fontello stamps each build, so the `.woff` differs by a few bytes even when nothing about the glyphs changed. A diff on that file with no configuration change beside it means nothing was edited.
+
+The numbers live at the top of [build-font.mjs](scripts/build-font.mjs). `ADVANCE` is the one to reach for first: thirty of it should come to the width the usage bars occupy, and that width is measured, not derived — the bars are 314 space cells shrunk by six `<small>` elements, the space ratio belongs to the theme's font, and `<small>` does not scale by an exact factor in this renderer, so the arithmetic drifts a few pixels over the row. Compare against a rendered tooltip. `HEIGHTS` must keep one entry per step plus the idle mark, and `HISTORY_LEVELS` in [history.ts](src/history.ts) must agree with it; a test pins the manifest against that count so a missing glyph fails the build rather than drawing a placeholder box.
 
 ## Releasing
 

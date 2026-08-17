@@ -3,6 +3,8 @@ import { claudeSessionsPath } from "./claude";
 import { fetchClaudeUsage } from "./claude-api";
 import { codexSessionsPath } from "./codex";
 import { CodexAppServer } from "./codex-appserver";
+import { HistoryService } from "./history-service";
+import { UsageHistoryState } from "./history-store";
 import { openSettings, showMenu } from "./menu";
 import { ReadCoordinator } from "./read-coordinator";
 import { affectsSettings, readConfiguration } from "./settings";
@@ -20,7 +22,8 @@ import { FileWatcher } from "./watcher";
 function display(provider: ProviderId): ProviderDisplay {
   const item = createStatusBarItem(provider);
   return {
-    render: (view, configuration) => renderStatusBarItem(item, provider, view, configuration),
+    render: (view, configuration, history) =>
+      renderStatusBarItem(item, provider, view, configuration, history),
     loading: (configuration) => showLoading(item, provider, configuration),
     hide: () => hideStatusBarItem(item),
     dispose: () => item.dispose(),
@@ -66,10 +69,19 @@ export function activate(context: vscode.ExtensionContext): void {
   // oxlint-disable-next-line prefer-const -- assigned on the next line, read only from the closure
   let usageBar: UsageBar;
   const ports = providers(() => void usageBar.refresh({ only: "codex" }));
-  usageBar = new UsageBar(ports, reads, readConfiguration);
+  const history = new HistoryService(
+    new UsageHistoryState(context.globalState),
+    (provider, totals) => usageBar.setHistory(provider, totals),
+    readConfiguration,
+  );
+  usageBar = new UsageBar(ports, reads, readConfiguration, (provider) =>
+    history.handleActivity(provider),
+  );
 
   context.subscriptions.push(
     usageBar,
+    history,
+    vscode.window.onDidChangeActiveColorTheme(() => usageBar.handleConfigurationChange()),
     vscode.commands.registerCommand("agentUsageBar.refresh", () =>
       usageBar.refresh({ showLoading: true, force: true }),
     ),
@@ -84,10 +96,12 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidChangeConfiguration((event) => {
       if (affectsSettings(event)) {
         usageBar.handleConfigurationChange();
+        history.handleConfigurationChange();
       }
     }),
   );
   usageBar.start();
+  history.start();
 }
 
 export function deactivate(): void {

@@ -30,6 +30,8 @@ function configure(overrides: Partial<ExtensionConfiguration> = {}): ExtensionCo
     claudeLabel: "",
     codexLabel: "",
     refreshIntervalSeconds: 300,
+    showHistory: true,
+    theme: "dark",
     ...overrides,
   };
 }

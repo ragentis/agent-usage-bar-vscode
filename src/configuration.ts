@@ -5,6 +5,8 @@
 export type DisplayMode = "compact" | "full";
 export type PercentageMode = "used" | "remaining";
 export type WarnWhen = "threshold" | "overPace";
+/** Not a setting: the strip's hue is written out per theme; theme colors carry no opacity. */
+export type ThemeKind = "light" | "dark";
 
 export interface ExtensionConfiguration {
   displayMode: DisplayMode;
@@ -19,6 +21,8 @@ export interface ExtensionConfiguration {
   codexLabel: string;
   claudeLabel: string;
   refreshIntervalSeconds: number;
+  showHistory: boolean;
+  theme: ThemeKind;
 }
 
 /**
@@ -62,7 +66,10 @@ function bounded(value: number, fallback: number, minimum: number, maximum: numb
 
 export type SettingReader = <T>(key: string, fallback: T) => T;
 
-export function resolveConfiguration(read: SettingReader): ExtensionConfiguration {
+export function resolveConfiguration(
+  read: SettingReader,
+  theme: ThemeKind = "dark",
+): ExtensionConfiguration {
   const warningThreshold = bounded(
     read("warningThreshold", DEFAULT_WARNING_THRESHOLD),
     DEFAULT_WARNING_THRESHOLD,
@@ -91,6 +98,8 @@ export function resolveConfiguration(read: SettingReader): ExtensionConfiguratio
       MIN_REFRESH_INTERVAL_SECONDS,
       MAX_REFRESH_INTERVAL_SECONDS,
     ),
+    showHistory: read("showHistory", true),
+    theme,
   };
 }
 
@@ -104,6 +113,8 @@ const PRESENTATION_KEYS = [
   "warnWhen",
   "claudeLabel",
   "codexLabel",
+  "showHistory",
+  "theme",
 ] as const satisfies readonly (keyof ExtensionConfiguration)[];
 
 /**

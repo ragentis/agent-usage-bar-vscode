@@ -1,7 +1,9 @@
+import { existsSync, readFileSync } from "node:fs";
 import { expect, test } from "vitest";
 import type { ExtensionConfiguration } from "../src/configuration";
+import { HISTORY_LEVELS, localDay, shiftDay, type DailyTotals } from "../src/history";
 import { buildMessageTooltip, buildTooltip, escapeHtml, TOOLTIP_COMMANDS } from "../src/tooltip";
-import type { UsageSnapshot } from "../src/usage";
+import { isRecord, type UsageSnapshot } from "../src/usage";
 
 /**
  * Provider text crosses a trusted-Markdown boundary here. Tests pin escaping and the renderer's
@@ -34,6 +36,9 @@ const STEP = "<table><tr><td></td></tr></table>";
 
 const COLUMNS = 52;
 
+/** The bar is drawn in this many cells; `tooltip.ts` measures the same number against the text. */
+const BAR_CELLS = 314;
+
 const ROW_COLUMNS = 60;
 
 const INDENT = "&nbsp;&nbsp;";
@@ -64,6 +69,8 @@ function configure(overrides: Partial<ExtensionConfiguration> = {}): ExtensionCo
     claudeLabel: "",
     codexLabel: "",
     refreshIntervalSeconds: 300,
+    showHistory: true,
+    theme: "dark",
     ...overrides,
   };
 }
@@ -73,6 +80,7 @@ function tooltip(
   failure: string | null = null,
   overrides: Partial<ExtensionConfiguration> = {},
   age: string | null = null,
+  history: DailyTotals | null = null,
 ): string {
   return buildTooltip(
     "Claude Code usage",
@@ -82,8 +90,17 @@ function tooltip(
     failure === null ? null : { message: failure },
     age,
     now,
+    history,
   );
 }
+
+/** Days are local, so the fixture is built from the clock the tooltip will read rather than pinned. */
+const today = localDay(now);
+
+const history: DailyTotals = {
+  unit: "percent",
+  days: { [shiftDay(today, -2)]: 20, [today]: 5 },
+};
 
 function verbatimTooltip(failure: string): string {
   return buildTooltip(
@@ -136,16 +153,40 @@ const CHARACTERS: Record<string, string> = {
  * Extracts visible text lines while treating table cells as separate aligned runs.
  */
 function drawnLines(text: string): string[] {
-  return text
-    .split(/<br>|<\/?h[1-6]>|<\/?p>|<hr>|<\/div>|<\/td>/)
-    .map((part) =>
-      part
-        .replace(/<[^>]+>/g, "")
-        // A codicon is written as its name and drawn as one glyph, so it is counted as one.
-        .replace(/\$\([a-z0-9-]+\)/g, "@")
-        .replace(/&[a-z]+;|&#\d+;/g, (entity) => CHARACTERS[entity] ?? entity),
-    )
-    .filter((part) => part.trim());
+  return (
+    text
+      // A table opens its own block, so it begins a line as surely as a break does.
+      .split(/<br>|<\/?h[1-6]>|<\/?p>|<hr>|<\/?div>|<table[^>]*>|<\/td>/)
+      .map((part) =>
+        part
+          .replace(/<[^>]+>/g, "")
+          // A codicon is written as its name and drawn as one glyph, so it is counted as one.
+          .replace(/\$\([a-z0-9-]+\)/g, "@")
+          .replace(/&[a-z]+;|&#\d+;/g, (entity) => CHARACTERS[entity] ?? entity),
+      )
+      .filter((part) => part.trim())
+  );
+}
+
+/** The drawn row of days: what stands between the step under the title and the legend under it. */
+function stripBlock(text: string): string {
+  const block = text.slice(text.indexOf("Daily activity"));
+  const start = block.indexOf(`<div>${STEP}`);
+  const end = block.indexOf('<table width="100%">');
+  return start === -1 || end === -1 ? "" : block.slice(start + `<div>${STEP}`.length, end);
+}
+
+/** Named rather than numbered; the reason is pinned by its own test below. */
+const STEP_NAMES = ["none", "one", "two", "three", "four", "five"];
+
+const STRIP_DAY = /<span style="color:([^"]+);">\$\(agent-usage-bar-day-([a-z]+)\)<\/span>/g;
+
+/** The drawn strip, one entry per day and oldest first. */
+function stripDays(text: string): { step: number; color: string }[] {
+  return [...stripBlock(text).matchAll(STRIP_DAY)].map(([, color, name]) => ({
+    step: STEP_NAMES.indexOf(name ?? ""),
+    color: color ?? "",
+  }));
 }
 
 /** A mark is the only span carrying a background color and no radius, so none appears here. */
@@ -218,10 +259,12 @@ test("a reading is drawn as a header, a block per window, and where it came from
   const session = windowBlock(text, "5-hour");
   expect(session).toMatch(heading("5-hour", "12%"));
   expect(session).toContain(">used<");
-  expect(session.split("<br>")).toHaveLength(2);
+  // The title closes its heading, and the bar and its legend share the block that follows.
+  expect(session).not.toContain("<br>");
   expect(session).toMatch(
-    new RegExp(`</h3><table width="100%"><tr><td>${INDENT}<span style="color:[^"]+">Resets .+`),
+    new RegExp(`</h3><div><small>.+<table width="100%"><tr><td>${INDENT}<span [^>]*>Resets .+`),
   );
+  expect(session.endsWith("</table></div>")).toBe(true);
   expect(text).toContain("From Claude account · as of ");
   expect(text.indexOf("Refresh")).toBeGreaterThan(text.indexOf("From Claude account"));
 });
@@ -230,7 +273,9 @@ test("the whole tooltip is one html block with no blank line in it", () => {
   const text = tooltip({ plan: "a\n\nb", credits: "c\n\nd" }, "e\n\nf");
 
   expect(text).not.toContain("\n");
-  expect(text.match(/<div>/g)).toHaveLength(1);
+  // One wrapper plus one per window, since a bar and its legend share a block of their own.
+  expect(text.match(/<div>/g)).toHaveLength(1 + snapshot.windows.length);
+  expect(text.match(/<\/div>/g)).toHaveLength(1 + snapshot.windows.length);
   expect(text).toContain("a b");
   expect(text).toContain("e f");
 });
@@ -264,10 +309,166 @@ test("no line of text is wider than the bar, however much a provider says", () =
   }
 });
 
+test("the daily strip draws one day per glyph and names the busiest of them", () => {
+  const text = tooltip({}, null, {}, null, history);
+  const days = stripDays(text);
+
+  expect(text).toContain("Daily activity");
+  expect(text).toContain("busiest day");
+  // The busiest day sets the scale, so it is the one named beside the strip.
+  expect(text).toContain("20%");
+  // Thirty days whatever is recorded: two stand at a step of the ramp, twenty-eight on the floor.
+  expect(days).toHaveLength(30);
+  expect(days.filter((day) => day.step === 0)).toHaveLength(28);
+  expect(days.filter((day) => day.step > 0)).toHaveLength(2);
+});
+
+/**
+ * Height and shade are one step, and the step is the glyph. Drawing height any other way would widen
+ * the day with it: a cell's width and its height both follow the one font size.
+ */
+test("a day's height and its shade are the same step", () => {
+  const days = stripDays(tooltip({}, null, {}, null, history));
+
+  // Twenty percent is the busiest day, so it takes the top step; five of it lands two steps down.
+  expect(days.at(-3)).toEqual({ step: HISTORY_LEVELS, color: "#3794ffff" });
+  expect(days.at(-1)).toEqual({ step: 2, color: "#3794ff80" });
+  expect(days[0]).toEqual({ step: 0, color: "var(--vscode-editorWidget-border)" });
+});
+
+test("the light theme takes the same ramp on its own hue", () => {
+  const days = stripDays(tooltip({}, null, { theme: "light" }, null, history));
+
+  expect(days.at(-3)?.color).toBe("#1a85ffff");
+  expect(days.at(-1)?.color).toBe("#1a85ff80");
+});
+
+/** The glyph carries its own width, height, gap and rounding, so the strip lays out nothing itself. */
+test("the strip is glyphs between two indents, and nothing else", () => {
+  const row = stripBlock(tooltip({}, null, {}, null, history));
+
+  expect(row).not.toContain("background-color");
+  expect(row).not.toContain("</span></span>");
+  // Every day is a glyph, so the only cells on the row are the indent at either end.
+  expect((row.match(/&nbsp;/g) ?? []).length).toBe(2 * 7);
+});
+
+function at(value: unknown, key: string): unknown {
+  return isRecord(value) ? value[key] : null;
+}
+
+function manifestIcons(): unknown {
+  const manifest = JSON.parse(readFileSync("package.json", "utf8")) as unknown;
+  return at(at(manifest, "contributes"), "icons");
+}
+
+/** Every step the renderer can produce needs a glyph, or that day would draw as a missing icon. */
+test("the manifest registers a glyph for every step, including the empty one", () => {
+  const icons = manifestIcons();
+
+  expect(STEP_NAMES).toHaveLength(HISTORY_LEVELS + 1);
+  for (const [step, name] of STEP_NAMES.entries()) {
+    expect(at(icons, `agent-usage-bar-day-${name}`)).toMatchObject({
+      default: { fontCharacter: `\\E81${step}` },
+    });
+  }
+});
+
+/**
+ * The renderer keeps a codicon class only when it matches this, so an id carrying a digit or a
+ * capital has its class stripped and draws an empty element. Nothing reports it: the icons
+ * contribution point accepts `[A-Za-z0-9]` segments, the icon registers, and its CSS rule is
+ * written, so every other check passes while the glyph never appears.
+ */
+const SANITIZED_CLASS = /^codicon codicon-[a-z-]+( codicon-modifier-[a-z-]+)?$/;
+
+test("every icon id survives the sanitizer that has to render it", () => {
+  const icons = manifestIcons();
+  const ids = Object.keys(isRecord(icons) ? icons : {});
+
+  expect(ids.length).toBeGreaterThan(0);
+  for (const id of ids) {
+    expect(`codicon codicon-${id}`).toMatch(SANITIZED_CLASS);
+  }
+});
+
+test("every glyph the strip asks for is an id the sanitizer keeps", () => {
+  const drawn = [...stripBlock(tooltip({}, null, {}, null, history)).matchAll(/\$\(([^)]+)\)/g)];
+
+  expect(drawn.length).toBe(30);
+  for (const [, id] of drawn) {
+    expect(`codicon codicon-${id}`).toMatch(SANITIZED_CLASS);
+  }
+});
+
+function manifestFontPaths(): string[] {
+  const icons = manifestIcons();
+  return Object.values(isRecord(icons) ? icons : {}).map((icon) =>
+    String(at(at(icon, "default"), "fontPath")),
+  );
+}
+
+test("every icon points at the one font file, and it is there", () => {
+  const paths = manifestFontPaths();
+
+  expect(paths.length).toBeGreaterThan(0);
+  expect(new Set(paths)).toEqual(new Set(["./assets/agent-usage-bar.woff"]));
+  expect(existsSync("assets/agent-usage-bar.woff")).toBe(true);
+});
+
+/**
+ * `.vscodeignore` denies everything and then allows what ships, by name. A font no allow line
+ * matches is left out of the package entirely, and the extension then installs with no glyphs at
+ * all rather than with one missing.
+ */
+test("the packaged extension carries the font the manifest names", () => {
+  const allowed = readFileSync(".vscodeignore", "utf8")
+    .split("\n")
+    .flatMap((line) => (line.startsWith("!") ? [line.slice(1).trim()] : []));
+  const shipped = (path: string): boolean =>
+    allowed.some((pattern) =>
+      new RegExp(
+        `^${pattern.replace(/[.+^${}()|[\]\\]/g, String.raw`\$&`).replaceAll("*", "[^/]*")}$`,
+      ).test(path),
+    );
+
+  expect(allowed.length).toBeGreaterThan(0);
+  for (const path of manifestFontPaths()) {
+    expect(shipped(path.replace(/^\.\//, ""))).toBe(true);
+  }
+});
+
+test("the strip is left out when there is nothing to draw or the setting is off", () => {
+  expect(tooltip()).not.toContain("Daily activity");
+  expect(tooltip({}, null, { showHistory: false }, null, history)).not.toContain("Daily activity");
+  expect(tooltip({}, null, {}, null, { unit: "percent", days: {} })).not.toContain(
+    "Daily activity",
+  );
+});
+
+/** Codex counts a share of its own limit; Claude counts tokens and must never claim otherwise. */
+test("each provider's strip is labelled in the unit it was measured in", () => {
+  const tokens: DailyTotals = { unit: "tokens", days: { [today]: 8_400_000 } };
+  expect(tooltip({}, null, {}, null, tokens)).toContain("8.4M tokens");
+  expect(tooltip({}, null, {}, null, history)).not.toContain("tokens");
+});
+
+/** Width is the glyph's advance, so the count is what holds the strip to the width of the bars. */
+test("the strip is thirty glyphs however many days are recorded", () => {
+  const days: Record<string, number> = {};
+  for (let index = 0; index < 30; index++) {
+    days[shiftDay(today, -index)] = index + 1;
+  }
+
+  expect(stripDays(tooltip({}, null, {}, null, { unit: "percent", days }))).toHaveLength(30);
+});
+
 test("every element and every attribute the tooltip writes survives the renderer's allowlist", () => {
   const text = [
     tooltip({ blocked: "Spend limit reached", credits: "3 reset credits" }, "connection refused"),
     tooltip({}, null, {}, "2h ago"),
+    tooltip({}, null, {}, null, history),
+    tooltip({}, null, { theme: "light" }, null, history),
     buildMessageTooltip("Codex usage", "agent-usage-bar-codex", "no reading yet"),
   ].join("");
 
@@ -324,11 +525,11 @@ test("the bar fills to the percent and its two segments always total a full bar"
     return { filled, track };
   };
 
-  expect(bar(0)).toEqual({ filled: 0, track: 320 });
-  expect(bar(100)).toEqual({ filled: 320, track: 0 });
-  expect(bar(50)).toEqual({ filled: 160, track: 160 });
-  expect(bar(12.4)).toEqual({ filled: 40, track: 280 });
-  expect(bar(99.9)).toEqual({ filled: 320, track: 0 });
+  expect(bar(0)).toEqual({ filled: 0, track: BAR_CELLS });
+  expect(bar(100)).toEqual({ filled: BAR_CELLS, track: 0 });
+  expect(bar(50)).toEqual({ filled: 157, track: 157 });
+  expect(bar(12.4)).toEqual({ filled: 39, track: 275 });
+  expect(bar(99.9)).toEqual({ filled: BAR_CELLS, track: 0 });
 });
 
 const WEEK_RESET = new Date("2026-08-03T15:00:00Z");
@@ -346,7 +547,7 @@ function weekly(usedPercent: number, overrides: Partial<ExtensionConfiguration> 
   return cells(windowBlock(text, "Weekly"));
 }
 
-const ELAPSED_CELLS = Math.round(0.68 * 320) - 1;
+const ELAPSED_CELLS = Math.round(0.68 * BAR_CELLS) - 1;
 
 /** Theme colors carry alpha of their own, so the mark states its opacity; these pin what it states. */
 const MARK_ON_FILL = "#00000066";
@@ -357,20 +558,20 @@ test("the weekly bar marks how far the week itself has gone", () => {
   const bar = weekly(41);
 
   expect(bar).toMatchObject({
-    filled: 131,
+    filled: 129,
     mark: ELAPSED_CELLS,
     markWidth: 2,
     markColor: MARK_ON_TRACK,
   });
-  expect(bar.filled + bar.track).toBe(320);
+  expect(bar.filled + bar.track).toBe(BAR_CELLS);
 });
 
 test("a mark inside the fill is cut out of it rather than added to the bar", () => {
   const bar = weekly(90);
 
   expect(bar).toMatchObject({
-    filled: 288,
-    track: 32,
+    filled: 283,
+    track: 31,
     mark: ELAPSED_CELLS,
     markWidth: 2,
     markColor: MARK_ON_FILL,
@@ -403,7 +604,7 @@ test("a mark that would fall under a rounded end is left off too", () => {
   expect(atElapsed(101)).toBeNull();
   expect(atElapsed(9_980)).toBeNull();
   // The mark follows the whole percentage the pace line states, not the unrounded fraction.
-  expect(atElapsed(2_000)).toBe(Math.round(0.2 * 320) - 1);
+  expect(atElapsed(2_000)).toBe(Math.round(0.2 * BAR_CELLS) - 1);
 });
 
 test("only a clocked weekly window is marked, and only while pace is shown", () => {
@@ -420,8 +621,10 @@ test("a bar is one rounded track with a rounded fill nested in it", () => {
   expect(session).toContain(
     '<span style="background-color:var(--vscode-editorWidget-border);border-radius:4px;"><span style="background-color:var(--vscode-charts-blue);border-radius:4px;">',
   );
-  expect(session.match(/<small>/g)).toHaveLength(8);
-  expect(session).toContain("<small><small><small><small><small><small><small><span");
+  // Six for the bar and the indent scaled with it, and one around the label.
+  expect(session.match(/<small>/g)).toHaveLength(7);
+  // The indent beside the bar is inside the scaling, so nothing on that line is taller than the bar.
+  expect(session).toContain("<small><small><small><small><small><small>&nbsp;");
 });
 
 test("a bar is colored by its own window, not by the worst one on the tooltip", () => {
@@ -549,7 +752,7 @@ test("a window past its reset says so instead of showing a stale number", () => 
 
   expect(windowBlock(text, "5-hour")).toContain(">~ Reset since this reading<");
   expect(windowBlock(text, "5-hour")).toMatch(heading("5-hour", "0%"));
-  expect(cells(windowBlock(text, "5-hour"))).toMatchObject({ filled: 0, track: 320 });
+  expect(cells(windowBlock(text, "5-hour"))).toMatchObject({ filled: 0, track: BAR_CELLS });
   expect(windowBlock(text, "Weekly")).toContain(">Resets ");
   expect(windowBlock(text, "Weekly")).toMatch(heading("Weekly", "41%"));
 });
@@ -595,7 +798,7 @@ test("the pace holds still while the reading does, and goes away with its settin
   expect(off).not.toContain("At this pace");
   expect(off).not.toContain("of the week gone");
   expect(off).toMatch(
-    new RegExp(`</h3><table width="100%"><tr><td>${INDENT}<span style="color:[^"]+">Resets .+`),
+    new RegExp(`</h3><div><small>.+<table width="100%"><tr><td>${INDENT}<span [^>]*>Resets .+`),
   );
   expect(off).toContain(`<td align="right">${INDENT}</td>`);
 });
@@ -607,7 +810,7 @@ test("the percentage mode the item uses is the one the tooltip explains", () => 
   expect(text).toMatch(heading("Weekly", "59%"));
   expect(text).toContain(">remaining<");
   expect(text).not.toContain(">used<");
-  expect(cells(windowBlock(text, "Weekly"))).toMatchObject({ filled: 131, track: 189 });
+  expect(cells(windowBlock(text, "Weekly"))).toMatchObject({ filled: 129, track: 185 });
 });
 
 test("an age is stated beside the reading it belongs to, not on its own", () => {
