@@ -40,6 +40,8 @@ Beside each window's reset time, the tooltip says where that window is heading:
 
 Only the 5-hour window is forecast. It opens on your first message, so its elapsed time roughly follows working time. The weekly window starts from a calendar anchor and continues through nights and days off. Forecasting from a busy Monday could therefore predict a limit by Thursday even when the rest of the week is quiet. For that window, the tooltip shows elapsed time instead of a forecast.
 
+The weekly bar also carries a thin mark standing where that elapsed percentage falls, so a glance says whether spending is ahead of the week or behind it. The mark is left off where it would say nothing: under the bar's rounded ends, or right beside the edge of the fill, which is the same comparison.
+
 Pace remains hidden until the window has been open for fifteen minutes, and the 5-hour forecast also requires at least three percent usage. These minimums prevent rounded early values from being presented as a meaningful rate. Set `agentUsageBar.showPace` to `false` to hide pace information.
 
 `warnWhen` works even when `showPace` is off. If a window is too new to compare, the warning threshold applies normally.

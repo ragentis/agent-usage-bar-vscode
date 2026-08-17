@@ -33,6 +33,11 @@ const COLOR = {
   normal: "var(--vscode-charts-blue)",
   warning: "var(--vscode-charts-yellow)",
   error: "var(--vscode-charts-red)",
+  // The mark states its own opacity instead of taking a theme color, because several theme colors
+  // carry an alpha channel themselves. Darkening the fill and lightening the track holds in any
+  // theme, whatever the fill's severity color is.
+  markOnFill: "#00000066",
+  markOnTrack: "#ffffff40",
 } as const;
 
 /** Nested `<small>` elements reduce the bar to roughly four pixels inside an `h3`. */
@@ -134,20 +139,67 @@ function scaled(markup: string): string {
   return `${"<small>".repeat(BAR_SCALE)}${markup}${"</small>".repeat(BAR_SCALE)}`;
 }
 
+const CELL = "&nbsp;";
+
+/** Two cells are roughly two pixels at this scale, which is the thinnest mark a theme still shows. */
+const MARK_CELLS = 2;
+
+/** The rounded ends taper the bar, so a mark under one of them would be clipped. */
+const MARK_MARGIN = 4;
+
+/** Cells kept clear of the fill edge, whose own position already says the same thing. */
+const MARK_CLEARANCE = 3;
+
+interface Mark {
+  at: number;
+  color: string;
+}
+
+/** The mark centred on the elapsed position, or nothing when the bar cannot show it there. */
+function markFor(elapsedPercent: number | null, filled: number): Mark | null {
+  if (elapsedPercent === null) {
+    return null;
+  }
+  const at = Math.round((elapsedPercent / 100) * BAR_CELLS) - Math.floor(MARK_CELLS / 2);
+  if (at < MARK_MARGIN || at + MARK_CELLS > BAR_CELLS - MARK_MARGIN) {
+    return null;
+  }
+  const clear = at >= filled + MARK_CLEARANCE || at + MARK_CELLS + MARK_CLEARANCE <= filled;
+  return clear ? { at, color: at < filled ? COLOR.markOnFill : COLOR.markOnTrack } : null;
+}
+
+/**
+ * Recolors cells in place rather than dividing the run, so a marked segment keeps its rounded ends
+ * and the bar keeps its exact cell count.
+ */
+function marked(count: number, mark: Mark | null): string {
+  if (!mark) {
+    return CELL.repeat(count);
+  }
+  return [
+    CELL.repeat(mark.at),
+    span(CELL.repeat(MARK_CELLS), `background-color:${mark.color};`),
+    CELL.repeat(count - mark.at - MARK_CELLS),
+  ].join("");
+}
+
 /** Nests the fill inside the track so both retain rounded ends without a seam between segments. */
-function bar(usedPercent: number, severity: Severity): string {
+function bar(usedPercent: number, severity: Severity, elapsedPercent: number | null): string {
   const filled = Math.min(BAR_CELLS, Math.max(0, Math.round((usedPercent / 100) * BAR_CELLS)));
-  const cell = "&nbsp;";
+  const mark = markFor(elapsedPercent, filled);
+  const onFill = mark !== null && mark.at < filled;
   const fill =
     filled > 0
-      ? span(cell.repeat(filled), `background-color:${COLOR[severity]};border-radius:4px;`)
+      ? span(
+          marked(filled, onFill ? mark : null),
+          `background-color:${COLOR[severity]};border-radius:4px;`,
+        )
       : "";
-  return scaled(
-    span(
-      `${fill}${cell.repeat(BAR_CELLS - filled)}`,
-      `background-color:${COLOR.track};border-radius:4px;`,
-    ),
+  const rest = marked(
+    BAR_CELLS - filled,
+    mark && !onFill ? { ...mark, at: mark.at - filled } : null,
   );
+  return scaled(span(`${fill}${rest}`, `background-color:${COLOR.track};border-radius:4px;`));
 }
 
 function formatDate(date: Date, locale?: string): string {
@@ -200,7 +252,10 @@ function windowBlock(
   const pace = configuration.showPace ? paceFor(window, asOf) : null;
   const percent = formatPercent(window.usedPercent, configuration.percentageMode);
   const label = configuration.percentageMode === "remaining" ? "remaining" : "used";
-  const meter = `${bar(window.usedPercent, severityFor(window, configuration, asOf))}${INDENT}`;
+  // Only a weekly window is clocked rather than forecast, so only that bar carries the mark, and it
+  // stands exactly where the elapsed percentage beside it says.
+  const elapsed = pace?.kind === "elapsed" ? pace.percent : null;
+  const meter = `${bar(window.usedPercent, severityFor(window, configuration, asOf), elapsed)}${INDENT}`;
   return [
     `<h3>${INDENT}${dim(windowTitle(window))}${INDENT}${percent} <small>${dim(label)}</small>`,
     `<br>${INDENT}${meter}</h3>`,

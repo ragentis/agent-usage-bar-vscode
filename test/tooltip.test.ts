@@ -148,16 +148,59 @@ function drawnLines(text: string): string[] {
     .filter((part) => part.trim());
 }
 
-function cells(text: string): { filled: number; track: number; fillColor: string } {
-  const bar =
-    /<span style="background-color:([^;]+);border-radius:4px;">(?:<span style="background-color:([^;]+);border-radius:4px;">((?:&nbsp;)*)<\/span>)?((?:&nbsp;)*)<\/span>/.exec(
-      text,
-    );
-  const count = (part: string | undefined): number => (part?.match(/&nbsp;/g) ?? []).length;
+/** A mark is the only span carrying a background color and no radius, so none appears here. */
+const MARK = '<span style="background-color:([^;"]+);">((?:&nbsp;)*)</span>';
+
+const RUN = '(?:&nbsp;|<span style="background-color:[^;"]+;">(?:&nbsp;)*</span>)*';
+
+const BAR = new RegExp(
+  `<span style="background-color:([^;]+);border-radius:4px;">` +
+    `(?:<span style="background-color:([^;]+);border-radius:4px;">(${RUN})</span>)?(${RUN})</span>`,
+);
+
+function count(part: string | undefined): number {
+  return (part?.match(/&nbsp;/g) ?? []).length;
+}
+
+/** Locates the mark by the cells drawn before it, so its position is read as one bar-wide index. */
+function mark(fill: string, rest: string): { at: number | null; color: string; width: number } {
+  for (const [part, offset] of [
+    [fill, 0],
+    [rest, count(fill)],
+  ] as const) {
+    const found = new RegExp(MARK).exec(part);
+    if (found) {
+      return {
+        at: count(part.slice(0, found.index)) + offset,
+        color: found[1] ?? "",
+        width: count(found[2]),
+      };
+    }
+  }
+  return { at: null, color: "", width: 0 };
+}
+
+interface Bar {
+  filled: number;
+  track: number;
+  fillColor: string;
+  mark: number | null;
+  markColor: string;
+  markWidth: number;
+}
+
+function cells(text: string): Bar {
+  const bar = BAR.exec(text);
+  const fill = bar?.[3] ?? "";
+  const rest = bar?.[4] ?? "";
+  const found = mark(fill, rest);
   return {
-    filled: count(bar?.[3]),
-    track: count(bar?.[4]),
+    filled: count(fill),
+    track: count(rest),
     fillColor: bar?.[2] ?? "",
+    mark: found.at,
+    markColor: found.color,
+    markWidth: found.width,
   };
 }
 
@@ -286,6 +329,89 @@ test("the bar fills to the percent and its two segments always total a full bar"
   expect(bar(50)).toEqual({ filled: 160, track: 160 });
   expect(bar(12.4)).toEqual({ filled: 40, track: 280 });
   expect(bar(99.9)).toEqual({ filled: 320, track: 0 });
+});
+
+const WEEK_RESET = new Date("2026-08-03T15:00:00Z");
+
+/** The reading is 68% of the way through this week, which is what the pace line says. */
+function weekly(usedPercent: number, overrides: Partial<ExtensionConfiguration> = {}): Bar {
+  const text = tooltip(
+    { windows: [{ kind: "weekly", usedPercent, resetsAt: WEEK_RESET }] },
+    null,
+    overrides,
+  );
+  expect(text).toContain(
+    overrides.showPace === false ? "Resets " : `${Math.round((6_900 / 10_080) * 100)}% of the week`,
+  );
+  return cells(windowBlock(text, "Weekly"));
+}
+
+const ELAPSED_CELLS = Math.round(0.68 * 320) - 1;
+
+/** Theme colors carry alpha of their own, so the mark states its opacity; these pin what it states. */
+const MARK_ON_FILL = "#00000066";
+
+const MARK_ON_TRACK = "#ffffff40";
+
+test("the weekly bar marks how far the week itself has gone", () => {
+  const bar = weekly(41);
+
+  expect(bar).toMatchObject({
+    filled: 131,
+    mark: ELAPSED_CELLS,
+    markWidth: 2,
+    markColor: MARK_ON_TRACK,
+  });
+  expect(bar.filled + bar.track).toBe(320);
+});
+
+test("a mark inside the fill is cut out of it rather than added to the bar", () => {
+  const bar = weekly(90);
+
+  expect(bar).toMatchObject({
+    filled: 288,
+    track: 32,
+    mark: ELAPSED_CELLS,
+    markWidth: 2,
+    markColor: MARK_ON_FILL,
+  });
+});
+
+test("a mark in the fill states its own opacity whichever severity the fill takes", () => {
+  for (const usedPercent of [90, 96]) {
+    const bar = weekly(usedPercent);
+    expect(bar.markColor).toBe(MARK_ON_FILL);
+    expect(bar.markColor).not.toContain("var(");
+  }
+  expect(weekly(90).fillColor).toBe("var(--vscode-charts-yellow)");
+  expect(weekly(96).fillColor).toBe("var(--vscode-charts-red)");
+});
+
+test("a mark the fill edge already accounts for is left off", () => {
+  expect(weekly(68).mark).toBeNull();
+  expect(weekly(69).mark).toBeNull();
+  expect(weekly(66).mark).toBe(ELAPSED_CELLS);
+});
+
+test("a mark that would fall under a rounded end is left off too", () => {
+  const atElapsed = (minutes: number): number | null => {
+    const resetsAt = new Date(now.getTime() + (10_080 - minutes) * 60_000);
+    const text = tooltip({ windows: [{ kind: "weekly", usedPercent: 50, resetsAt }] });
+    return cells(windowBlock(text, "Weekly")).mark;
+  };
+
+  expect(atElapsed(101)).toBeNull();
+  expect(atElapsed(9_980)).toBeNull();
+  // The mark follows the whole percentage the pace line states, not the unrounded fraction.
+  expect(atElapsed(2_000)).toBe(Math.round(0.2 * 320) - 1);
+});
+
+test("only a clocked weekly window is marked, and only while pace is shown", () => {
+  expect(weekly(41, { showPace: false }).mark).toBeNull();
+  expect(cells(windowBlock(tooltip(), "5-hour")).mark).toBeNull();
+  expect(
+    cells(tooltip({ windows: [{ kind: "weekly", usedPercent: 41, resetsAt: null }] })).mark,
+  ).toBeNull();
 });
 
 test("a bar is one rounded track with a rounded fill nested in it", () => {
