@@ -88,7 +88,7 @@ All source and test files are also checked by `tsc --strict`. One `tsconfig.json
 | Script | Purpose |
 | --- | --- |
 | `clean` | Removes `dist/` and any built `.vsix`. |
-| `font` | Regenerates the day glyphs, their manifest entries, and the icon font, through the Fontello API. On demand only; see **Day bars**. |
+| `font` | Regenerates the day glyphs and the weekly mark, their manifest entries, and the icon font, through the Fontello API. On demand only; see **Day bars and the weekly mark**. |
 | `bundle` | Production esbuild build into `dist/extension.js`, plus `dist/meta.json`. |
 | `bundle:dev` | One development build with source maps. |
 | `bundle:watch` | Development build that watches for edits. This is the `F5` pre-launch task; reload the Extension Development Host with `Ctrl+R`. |
@@ -160,6 +160,8 @@ Keep the pinned code points on re-import, because `contributes.icons` addresses 
 | `U+E803`          | Codex, lifted         | tooltips         |
 | `U+E810`          | Idle day              | tooltips         |
 | `U+E811`–`U+E815` | Day, steps one – five | tooltips         |
+| `U+E816`          | Weekly mark           | tooltips         |
+| `U+E817`          | Weekly mark, halo     | tooltips         |
 
 **An icon id may contain only lowercase letters and hyphens.** That is not the rule the `icons` contribution point enforces: it accepts `[A-Za-z0-9]` segments, so an id carrying a digit registers cleanly and gets its CSS rule like any other. The Markdown renderer is stricter, and keeps a codicon class only when the whole attribute matches
 
@@ -169,9 +171,11 @@ Keep the pinned code points on re-import, because `contributes.icons` addresses 
 
 A digit makes the sanitizer strip the class, and the icon draws as an empty element. Nothing reports it anywhere, and every other check still passes: the font loads, the glyph is present and measurable through `measureText`, the rule exists, the registration succeeds. The day steps are named `one` through `five` rather than numbered for exactly this reason, and a test asserts every contributed id against that expression.
 
-## Day bars
+## Day bars and the weekly mark
 
 The daily activity strip is drawn from `U+E810`–`U+E815`, one glyph per step. They exist because a tooltip cannot size a mark: trusted Markdown keeps no declaration that sets height, and the only lever left, type size, moves width and height together, so a taller day would only ever be a wider one. A glyph settles it — its outline states the height, its advance width states the width and the gap to the next day, and the shade is the text color the surrounding span sets.
+
+The mark on the weekly bar is `U+E816` with `U+E817` under it, for the same reason: drawn from cells it could be no taller than the bar and no rounder than a rectangle. The hover renders a codicon at the surrounding font size, so the mark is set in the bar's own four-pixel type, its advance width is exactly three of the bar's cells, and it replaces those cells rather than being added beside them. Ahead of it, with an advance of a single unit, goes the halo: the same shape grown by a pixel and a half on every side, in the color of the hover's background, so the mark is cut out of a fill or the track alike and the halo vanishes where the mark reaches past the bar. Both take theme colors and nothing else, so a theme change simply repaints them.
 
 Unlike the provider marks these are generated, because their point is a set of exact heights:
 
@@ -179,13 +183,13 @@ Unlike the provider marks these are generated, because their point is a set of e
 npm run font
 ```
 
-That regenerates the bars in `assets/fontello-config.json`, posts the whole configuration to the Fontello API, writes the returned font to `assets/agent-usage-bar.woff`, and rewrites the day icons in `package.json`. The provider marks pass through untouched, in the configuration and in the manifest; the script replaces only glyphs named `day-*`. It runs on demand, never as part of a build, and everything it writes is committed.
+That regenerates the bars in `assets/fontello-config.json`, posts the whole configuration to the Fontello API, writes the returned font to `assets/agent-usage-bar.woff`, and rewrites the day and mark icons in `package.json`. The provider marks pass through untouched, in the configuration and in the manifest; the script replaces only glyphs named `day-*` and `mark*`. It runs on demand, never as part of a build, and everything it writes is committed.
 
 Two tests keep the manifest and the asset together: one pins every `fontPath` to a file that exists, the other to a file [.vscodeignore](.vscodeignore) actually lets through. The second matters because that file denies everything and then allows what ships, by name: a font no allow line matches is dropped from the package silently, and the extension then installs with no glyphs at all rather than with one missing.
 
 The configuration is reproduced exactly on a re-run, glyph ids included, but the font is not: Fontello stamps each build, so the `.woff` differs by a few bytes even when nothing about the glyphs changed. A diff on that file with no configuration change beside it means nothing was edited.
 
-The numbers live at the top of [build-font.mjs](scripts/build-font.mjs). `ADVANCE` is the one to reach for first: thirty of it should come to the width the usage bars occupy, and that width is measured, not derived — the bars are 314 space cells shrunk by six `<small>` elements, the space ratio belongs to the theme's font, and `<small>` does not scale by an exact factor in this renderer, so the arithmetic drifts a few pixels over the row. Compare against a rendered tooltip. `HEIGHTS` must keep one entry per step plus the idle mark, and `HISTORY_LEVELS` in [history.ts](src/history.ts) must agree with it; a test pins the manifest against that count so a missing glyph fails the build rather than drawing a placeholder box.
+The numbers live at the top of [build-font.mjs](scripts/build-font.mjs). `ADVANCE` is the one to reach for first: thirty of it should come to the width the usage bars occupy, and that width is measured, not derived — the bars are 314 space cells shrunk by six `<small>` elements, the space ratio belongs to the theme's font, and `<small>` does not scale by an exact factor in this renderer, so the arithmetic drifts a few pixels over the row. Compare against a rendered tooltip. `HEIGHTS` must keep one entry per step plus the idle mark, and `HISTORY_LEVELS` in [history.ts](src/history.ts) must agree with it; a test pins the manifest against that count so a missing glyph fails the build rather than drawing a placeholder box. `MARK` and `HALO` place the weekly mark: its reach above and below the baseline is measured against the bar in a rendered tooltip, since the bar's height belongs to the theme's font and the hover aligns a codicon `middle`, which sets the glyph's baseline about a pixel under the text's.
 
 ## Releasing
 

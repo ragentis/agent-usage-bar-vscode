@@ -41,11 +41,10 @@ const COLOR = {
   normal: "var(--vscode-charts-blue)",
   warning: "var(--vscode-charts-yellow)",
   error: "var(--vscode-charts-red)",
-  // The mark states its own opacity instead of taking a theme color, because several theme colors
-  // carry an alpha channel themselves. Darkening the fill and lightening the track holds in any
-  // theme, whatever the fill's severity color is.
-  markOnFill: "#00000066",
-  markOnTrack: "#ffffff40",
+  mark: "var(--vscode-descriptionForeground)",
+  // The halo is the hover's own background, so it cuts the mark out of a fill or the track and
+  // vanishes where the mark reaches past the bar.
+  halo: "var(--vscode-editorHoverWidget-background)",
 } as const;
 
 /**
@@ -159,8 +158,20 @@ function scaled(markup: string): string {
 
 const CELL = "&nbsp;";
 
-/** Two cells are roughly two pixels at this scale, which is the thinnest mark a theme still shows. */
-const MARK_CELLS = 2;
+/**
+ * The mark is two glyphs from the extension's own icon font, a halo and the mark drawn over it, so
+ * that it can stand taller than the bar and be rounded, which cells cannot. See
+ * `scripts/build-font.mjs`, which generates both.
+ */
+const MARK_GLYPH = "agent-usage-bar-mark";
+
+const HALO_GLYPH = "agent-usage-bar-mark-halo";
+
+/**
+ * The mark's advance width is exactly this many cells and the halo's is none, so the pair replaces
+ * these cells and the bar keeps its length.
+ */
+const MARK_CELLS = 3;
 
 /** The rounded ends taper the bar, so a mark under one of them would be clipped. */
 const MARK_MARGIN = 4;
@@ -168,13 +179,8 @@ const MARK_MARGIN = 4;
 /** Cells kept clear of the fill edge, whose own position already says the same thing. */
 const MARK_CLEARANCE = 3;
 
-interface Mark {
-  at: number;
-  color: string;
-}
-
-/** The mark centred on the elapsed position, or nothing when the bar cannot show it there. */
-function markFor(elapsedPercent: number | null, filled: number, cells: number): Mark | null {
+/** The cell the mark starts at, or nothing when the bar cannot show it centred where it belongs. */
+function markAt(elapsedPercent: number | null, filled: number, cells: number): number | null {
   if (elapsedPercent === null) {
     return null;
   }
@@ -183,22 +189,23 @@ function markFor(elapsedPercent: number | null, filled: number, cells: number): 
     return null;
   }
   const clear = at >= filled + MARK_CLEARANCE || at + MARK_CELLS + MARK_CLEARANCE <= filled;
-  return clear ? { at, color: at < filled ? COLOR.markOnFill : COLOR.markOnTrack } : null;
+  return clear ? at : null;
 }
 
+const MARK = [
+  span(`$(${HALO_GLYPH})`, `color:${COLOR.halo};`),
+  span(`$(${MARK_GLYPH})`, `color:${COLOR.mark};`),
+].join("");
+
 /**
- * Recolors cells in place rather than dividing the run, so a marked segment keeps its rounded ends
+ * Replaces cells in place rather than dividing the run, so a marked segment keeps its rounded ends
  * and the bar keeps its exact cell count.
  */
-function marked(count: number, mark: Mark | null): string {
-  if (!mark) {
+function marked(count: number, at: number | null): string {
+  if (at === null) {
     return CELL.repeat(count);
   }
-  return [
-    CELL.repeat(mark.at),
-    span(CELL.repeat(MARK_CELLS), `background-color:${mark.color};`),
-    CELL.repeat(count - mark.at - MARK_CELLS),
-  ].join("");
+  return `${CELL.repeat(at)}${MARK}${CELL.repeat(count - at - MARK_CELLS)}`;
 }
 
 /** Nests the fill inside the track so both retain rounded ends without a seam between segments. */
@@ -209,16 +216,16 @@ function bar(
   cells = BAR_CELLS,
 ): string {
   const filled = Math.min(cells, Math.max(0, Math.round((usedPercent / 100) * cells)));
-  const mark = markFor(elapsedPercent, filled, cells);
-  const onFill = mark !== null && mark.at < filled;
+  const at = markAt(elapsedPercent, filled, cells);
+  const onFill = at !== null && at < filled;
   const fill =
     filled > 0
       ? span(
-          marked(filled, onFill ? mark : null),
+          marked(filled, onFill ? at : null),
           `background-color:${COLOR[severity]};border-radius:4px;`,
         )
       : "";
-  const rest = marked(cells - filled, mark && !onFill ? { ...mark, at: mark.at - filled } : null);
+  const rest = marked(cells - filled, at !== null && !onFill ? at - filled : null);
   return span(`${fill}${rest}`, `background-color:${COLOR.track};border-radius:4px;`);
 }
 

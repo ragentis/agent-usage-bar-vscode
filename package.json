@@ -117,6 +117,20 @@
           "fontPath": "./assets/agent-usage-bar.woff",
           "fontCharacter": "\\E815"
         }
+      },
+      "agent-usage-bar-mark": {
+        "description": "Elapsed-time mark on a weekly usage bar",
+        "default": {
+          "fontPath": "./assets/agent-usage-bar.woff",
+          "fontCharacter": "\\E816"
+        }
+      },
+      "agent-usage-bar-mark-halo": {
+        "description": "Halo drawn under the elapsed-time mark",
+        "default": {
+          "fontPath": "./assets/agent-usage-bar.woff",
+          "fontCharacter": "\\E817"
+        }
       }
     },
     "commands": [

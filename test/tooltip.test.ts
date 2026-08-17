@@ -160,6 +160,8 @@ function drawnLines(text: string): string[] {
       .map((part) =>
         part
           .replace(/<[^>]+>/g, "")
+          // The mark stands in a bar, which is cells rather than text and is dropped as blank below.
+          .replace(/\$\(agent-usage-bar-mark(-halo)?\)/g, "")
           // A codicon is written as its name and drawn as one glyph, so it is counted as one.
           .replace(/\$\([a-z0-9-]+\)/g, "@")
           .replace(/&[a-z]+;|&#\d+;/g, (entity) => CHARACTERS[entity] ?? entity),
@@ -189,22 +191,29 @@ function stripDays(text: string): { step: number; color: string }[] {
   }));
 }
 
-/** A mark is the only span carrying a background color and no radius, so none appears here. */
-const MARK = '<span style="background-color:([^;"]+);">((?:&nbsp;)*)</span>';
+/** The mark is its halo glyph and then its own, each in a span that sets only a color. */
+const MARK =
+  '<span style="color:([^;"]+);">\\$\\(agent-usage-bar-mark-halo\\)</span>' +
+  '<span style="color:([^;"]+);">\\$\\(agent-usage-bar-mark\\)</span>';
 
-const RUN = '(?:&nbsp;|<span style="background-color:[^;"]+;">(?:&nbsp;)*</span>)*';
+/** The cells the mark glyph's advance width replaces; see `MARK_CELLS` in the tooltip. */
+const MARK_WIDTH = 3;
+
+const RUN = `(?:&nbsp;|${MARK.replaceAll('([^;"]+)', '[^;"]+')})*`;
 
 const BAR = new RegExp(
   `<span style="background-color:([^;]+);border-radius:4px;">` +
     `(?:<span style="background-color:([^;]+);border-radius:4px;">(${RUN})</span>)?(${RUN})</span>`,
 );
 
+/** Cells in a run, counting the mark as the cells it stands in for. */
 function count(part: string | undefined): number {
-  return (part?.match(/&nbsp;/g) ?? []).length;
+  const marks = new RegExp(MARK).test(part ?? "") ? MARK_WIDTH : 0;
+  return (part?.match(/&nbsp;/g) ?? []).length + marks;
 }
 
 /** Locates the mark by the cells drawn before it, so its position is read as one bar-wide index. */
-function mark(fill: string, rest: string): { at: number | null; color: string; width: number } {
+function mark(fill: string, rest: string): { at: number | null; color: string; halo: string } {
   for (const [part, offset] of [
     [fill, 0],
     [rest, count(fill)],
@@ -213,12 +222,12 @@ function mark(fill: string, rest: string): { at: number | null; color: string; w
     if (found) {
       return {
         at: count(part.slice(0, found.index)) + offset,
-        color: found[1] ?? "",
-        width: count(found[2]),
+        color: found[2] ?? "",
+        halo: found[1] ?? "",
       };
     }
   }
-  return { at: null, color: "", width: 0 };
+  return { at: null, color: "", halo: "" };
 }
 
 interface Bar {
@@ -227,7 +236,7 @@ interface Bar {
   fillColor: string;
   mark: number | null;
   markColor: string;
-  markWidth: number;
+  haloColor: string;
 }
 
 function cells(text: string): Bar {
@@ -241,7 +250,7 @@ function cells(text: string): Bar {
     fillColor: bar?.[2] ?? "",
     mark: found.at,
     markColor: found.color,
-    markWidth: found.width,
+    haloColor: found.halo,
   };
 }
 
@@ -372,6 +381,21 @@ test("the manifest registers a glyph for every step, including the empty one", (
       default: { fontCharacter: `\\E81${step}` },
     });
   }
+});
+
+test("the manifest registers the mark and its halo, which the weekly bar draws by name", () => {
+  const icons = manifestIcons();
+
+  expect(at(icons, "agent-usage-bar-mark")).toMatchObject({
+    default: { fontCharacter: "\\E816" },
+  });
+  expect(at(icons, "agent-usage-bar-mark-halo")).toMatchObject({
+    default: { fontCharacter: "\\E817" },
+  });
+  const drawn = [...windowBlock(tooltip(), "Weekly").matchAll(/\$\(([^)]+)\)/g)].map(
+    ([, id]) => id,
+  );
+  expect(drawn).toEqual(["agent-usage-bar-mark-halo", "agent-usage-bar-mark"]);
 });
 
 /**
@@ -549,10 +573,10 @@ function weekly(usedPercent: number, overrides: Partial<ExtensionConfiguration> 
 
 const ELAPSED_CELLS = Math.round(0.68 * BAR_CELLS) - 1;
 
-/** Theme colors carry alpha of their own, so the mark states its opacity; these pin what it states. */
-const MARK_ON_FILL = "#00000066";
+const MARK_COLOR = "var(--vscode-descriptionForeground)";
 
-const MARK_ON_TRACK = "#ffffff40";
+/** The halo is the hover's own background, so it cuts the mark out of the bar and vanishes beyond it. */
+const HALO_COLOR = "var(--vscode-editorHoverWidget-background)";
 
 test("the weekly bar marks how far the week itself has gone", () => {
   const bar = weekly(41);
@@ -560,29 +584,29 @@ test("the weekly bar marks how far the week itself has gone", () => {
   expect(bar).toMatchObject({
     filled: 129,
     mark: ELAPSED_CELLS,
-    markWidth: 2,
-    markColor: MARK_ON_TRACK,
+    markColor: MARK_COLOR,
+    haloColor: HALO_COLOR,
   });
   expect(bar.filled + bar.track).toBe(BAR_CELLS);
 });
 
-test("a mark inside the fill is cut out of it rather than added to the bar", () => {
+test("a mark inside the fill replaces its cells rather than adding to the bar", () => {
   const bar = weekly(90);
 
   expect(bar).toMatchObject({
     filled: 283,
     track: 31,
     mark: ELAPSED_CELLS,
-    markWidth: 2,
-    markColor: MARK_ON_FILL,
+    markColor: MARK_COLOR,
+    haloColor: HALO_COLOR,
   });
 });
 
-test("a mark in the fill states its own opacity whichever severity the fill takes", () => {
-  for (const usedPercent of [90, 96]) {
+test("the mark takes the same theme colors over a fill of any severity as over the track", () => {
+  for (const usedPercent of [41, 90, 96]) {
     const bar = weekly(usedPercent);
-    expect(bar.markColor).toBe(MARK_ON_FILL);
-    expect(bar.markColor).not.toContain("var(");
+    expect(bar.markColor).toBe(MARK_COLOR);
+    expect(bar.haloColor).toBe(HALO_COLOR);
   }
   expect(weekly(90).fillColor).toBe("var(--vscode-charts-yellow)");
   expect(weekly(96).fillColor).toBe("var(--vscode-charts-red)");

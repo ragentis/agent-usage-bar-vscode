@@ -2,9 +2,10 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { inflateRawSync } from "node:zlib";
 
-// Regenerate the day glyphs in the Fontello configuration and rebuild the icon font from it. The
-// provider marks are hand-drawn and are carried through untouched; only the bars are generated here,
-// because their whole purpose is a set of exact heights that a drawing tool cannot hold by hand.
+// Regenerate the day glyphs and the weekly mark in the Fontello configuration and rebuild the icon
+// font from it. The provider marks are hand-drawn and are carried through untouched; only the bars
+// and the mark are generated here, because their whole purpose is a set of exact sizes that a drawing
+// tool cannot hold by hand.
 //
 // Run with `npm run font` after changing any number below. The font is a committed asset, so this is
 // a maintenance step and never part of a build.
@@ -51,6 +52,36 @@ const HEIGHTS = [263, 527, 747, 965, 1185, 1404];
  */
 const STEPS = ["none", "one", "two", "three", "four", "five"];
 
+/**
+ * The elapsed-time mark on a weekly bar. The hover draws a codicon at the surrounding font size and
+ * aligns it `middle`, so this glyph is set in the same four-pixel type as the bar's cells and one em
+ * here is one em of the cell. A cell is a space of the UI font, 274 units in Segoe UI, and the mark
+ * replaces three of them. Middle alignment puts the glyph baseline about a pixel under the text
+ * baseline, which the reach above and below already allows for; both are calibrated in a rendered
+ * tooltip, like the day advance above. The ink is centred on the advance and may reach past it.
+ */
+const MARK = {
+  cells: 3,
+  advance: 822,
+  ink: 690,
+  radius: 345,
+  above: 1400,
+  below: 605,
+};
+
+/**
+ * A halo drawn under the mark, in the hover's own background color, to cut it out of whatever it
+ * stands on. It is set before the mark with an advance of a single unit, so the mark's glyph
+ * lands on top of it, and its ink reaches this far past the mark's on every side. Both are centred
+ * on the mark's advance, so the halo's path starts left of its origin.
+ */
+const HALO = 345;
+
+/** The glyphs this script generates; the provider marks are hand-drawn and carried through. */
+function generated(css) {
+  return css.startsWith("day-") || css.startsWith("mark");
+}
+
 const KAPPA = 0.5522847498307936;
 
 function round(value) {
@@ -58,16 +89,11 @@ function round(value) {
 }
 
 /**
- * A bar standing on the baseline, rounded on all four corners. Corners are cubic curves rather than
- * arcs because every consumer of this path renders those identically.
+ * A rectangle rounded on all four corners. Corners are cubic curves rather than arcs because every
+ * consumer of this path renders those identically.
  */
-function barPath(height) {
-  const radius = Math.min(RADIUS, INK / 2, height / 2);
+function roundedRect(left, right, top, bottom, radius) {
   const pull = radius * KAPPA;
-  const left = (ADVANCE - INK) / 2;
-  const right = left + INK;
-  const bottom = ASCENT;
-  const top = ASCENT - height;
   const at = (x, y) => `${round(x)} ${round(y)}`;
   return [
     `M${at(left + radius, top)}`,
@@ -83,9 +109,44 @@ function barPath(height) {
   ].join("");
 }
 
+/** A bar standing on the baseline. */
+function barPath(height) {
+  const left = (ADVANCE - INK) / 2;
+  const radius = Math.min(RADIUS, INK / 2, height / 2);
+  return roundedRect(left, left + INK, ASCENT - height, ASCENT, radius);
+}
+
+/** The mark straddles the baseline, so it is placed by its reach above and below it. */
+function markPath(halo = 0) {
+  const left = (MARK.advance - MARK.ink) / 2 - halo;
+  const radius = Math.min(MARK.radius, MARK.ink / 2, (MARK.above + MARK.below) / 2) + halo;
+  return roundedRect(
+    left,
+    left + MARK.ink + 2 * halo,
+    ASCENT - MARK.above - halo,
+    ASCENT + MARK.below + halo,
+    radius,
+  );
+}
+
 /** Fontello identifies a glyph by uid, so deriving it from the name keeps re-runs stable. */
 function uid(name) {
   return createHash("sha256").update(name).digest("hex").slice(0, 32);
+}
+
+function markGlyphs() {
+  return [
+    ["mark", 0xe816, markPath(), MARK.advance],
+    ["mark-halo", 0xe817, markPath(HALO), 1],
+  ].map(([css, code, path, width]) => ({
+    uid: uid(css),
+    css,
+    code,
+    src: "custom_icons",
+    selected: true,
+    svg: { path, width },
+    search: [css],
+  }));
 }
 
 function dayGlyphs() {
@@ -104,19 +165,29 @@ function dayGlyphs() {
 }
 
 /** Generated with the glyphs so the id, the code point and the height cannot drift apart. */
-function dayIcons(fontPath) {
-  return Object.fromEntries(
-    STEPS.map((step, level) => [
-      `${FONT_NAME}-day-${step}`,
-      {
-        description:
-          level === 0
-            ? "Daily activity bar, a day with no activity"
-            : `Daily activity bar, step ${level} of ${STEPS.length - 1}`,
-        default: { fontPath, fontCharacter: `\\E81${level}` },
-      },
-    ]),
-  );
+function generatedIcons(fontPath) {
+  return {
+    ...Object.fromEntries(
+      STEPS.map((step, level) => [
+        `${FONT_NAME}-day-${step}`,
+        {
+          description:
+            level === 0
+              ? "Daily activity bar, a day with no activity"
+              : `Daily activity bar, step ${level} of ${STEPS.length - 1}`,
+          default: { fontPath, fontCharacter: `\\E81${level}` },
+        },
+      ]),
+    ),
+    [`${FONT_NAME}-mark`]: {
+      description: "Elapsed-time mark on a weekly usage bar",
+      default: { fontPath, fontCharacter: "\\E816" },
+    },
+    [`${FONT_NAME}-mark-halo`]: {
+      description: "Halo drawn under the elapsed-time mark",
+      default: { fontPath, fontCharacter: "\\E817" },
+    },
+  };
 }
 
 /** Reads one file out of a zip. Only the two methods Fontello returns are handled. */
@@ -163,25 +234,28 @@ async function build(config) {
   return unzip(Buffer.from(await archive.arrayBuffer()), `${config.name}.woff`);
 }
 
-/** The provider marks keep their manifest entries; only the day icons are regenerated. */
+/** The provider marks keep their manifest entries; only the generated icons are rewritten. */
 async function publish(font) {
   await writeFile(FONT_PATH, font);
   const manifest = JSON.parse(await readFile(MANIFEST_PATH, "utf8"));
   const marks = Object.entries(manifest.contributes.icons).filter(
-    ([id]) => !id.startsWith(`${FONT_NAME}-day-`),
+    ([id]) => !generated(id.slice(FONT_NAME.length + 1)),
   );
-  manifest.contributes.icons = { ...Object.fromEntries(marks), ...dayIcons(`./${FONT_PATH}`) };
+  manifest.contributes.icons = {
+    ...Object.fromEntries(marks),
+    ...generatedIcons(`./${FONT_PATH}`),
+  };
   await writeFile(MANIFEST_PATH, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
 const config = JSON.parse(await readFile(CONFIG_PATH, "utf8"));
-const marks = config.glyphs.filter((glyph) => !glyph.css.startsWith("day-"));
-config.glyphs = [...marks, ...dayGlyphs()];
+const marks = config.glyphs.filter((glyph) => !generated(glyph.css));
+config.glyphs = [...marks, ...dayGlyphs(), ...markGlyphs()];
 
 const font = await build(config);
 await writeFile(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`);
 await publish(font);
 
 console.log(
-  `Rebuilt ${FONT_PATH}: ${marks.length} provider marks, ${HEIGHTS.length} day glyphs, ${font.length} bytes.`,
+  `Rebuilt ${FONT_PATH}: ${marks.length} provider marks, ${HEIGHTS.length} day glyphs, a bar mark and its halo, ${font.length} bytes.`,
 );
