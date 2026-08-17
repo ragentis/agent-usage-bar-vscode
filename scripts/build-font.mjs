@@ -2,10 +2,10 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { inflateRawSync } from "node:zlib";
 
-// Regenerate the day glyphs and the weekly mark in the Fontello configuration and rebuild the icon
-// font from it. The provider marks are hand-drawn and are carried through untouched; only the bars
-// and the mark are generated here, because their whole purpose is a set of exact sizes that a drawing
-// tool cannot hold by hand.
+// Regenerate the day glyphs, the weekly mark and the tooltip variants of the provider marks in the
+// Fontello configuration, and rebuild the icon font from it. The provider marks themselves are
+// hand-drawn and are carried through untouched; everything else is generated here, because its whole
+// purpose is a set of exact sizes and offsets that a drawing tool cannot hold by hand.
 //
 // Run with `npm run font` after changing any number below. The font is a committed asset, so this is
 // a maintenance step and never part of a build.
@@ -18,6 +18,21 @@ const FONTELLO = "https://fontello.com";
 
 /** Fontello reads SVG coordinates and writes `ascent - y`, so this row is the baseline. */
 const ASCENT = 970;
+
+/**
+ * The tooltip variant of each provider mark, drawn from the status-bar one. The tooltip has no way
+ * to size or place a codicon, so the outline itself is scaled about the mark's centre and lifted:
+ * larger, because a title reads better behind a mark bigger than its type, and lifted because
+ * baseline alignment sets the mark about a pixel too low beside the title, and 39 units is about
+ * half a pixel at 13px, which grid fitting turns into one. The advance grows with the scale and the
+ * gap is added after the mark, so the title stands clear of it.
+ */
+const HOVER = { scale: 1.5, lift: 39, gap: 150 };
+
+/** The hand-drawn marks are centred in their em, so this is the point they are scaled about. */
+const MARK_CENTRE = 500;
+
+const HOVERS = { claude: "claude-hover", openai: "openai-hover" };
 
 /**
  * One glyph is one day. The advance width carries the gap to the next day, so a row of them needs no
@@ -79,7 +94,12 @@ const HALO = 345;
 
 /** The glyphs this script generates; the provider marks are hand-drawn and carried through. */
 function generated(css) {
-  return css.startsWith("day-") || css.startsWith("mark");
+  return css.startsWith("day-") || css.startsWith("mark") || css.endsWith("-hover");
+}
+
+/** The icons this script writes; the provider marks and their tooltip variants keep their entries. */
+function generatedIcon(id) {
+  return id.startsWith("day-") || id.startsWith("mark");
 }
 
 const KAPPA = 0.5522847498307936;
@@ -132,6 +152,43 @@ function markPath(halo = 0) {
 /** Fontello identifies a glyph by uid, so deriving it from the name keeps re-runs stable. */
 function uid(name) {
   return createHash("sha256").update(name).digest("hex").slice(0, 32);
+}
+
+/**
+ * Scales and lifts a hand-drawn mark. Every command in those paths is absolute and takes whole
+ * coordinate pairs, so the numbers alternate x, y throughout.
+ */
+function hoverPath(path) {
+  let axis = 0;
+  return path.replace(/-?\d+(\.\d+)?/g, (number) => {
+    const scaled = MARK_CENTRE + (Number(number) - MARK_CENTRE) * HOVER.scale;
+    const shifted =
+      axis++ % 2 === 0 ? scaled + (HOVER.scale - 1) * MARK_CENTRE : scaled - HOVER.lift;
+    return String(round(shifted));
+  });
+}
+
+/** The tooltip variants keep the code points and ids the manifest already addresses them by. */
+function hoverGlyphs(glyphs) {
+  return Object.entries(HOVERS).map(([base, css]) => {
+    const source = glyphs.find((glyph) => glyph.css === base);
+    const previous = glyphs.find((glyph) => glyph.css === css);
+    if (!source || !previous) {
+      throw new Error(`The configuration has no ${base} and ${css} pair to derive from`);
+    }
+    return {
+      uid: uid(css),
+      css,
+      code: previous.code,
+      src: "custom_icons",
+      selected: true,
+      svg: {
+        path: hoverPath(source.svg.path),
+        width: Math.round(source.svg.width * HOVER.scale + HOVER.gap),
+      },
+      search: [css],
+    };
+  });
 }
 
 function markGlyphs() {
@@ -239,7 +296,7 @@ async function publish(font) {
   await writeFile(FONT_PATH, font);
   const manifest = JSON.parse(await readFile(MANIFEST_PATH, "utf8"));
   const marks = Object.entries(manifest.contributes.icons).filter(
-    ([id]) => !generated(id.slice(FONT_NAME.length + 1)),
+    ([id]) => !generatedIcon(id.slice(FONT_NAME.length + 1)),
   );
   manifest.contributes.icons = {
     ...Object.fromEntries(marks),
@@ -249,13 +306,14 @@ async function publish(font) {
 }
 
 const config = JSON.parse(await readFile(CONFIG_PATH, "utf8"));
+const hovers = hoverGlyphs(config.glyphs);
 const marks = config.glyphs.filter((glyph) => !generated(glyph.css));
-config.glyphs = [...marks, ...dayGlyphs(), ...markGlyphs()];
+config.glyphs = [...marks, ...hovers, ...dayGlyphs(), ...markGlyphs()];
 
 const font = await build(config);
 await writeFile(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`);
 await publish(font);
 
 console.log(
-  `Rebuilt ${FONT_PATH}: ${marks.length} provider marks, ${HEIGHTS.length} day glyphs, a bar mark and its halo, ${font.length} bytes.`,
+  `Rebuilt ${FONT_PATH}: ${marks.length} provider marks and their tooltip variants, ${HEIGHTS.length} day glyphs, a bar mark and its halo, ${font.length} bytes.`,
 );
