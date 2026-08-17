@@ -174,6 +174,26 @@ test("an error the server names is what the item says", async () => {
   });
 });
 
+test("a server that answers with an error is replaced before the next read", async () => {
+  const world = harness();
+  const reading = world.app.readUsage();
+  const codex = world.latest();
+  await handshake(codex);
+
+  codex.says(
+    `${JSON.stringify({ jsonrpc: "2.0", id: 2, error: { message: "failed to fetch codex rate limits" } })}\n`,
+  );
+  await expect(reading).resolves.toMatchObject({ status: "unavailable" });
+  expect(codex.killed).toBe(1);
+
+  const second = world.app.readUsage();
+  await handshake(world.latest());
+  world.latest().answers(RATE_LIMITS);
+
+  await expect(second).resolves.toMatchObject({ status: "ok" });
+  expect(world.spawned).toHaveLength(2);
+});
+
 test("an error of this extension's own making is not marked as the server's", async () => {
   const world = harness();
   const reading = world.app.readUsage();
@@ -205,6 +225,37 @@ test("a server that stops answering is dropped, and the next read starts a fresh
 
   await expect(second).resolves.toMatchObject({ status: "ok" });
   expect(world.spawned).toHaveLength(2);
+});
+
+test("changed credentials are picked up by a fresh process on the next read", async () => {
+  const world = harness();
+  const first = world.app.readUsage();
+  const codex = world.latest();
+  await handshake(codex);
+  codex.answers(RATE_LIMITS);
+  await expect(first).resolves.toMatchObject({ status: "ok" });
+
+  world.app.reload();
+  const second = world.app.readUsage();
+  await handshake(world.latest());
+  world.latest().answers(RATE_LIMITS);
+
+  await expect(second).resolves.toMatchObject({ status: "ok" });
+  expect(codex.killed).toBe(1);
+  expect(world.spawned).toHaveLength(2);
+});
+
+test("changed credentials leave a read that is already running alone", async () => {
+  const world = harness();
+  const reading = world.app.readUsage();
+  const codex = world.latest();
+  await handshake(codex);
+
+  world.app.reload();
+  codex.answers(RATE_LIMITS);
+
+  await expect(reading).resolves.toMatchObject({ status: "ok" });
+  expect(world.spawned).toHaveLength(1);
 });
 
 test("a process that exits mid-request answers it rather than leaving it hanging", async () => {

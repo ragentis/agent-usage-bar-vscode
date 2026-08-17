@@ -131,6 +131,8 @@ Account usage cannot be calculated reliably from activity on one machine, so the
 
 The extension starts `codex app-server` and requests usage over JSON-RPC through stdin and stdout. Codex manages and refreshes its own credentials, so this extension never reads or handles a Codex token. `~/.codex/auth.json` remains outside the boundary, and `npm run audit:bundle` fails if that path appears in the shipped bundle. If the CLI cannot be found or is signed out, the status item reports that state instead of inferring usage from local files.
 
+An app server keeps the credentials it loaded when it started, so a sign-in or token refresh performed elsewhere reaches only one started after it. The extension therefore watches the `~/.codex` directory for the fact that `auth.json` was replaced and starts a fresh app server at the next read. The name is matched against a directory event; the file itself is never opened. The directory is watched rather than the file because Codex replaces `auth.json` by rename, which a watch on the file would stop following.
+
 ### Claude Code
 
 **The extension reads the token stored by Claude Code, uses it for one request, and discards it.** The request goes to `https://api.anthropic.com/api/oauth/usage`, the same endpoint used by the official Claude Code extension for usage data.
@@ -168,7 +170,7 @@ The extension distinguishes these outcomes through the exit code returned by `se
 
 The extension watches `~/.codex/sessions` and `~/.claude/projects` only for the fact that a `.jsonl` file changed. After the writes settle, that change requests a usage refresh. Transcript contents are never opened.
 
-Codex also sends an `account/rateLimits/updated` notification while its app server is running. The extension stops an idle app server after ten minutes instead of keeping a child process alive only for that notification. File watching covers later activity and triggers a fresh app server when another reading is needed.
+Codex also sends an `account/rateLimits/updated` notification while its app server is running. The extension stops an idle app server after ten minutes instead of keeping a child process alive only for that notification. It also drops one whose read failed, because a failing app server tends to keep failing. File watching covers later activity and triggers a fresh app server when another reading is needed.
 
 Every automatic read has a minimum interval of thirty seconds per provider, regardless of which trigger requested it. A long agent turn can write its transcript in several bursts, and those small updates do not justify a request each. A manual menu refresh bypasses this minimum.
 

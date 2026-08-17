@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { FileWatcher } from "../src/watcher";
+import { FileWatcher, watchBoth, type WatchTarget } from "../src/watcher";
 
 /**
  * These tests use the real platform watcher; the CI matrix covers inotify, FSEvents, and
@@ -32,9 +32,13 @@ afterEach(async () => {
   await fs.rm(root, { recursive: true, force: true });
 });
 
-function watching(directory: string, onChange: () => void): FileWatcher {
+function watching(
+  directory: string,
+  onChange: () => void,
+  target: Partial<WatchTarget> = {},
+): FileWatcher {
   const watcher = new FileWatcher(
-    { directory, fileSuffix: ".jsonl", recursive: true },
+    { directory, fileSuffix: ".jsonl", recursive: true, ...target },
     DEBOUNCE_MS,
     RETRY_MS,
   );
@@ -82,6 +86,55 @@ test("stopping ends the reports", async () => {
   await sleep(QUIET_MS);
 
   expect(changes).toBe(1);
+});
+
+test("a file replaced by rename is reported, and the file beside it is not", async () => {
+  // How Codex rewrites `auth.json`: the replacement is written under another name, then renamed
+  // over the old one. Watching the file itself would follow the replaced one and report nothing.
+  const session = path.join(root, "sessions");
+  await fs.mkdir(session, { recursive: true });
+  writeFileSync(path.join(root, "auth.json"), "{}", "utf8");
+  let changes = 0;
+  watching(root, () => void (changes += 1), { fileSuffix: "auth.json", recursive: false });
+
+  writeFileSync(path.join(root, "config.toml"), "x", "utf8");
+  writeFileSync(path.join(session, "a.jsonl"), "{}", "utf8");
+  await sleep(QUIET_MS);
+  expect(changes).toBe(0);
+
+  writeFileSync(path.join(root, "auth.json.tmp"), '{"tokens":1}', "utf8");
+  await fs.rename(path.join(root, "auth.json.tmp"), path.join(root, "auth.json"));
+
+  await delivered(() => expect(changes).toBe(1));
+});
+
+test("a credentials change replaces the provider before the refresh it also asks for", () => {
+  const calls: string[] = [];
+  const fake = (name: string) => ({
+    start: (onChange: () => void) => {
+      calls.push(`start ${name}`);
+      onChange();
+    },
+    stop: () => void calls.push(`stop ${name}`),
+    dispose: () => void calls.push(`dispose ${name}`),
+  });
+  const both = watchBoth(fake("activity"), fake("credentials"), () => void calls.push("reload"));
+
+  both.start(() => void calls.push("refresh"));
+  both.stop();
+  both.dispose();
+
+  expect(calls).toEqual([
+    "start activity",
+    "refresh",
+    "start credentials",
+    "reload",
+    "refresh",
+    "stop activity",
+    "stop credentials",
+    "dispose activity",
+    "dispose credentials",
+  ]);
 });
 
 test("a directory that does not exist yet is picked up once the agent creates it", async () => {

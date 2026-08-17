@@ -235,6 +235,7 @@ export class CodexAppServer {
   private nextId = 1;
   private lastSpawnFailedAt = 0;
   private disposed = false;
+  private stale = false;
   /** Bumped by every teardown, so work started before one can tell that it was overtaken. */
   private generation = 0;
   private readonly pending = new Map<number, PendingRequest>();
@@ -249,6 +250,14 @@ export class CodexAppServer {
    */
   stop(): void {
     this.teardown(new Error("The Codex app server was stopped."));
+  }
+
+  /**
+   * Credentials are read once at startup, so a sign-in or token refresh elsewhere only reaches a
+   * process started after it. Replacing it at the next read rather than now spares a running one.
+   */
+  reload(): void {
+    this.stale = true;
   }
 
   dispose(): void {
@@ -268,6 +277,9 @@ export class CodexAppServer {
             message: "Codex reported no usage windows. Sign in to Codex.",
           };
     } catch (error) {
+      // An error reply leaves the process running and healthy-looking, and a server that failed one
+      // read tends to fail the next. Nothing else would drop it.
+      this.stop();
       const message =
         error instanceof Error ? error.message : "The Codex app server is unreachable.";
       return { status: "unavailable", message, verbatim: error instanceof CodexSaid };
@@ -277,6 +289,10 @@ export class CodexAppServer {
   private ensureStarted(): Promise<void> {
     if (this.disposed) {
       return Promise.reject(new Error("The Codex app server was stopped."));
+    }
+    if (this.stale) {
+      this.stale = false;
+      this.stop();
     }
     if (this.ready) {
       return this.ready;
