@@ -9,6 +9,7 @@ import {
   isRecord,
   sortWindows,
   validDate,
+  validLabel,
   validUsedPercent,
   type ProviderResult,
   type UsageSnapshot,
@@ -54,12 +55,22 @@ function windowKind(entry: Record<string, unknown>): WindowKind | null {
   return kind?.startsWith("weekly") ? "weekly" : null;
 }
 
-/** Keeps the fullest of several weekly scopes because it is the first one that stops work. */
+/** A window may be narrowed to one model; the display name is the only part meant to be shown. */
+function scopeLabel(entry: Record<string, unknown>): string | null {
+  const scope = isRecord(entry.scope) ? entry.scope : null;
+  return scope && isRecord(scope.model) ? validLabel(scope.model.display_name) : null;
+}
+
+/**
+ * A named scope, such as a per-model weekly limit, becomes its own window because it can stop work
+ * before the unscoped one does. Scopes the service does not name collapse into a single window
+ * holding the fullest of them, which is the most an unlabelled row can honestly claim.
+ */
 export function parseUsageLimits(value: unknown): UsageWindow[] {
   if (!isRecord(value) || !Array.isArray(value.limits)) {
     return [];
   }
-  const byKind = new Map<WindowKind, UsageWindow>();
+  const byScope = new Map<string, UsageWindow>();
   for (const entry of value.limits) {
     if (!isRecord(entry)) {
       continue;
@@ -69,12 +80,14 @@ export function parseUsageLimits(value: unknown): UsageWindow[] {
     if (!kind || usedPercent === null) {
       continue;
     }
-    const existing = byKind.get(kind);
+    const label = scopeLabel(entry);
+    const key = label ? `${kind}:${label}` : kind;
+    const existing = byScope.get(key);
     if (!existing || usedPercent > existing.usedPercent) {
-      byKind.set(kind, { kind, usedPercent, resetsAt: validDate(entry.resets_at) });
+      byScope.set(key, { kind, usedPercent, resetsAt: validDate(entry.resets_at), label });
     }
   }
-  return sortWindows([...byKind.values()]);
+  return sortWindows([...byScope.values()]);
 }
 
 function blockedReason(value: Record<string, unknown>): string | null {

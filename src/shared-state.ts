@@ -75,6 +75,7 @@ function parseWindow(value: unknown): UsageWindow | null {
     usedPercent,
     resetsAt: resetsAt === null ? null : new Date(resetsAt),
     windowMinutes: validWindowMinutes(value.windowMinutes),
+    label: validLabel(value.label),
   };
 }
 
@@ -139,6 +140,7 @@ function serialize(entry: SharedEntry): Record<string, unknown> {
         usedPercent: window.usedPercent,
         resetsAt: window.resetsAt?.getTime() ?? null,
         windowMinutes: window.windowMinutes ?? null,
+        label: window.label ?? null,
       })),
       plan: snapshot.plan,
       blocked: snapshot.blocked,

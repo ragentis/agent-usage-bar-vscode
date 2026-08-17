@@ -177,6 +177,11 @@ function detailRow(left: string, right: string): string {
   ].join("");
 }
 
+function windowTitle(window: ResolvedWindow): string {
+  const title = WINDOW_TITLES[window.kind];
+  return window.label ? `${title} · ${escapeHtml(window.label)}` : title;
+}
+
 /**
  * Reset and pace values use the reading timestamp. Updating them with the clock would detach the
  * forecast from its measured percentage and rebuild an open hover.
@@ -197,7 +202,7 @@ function windowBlock(
   const label = configuration.percentageMode === "remaining" ? "remaining" : "used";
   const meter = `${bar(window.usedPercent, severityFor(window, configuration, asOf))}${INDENT}`;
   return [
-    `<h3>${INDENT}${dim(WINDOW_TITLES[window.kind])}${INDENT}${percent} <small>${dim(label)}</small>`,
+    `<h3>${INDENT}${dim(windowTitle(window))}${INDENT}${percent} <small>${dim(label)}</small>`,
     `<br>${INDENT}${meter}</h3>`,
     detailRow(
       reset,

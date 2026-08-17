@@ -50,6 +50,34 @@ test("compact mode shows the window that triggers the warning color", () => {
   );
 });
 
+const scoped: UsageSnapshot = {
+  ...snapshot,
+  windows: [
+    ...snapshot.windows,
+    {
+      kind: "weekly",
+      usedPercent: 62,
+      resetsAt: new Date("2026-08-03T15:00:00Z"),
+      label: "Fable",
+    },
+  ],
+};
+
+test("a quiet scoped window stays out of the status bar and names itself once it is loud", () => {
+  expect(buildStatusText(scoped, configure({ displayMode: "full" }), now)).toBe(
+    "5h 12% (3h 12m) · 7d 41% (2d 5h)",
+  );
+  expect(
+    buildStatusText(scoped, configure({ displayMode: "full", warningThreshold: 60 }), now),
+  ).toBe("5h 12% (3h 12m) · 7d 41% (2d 5h) · 7d Fable 62% (2d 5h)");
+});
+
+test("compact mode swaps to the scoped window that drives the color", () => {
+  expect(buildStatusText(scoped, configure({ warningThreshold: 60 }), now)).toBe(
+    "7d Fable 62% (2d 5h)",
+  );
+});
+
 test("formats reset countdown boundaries", () => {
   expect(formatRemaining(new Date("2026-08-01T10:45:00Z"), now)).toBe("45m");
   expect(formatRemaining(new Date("2026-08-01T09:59:00Z"), now)).toBe("reset due");

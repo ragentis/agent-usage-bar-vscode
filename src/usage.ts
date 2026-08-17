@@ -9,6 +9,8 @@ export interface UsageWindow {
   resetsAt: Date | null;
   /** Provider duration; `pace.ts` falls back to the window kind when absent. */
   windowMinutes?: number | null;
+  /** Scope narrowing the window within its kind, such as a model name. Absent means the whole kind. */
+  label?: string | null;
 }
 
 export interface UsageSnapshot {
@@ -119,7 +121,17 @@ export function classifyWindow(windowMinutes: unknown, fallback: WindowKind): Wi
   return windowMinutes <= SESSION_WINDOW_MAX_MINUTES ? "session" : "weekly";
 }
 
+/**
+ * Kind is the primary axis, and a whole-kind window precedes the scopes inside it. Percentage orders
+ * scoped windows only, so providers without scopes keep their original order.
+ */
 export function sortWindows(windows: UsageWindow[]): UsageWindow[] {
   const order: Record<WindowKind, number> = { session: 0, weekly: 1 };
-  return windows.toSorted((left, right) => order[left.kind] - order[right.kind]);
+  const scoped = (window: UsageWindow): number => (window.label ? 1 : 0);
+  return windows.toSorted(
+    (left, right) =>
+      order[left.kind] - order[right.kind] ||
+      scoped(left) - scoped(right) ||
+      (scoped(left) ? right.usedPercent - left.usedPercent : 0),
+  );
 }

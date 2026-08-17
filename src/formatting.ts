@@ -70,7 +70,8 @@ function formatWindow(
 ): string {
   const remaining = formatRemaining(window.resetsAt, now);
   const suffix = percentageMode === "remaining" ? " left" : "";
-  return `${WINDOW_LABELS[window.kind]} ${formatPercent(window.usedPercent, percentageMode)}${suffix}${remaining ? ` (${remaining})` : ""}`;
+  const scope = window.label ? ` ${window.label}` : "";
+  return `${WINDOW_LABELS[window.kind]}${scope} ${formatPercent(window.usedPercent, percentageMode)}${suffix}${remaining ? ` (${remaining})` : ""}`;
 }
 
 export function buildStatusText(
@@ -85,9 +86,17 @@ export function buildStatusText(
   }
   const prefix = windows.some((window) => window.reset) ? "~" : "";
   if (configuration.displayMode === "full") {
+    // Every scope would make the status bar grow with the plan, so a scoped window earns its place
+    // only once it is the one worth watching. The tooltip lists them all regardless.
+    const shown = windows.filter(
+      (window) =>
+        !window.label || severityFor(window, configuration, snapshot.fetchedAt) !== "normal",
+    );
     return (
       prefix +
-      windows.map((window) => formatWindow(window, configuration.percentageMode, now)).join(" · ")
+      (shown.length > 0 ? shown : [primary])
+        .map((window) => formatWindow(window, configuration.percentageMode, now))
+        .join(" · ")
     );
   }
   // Compact normally shows the shortest window, but switches to whichever window drives the

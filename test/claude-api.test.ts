@@ -26,7 +26,8 @@ const response = {
       percent: 7,
       severity: "normal",
       resets_at: "2026-08-02T16:29:59.048107+00:00",
-      is_active: false,
+      scope: null,
+      is_active: true,
     },
     {
       kind: "weekly_all",
@@ -34,21 +35,79 @@ const response = {
       percent: 9,
       severity: "normal",
       resets_at: "2026-08-04T08:59:59.048130+00:00",
-      is_active: true,
+      scope: null,
+      is_active: false,
+    },
+    {
+      kind: "weekly_scoped",
+      group: "weekly",
+      percent: 62,
+      severity: "normal",
+      resets_at: "2026-08-05T08:59:59.048130+00:00",
+      scope: { model: { id: null, display_name: "Fable" }, surface: null },
+      is_active: false,
     },
   ],
 };
 
 test("reads the normalized limits array", () => {
   const windows = parseUsageLimits(response);
-  expect(windows.map(({ kind, usedPercent }) => ({ kind, usedPercent }))).toEqual([
-    { kind: "session", usedPercent: 7 },
-    { kind: "weekly", usedPercent: 9 },
+  expect(windows.map(({ kind, usedPercent, label }) => ({ kind, usedPercent, label }))).toEqual([
+    { kind: "session", usedPercent: 7, label: null },
+    { kind: "weekly", usedPercent: 9, label: null },
+    { kind: "weekly", usedPercent: 62, label: "Fable" },
   ]);
   expect(windows[0]?.resetsAt?.toISOString()).toBe("2026-08-02T16:29:59.048Z");
+  expect(windows[2]?.resetsAt?.toISOString()).toBe("2026-08-05T08:59:59.048Z");
 });
 
-test("keeps the fullest bucket when the account carries several weekly scopes", () => {
+test("orders scoped weekly windows after the unscoped one, fullest first", () => {
+  const windows = parseUsageLimits({
+    limits: [
+      {
+        kind: "weekly_scoped",
+        group: "weekly",
+        percent: 3,
+        scope: { model: { display_name: "Sonnet" } },
+      },
+      {
+        kind: "weekly_scoped",
+        group: "weekly",
+        percent: 62,
+        scope: { model: { display_name: "Fable" } },
+      },
+      { kind: "weekly_all", group: "weekly", percent: 9 },
+    ],
+  });
+  expect(windows.map(({ usedPercent, label }) => ({ usedPercent, label }))).toEqual([
+    { usedPercent: 9, label: null },
+    { usedPercent: 62, label: "Fable" },
+    { usedPercent: 3, label: "Sonnet" },
+  ]);
+});
+
+test("keeps the fullest reading of one scope rather than two rows for it", () => {
+  const windows = parseUsageLimits({
+    limits: [
+      {
+        kind: "weekly_scoped",
+        group: "weekly",
+        percent: 12,
+        scope: { model: { display_name: "Fable" } },
+      },
+      {
+        kind: "weekly_scoped",
+        group: "weekly",
+        percent: 62,
+        scope: { model: { display_name: "Fable" } },
+      },
+    ],
+  });
+  expect(windows).toHaveLength(1);
+  expect(windows[0]?.usedPercent).toBe(62);
+});
+
+test("keeps the fullest bucket when the weekly scopes are unnamed", () => {
   const windows = parseUsageLimits({
     limits: [
       { kind: "weekly_all", group: "weekly", percent: 9, resets_at: "2026-08-04T08:59:59Z" },
@@ -59,6 +118,18 @@ test("keeps the fullest bucket when the account carries several weekly scopes", 
   expect(windows).toHaveLength(1);
   expect(windows[0]?.usedPercent).toBe(62);
   expect(windows[0]?.resetsAt?.toISOString()).toBe("2026-08-05T08:59:59.000Z");
+});
+
+test("a scope the service does not name cannot be told apart from the whole week", () => {
+  const windows = parseUsageLimits({
+    limits: [
+      { kind: "weekly_all", group: "weekly", percent: 9 },
+      { kind: "weekly_scoped", group: "weekly", percent: 62, scope: { model: { id: "x" } } },
+      { kind: "weekly_scoped", group: "weekly", percent: 40, scope: "not an object" },
+    ],
+  });
+  expect(windows).toHaveLength(1);
+  expect(windows[0]).toMatchObject({ kind: "weekly", usedPercent: 62, label: null });
 });
 
 test("falls back to kind when group is missing and drops unknown scopes", () => {

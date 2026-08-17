@@ -507,6 +507,30 @@ test("a configured locale writes every date in the tooltip", () => {
   );
 });
 
+test("a scoped window gets its own block, named after the scope", () => {
+  const text = tooltip({
+    windows: [
+      ...snapshot.windows,
+      {
+        kind: "weekly",
+        usedPercent: 62,
+        resetsAt: new Date("2026-08-03T15:00:00Z"),
+        label: "Fable",
+      },
+    ],
+  });
+
+  expect(text).toMatch(heading("Weekly", "41%"));
+  expect(text).toMatch(heading("Weekly · Fable", "62%"));
+});
+
+test("a scope name is provider text and cannot become markup", () => {
+  const text = tooltip({ windows: [{ ...snapshot.windows[0]!, label: "<b>x</b>" }] });
+
+  expect(text).toContain(escapeHtml("<b>x</b>"));
+  expect(text).not.toContain("<b>x</b>");
+});
+
 test("a Codex reading names Codex as where it came from", () => {
   expect(tooltip({ source: "codex-app-server" })).toContain("From Codex account · as of ");
 });
