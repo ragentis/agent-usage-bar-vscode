@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { claudeSessionsPath } from "./claude";
 import { fetchClaudeUsage } from "./claude-api";
-import { codexHomePath, codexSessionsPath } from "./codex";
+import { codexSessionsPath } from "./codex";
 import { CodexAppServer } from "./codex-appserver";
 import { openSettings, showMenu } from "./menu";
 import { ReadCoordinator } from "./read-coordinator";
@@ -15,7 +15,7 @@ import {
 } from "./status-bar";
 import { UsageBar, type ProviderDisplay, type ProviderPort } from "./usage-bar";
 import type { ProviderId } from "./usage";
-import { FileWatcher, watchBoth } from "./watcher";
+import { FileWatcher } from "./watcher";
 
 function display(provider: ProviderId): ProviderDisplay {
   const item = createStatusBarItem(provider);
@@ -38,11 +38,6 @@ function providers(onCodexPush: () => void): ProviderPort[] {
     fileSuffix: ".jsonl",
     recursive: true,
   });
-  const codexAuthWatcher = new FileWatcher({
-    directory: codexHomePath(),
-    fileSuffix: "auth.json",
-    recursive: false,
-  });
   let codexAppServer: CodexAppServer | null = null;
   return [
     {
@@ -57,7 +52,7 @@ function providers(onCodexPush: () => void): ProviderPort[] {
       display: display("codex"),
       // Lazy startup avoids a Codex process in windows that only adopt another window's readings.
       read: () => (codexAppServer ??= new CodexAppServer(onCodexPush)).readUsage(),
-      watcher: watchBoth(codexWatcher, codexAuthWatcher, () => codexAppServer?.reload()),
+      watcher: codexWatcher,
       isEnabled: (configuration) => configuration.codexEnabled,
       stop: () => codexAppServer?.stop(),
       dispose: () => codexAppServer?.dispose(),

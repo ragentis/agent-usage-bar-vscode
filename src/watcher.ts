@@ -1,5 +1,4 @@
 import { existsSync, watch, type FSWatcher } from "node:fs";
-import type { ProviderWatcher } from "./usage-bar";
 
 const RETRY_DELAY_MS = 15_000;
 /**
@@ -18,34 +17,6 @@ export interface WatchTarget {
   directory: string;
   fileSuffix: string;
   recursive: boolean;
-}
-
-/**
- * Both targets mean the reading is due again, but only the second one requires the provider itself
- * to be replaced first.
- */
-export function watchBoth(
-  activity: ProviderWatcher,
-  credentials: ProviderWatcher,
-  onCredentialsChange: () => void,
-): ProviderWatcher {
-  return {
-    start: (onChange) => {
-      activity.start(onChange);
-      credentials.start(() => {
-        onCredentialsChange();
-        onChange();
-      });
-    },
-    stop: () => {
-      activity.stop();
-      credentials.stop();
-    },
-    dispose: () => {
-      activity.dispose();
-      credentials.dispose();
-    },
-  };
 }
 
 export class FileWatcher {

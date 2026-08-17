@@ -73,21 +73,6 @@ for (const pattern of [/\bshell\s*:\s*true/, /\.codex[\\/]auth\.json/, /\bunlock
   }
 }
 
-// Watching the Codex credential file puts its name in the bundle, where its mere presence no longer
-// stands out. Reading it needs no module member this audit could reject, so pin the two forms that
-// carry the name: the watch filter declaring it, and the comparison that is allowed to use it.
-const credentialNames = bundle.match(/auth\.json/g) ?? [];
-const watchFilters = bundle.match(/fileSuffix:\s*"auth\.json"/g) ?? [];
-if (credentialNames.length !== watchFilters.length) {
-  fail("auth.json appears outside a watch filter; the Codex credential file must not be opened");
-}
-
-const suffixMentions = bundle.match(/fileSuffix/g) ?? [];
-const suffixPinned = bundle.match(/fileSuffix:\s*"|endsWith\([\w$]+\.fileSuffix\)/g) ?? [];
-if (suffixMentions.length !== suffixPinned.length) {
-  fail("fileSuffix reaches something other than a suffix comparison; a path may be built from it");
-}
-
 // Only the read-only keychain verb may ship.
 const keychainVerbs = [...new Set(bundle.match(/\b[a-z]+-(?:generic|internet)-password\b/g) ?? [])];
 const writeVerbs = keychainVerbs.filter((verb) => verb !== "find-generic-password");

@@ -227,35 +227,22 @@ test("a server that stops answering is dropped, and the next read starts a fresh
   expect(world.spawned).toHaveLength(2);
 });
 
-test("changed credentials are picked up by a fresh process on the next read", async () => {
-  const world = harness();
-  const first = world.app.readUsage();
-  const codex = world.latest();
-  await handshake(codex);
-  codex.answers(RATE_LIMITS);
-  await expect(first).resolves.toMatchObject({ status: "ok" });
-
-  world.app.reload();
-  const second = world.app.readUsage();
-  await handshake(world.latest());
-  world.latest().answers(RATE_LIMITS);
-
-  await expect(second).resolves.toMatchObject({ status: "ok" });
-  expect(codex.killed).toBe(1);
-  expect(world.spawned).toHaveLength(2);
-});
-
-test("changed credentials leave a read that is already running alone", async () => {
+test("a signed-out server is replaced, so a later sign-in is seen without a reload", async () => {
   const world = harness();
   const reading = world.app.readUsage();
   const codex = world.latest();
   await handshake(codex);
 
-  world.app.reload();
-  codex.answers(RATE_LIMITS);
+  codex.answers({ rateLimits: { primary: null, secondary: null } });
+  await expect(reading).resolves.toMatchObject({ status: "unavailable" });
+  expect(codex.killed).toBe(1);
 
-  await expect(reading).resolves.toMatchObject({ status: "ok" });
-  expect(world.spawned).toHaveLength(1);
+  const second = world.app.readUsage();
+  await handshake(world.latest());
+  world.latest().answers(RATE_LIMITS);
+
+  await expect(second).resolves.toMatchObject({ status: "ok" });
+  expect(world.spawned).toHaveLength(2);
 });
 
 test("a process that exits mid-request answers it rather than leaving it hanging", async () => {
