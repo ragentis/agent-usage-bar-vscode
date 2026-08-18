@@ -20,12 +20,12 @@ import {
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const OAUTH_BETA = "oauth-2025-04-20";
 const REQUEST_TIMEOUT_MS = 5_000;
-const RATE_LIMIT_FALLBACK_MS = 60_000;
 
 /**
  * Accepts both standard `Retry-After` forms. Missing or non-future values, including the service's
  * observed `Retry-After: 0`, mean no stated wait; treating zero as immediate retry would create a
- * refusal loop. Valid waits are capped before becoming shared timers.
+ * refusal loop; the reader backs off on its own instead. Valid waits are capped before becoming
+ * shared timers.
  */
 export function parseRetryAfter(header: string | null, now: Date): Date | null {
   if (!header) {
@@ -177,16 +177,13 @@ export async function fetchClaudeUsage(
     };
   }
   if (response.status === 429) {
-    const now = new Date();
-    // A one-minute fallback prevents a watcher burst without making an unknown wait feel stalled.
-    const retryAt =
-      parseRetryAfter(response.headers.get("retry-after"), now) ??
-      new Date(now.getTime() + RATE_LIMIT_FALLBACK_MS);
     // `retryAt` carries the wait; embedding it in the message would leave stale countdown text.
+    const retryAt = parseRetryAfter(response.headers.get("retry-after"), new Date());
     return {
       status: "unavailable",
       message: "Rate limited by the usage service.",
-      retryAt,
+      rateLimited: true,
+      ...(retryAt ? { retryAt } : {}),
     };
   }
   if (!response.ok) {

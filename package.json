@@ -261,10 +261,10 @@
         "agentUsageBar.refreshIntervalSeconds": {
           "type": "number",
           "default": 300,
-          "minimum": 30,
+          "minimum": 60,
           "maximum": 3600,
           "order": 13,
-          "description": "How often to re-read usage in the background, so this mainly covers usage spent on other machines or in other clients. Local agent activity also triggers a refresh, and no automatic read happens less than thirty seconds after the last one."
+          "description": "How often to re-read usage in the background, so this mainly covers usage spent on other machines or in other clients. Local agent activity also triggers a refresh, and no automatic read happens less than a minute after the last one."
         }
       }
     }

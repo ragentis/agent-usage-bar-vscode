@@ -27,9 +27,10 @@ export interface ExtensionConfiguration {
 
 /**
  * This bounds both the setting and every automatic trigger. Neither provider publishes its limit,
- * so `Retry-After` still controls any refusal.
+ * so `Retry-After` still controls any refusal. The account endpoint is shared with the agent itself
+ * and every other client, and a transcript-driven read every half minute was enough to be refused.
  */
-export const MIN_REFRESH_INTERVAL_SECONDS = 30;
+export const MIN_REFRESH_INTERVAL_SECONDS = 60;
 export const MAX_REFRESH_INTERVAL_SECONDS = 3_600;
 export const DEFAULT_REFRESH_INTERVAL_SECONDS = 300;
 

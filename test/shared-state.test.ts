@@ -119,6 +119,27 @@ test("a rate-limit wait crosses to the other windows", async () => {
   expect(shared.read("claude")?.retryAt).toEqual(retryAt);
 });
 
+test("the refusal count crosses with the wait and is dropped by a publication without one", async () => {
+  const shared = new SharedUsageState(memento());
+  await shared.publish("claude", {
+    owner: "abc",
+    view: { snapshot: null, message: "rate limited" },
+    retryAt: new Date(Date.now() + 60_000),
+    refusals: 3,
+  });
+  expect(shared.read("claude")?.refusals).toBe(3);
+
+  await shared.claim("claude", "xyz");
+  expect(shared.read("claude")?.refusals).toBe(3);
+
+  await shared.publish("claude", {
+    owner: "xyz",
+    view: { snapshot, message: null },
+    retryAt: null,
+  });
+  expect(shared.read("claude")?.refusals).toBe(0);
+});
+
 test("nothing a window of another version wrote is taken on trust", () => {
   expect(new SharedUsageState(memento({ "sharedUsage.v1.claude": 42 })).read("claude")).toBeNull();
   expect(
@@ -186,6 +207,8 @@ test("a v1 entry written by another window reads back as the reading it names", 
     publishedAt: 1_754_000_001_000,
     owner: "window-b",
     retryAt: null,
+    // An entry written before the back-off counted refusals starts the count from nothing.
+    refusals: 0,
     view: {
       message: null,
       verbatim: false,

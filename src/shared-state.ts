@@ -36,11 +36,17 @@ export interface SharedEntry {
   publishedAt: number;
   owner: string;
   retryAt: Date | null;
+  /** Consecutive refusals so far, so a later window continues the back-off instead of restarting it. */
+  refusals: number;
   view: ProviderView;
 }
 
 function millis(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function count(value: unknown): number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : 0;
 }
 
 /**
@@ -117,6 +123,7 @@ function parseEntry(value: unknown): SharedEntry | null {
     publishedAt: millis(value.publishedAt) ?? 0,
     owner: validLabel(value.owner) ?? "",
     retryAt: retryAt === null ? null : new Date(retryAt),
+    refusals: count(value.refusals),
     view: {
       snapshot: parseSnapshot(value.snapshot),
       message: validMessage(value.message),
@@ -132,6 +139,7 @@ function serialize(entry: SharedEntry): Record<string, unknown> {
     publishedAt: entry.publishedAt,
     owner: entry.owner,
     retryAt: entry.retryAt?.getTime() ?? null,
+    refusals: entry.refusals,
     message: entry.view.message,
     verbatim: entry.view.verbatim ?? false,
     snapshot: snapshot && {
@@ -171,9 +179,13 @@ export class SharedUsageState {
 
   publish(
     provider: ProviderId,
-    update: { owner: string; view: ProviderView; retryAt: Date | null },
+    update: { owner: string; view: ProviderView; retryAt: Date | null; refusals?: number },
   ): PromiseLike<void> {
-    return this.write(provider, { publishedAt: Date.now(), ...update });
+    return this.write(provider, {
+      publishedAt: Date.now(),
+      ...update,
+      refusals: update.refusals ?? 0,
+    });
   }
 
   rewind(provider: ProviderId, readAt: number): PromiseLike<void> {
@@ -190,6 +202,7 @@ export class SharedUsageState {
       publishedAt: 0,
       owner: "",
       retryAt: null,
+      refusals: 0,
       view: { snapshot: null, message: null },
       ...this.read(provider),
       ...change,

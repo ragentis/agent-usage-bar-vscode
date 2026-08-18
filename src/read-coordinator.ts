@@ -112,11 +112,16 @@ export class ReadCoordinator {
    * Publication time, rather than final lease ownership, preserves a valid result from a claim race
    * while preventing a slow read from overwriting a newer forced refresh.
    */
-  async publish(provider: ProviderId, view: ProviderView, retryAt: Date | null): Promise<void> {
+  async publish(
+    provider: ProviderId,
+    view: ProviderView,
+    retryAt: Date | null,
+    refusals = 0,
+  ): Promise<void> {
     const claimedAt = this.claimedAt.get(provider);
     const published = this.shared.read(provider)?.publishedAt ?? 0;
     if (claimedAt !== undefined && published <= claimedAt) {
-      await this.shared.publish(provider, { owner: this.windowId, view, retryAt });
+      await this.shared.publish(provider, { owner: this.windowId, view, retryAt, refusals });
     }
   }
 

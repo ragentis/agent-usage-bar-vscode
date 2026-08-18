@@ -27,11 +27,18 @@ export interface UsageSnapshot {
 
 /**
  * A new snapshot or the reason it is unavailable. Failures retain the last good snapshot;
- * `retryAt` additionally prevents another request before the provider's stated time.
+ * `retryAt` additionally prevents another request before the provider's stated time. `rateLimited`
+ * marks a refusal; when it states no `retryAt`, the reader chooses the wait.
  */
 export type ProviderResult =
   | { status: "ok"; snapshot: UsageSnapshot }
-  | { status: "unavailable"; message: string; retryAt?: Date; verbatim?: boolean };
+  | {
+      status: "unavailable";
+      message: string;
+      retryAt?: Date;
+      rateLimited?: boolean;
+      verbatim?: boolean;
+    };
 
 export interface ProviderView {
   snapshot: UsageSnapshot | null;

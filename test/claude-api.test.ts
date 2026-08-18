@@ -265,7 +265,11 @@ function service(reply: unknown): { url: unknown; init: Record<string, unknown> 
   return calls;
 }
 
-function refusal(result: ProviderResult): { message: string; retryAt?: Date } {
+function refusal(result: ProviderResult): {
+  message: string;
+  retryAt?: Date;
+  rateLimited?: boolean;
+} {
   if (result.status !== "unavailable") {
     throw new Error(`expected no reading, got ${result.status}`);
   }
@@ -307,13 +311,22 @@ test("a refusal carries the wait as a moment, not as words that go stale", async
   expect(result.message).not.toMatch(/\d/);
 });
 
-test("a refusal naming no window is held for a minute rather than retried at once", async () => {
+test("a refusal naming no window is flagged for the reader to choose the wait", async () => {
   service(answered(429, {}));
-  const before = Date.now();
 
   const result = refusal(await fetchClaudeUsage(await signedIn()));
 
-  expect(result.retryAt?.getTime()).toBeGreaterThanOrEqual(before + 60_000);
+  expect(result.rateLimited).toBe(true);
+  expect(result.retryAt).toBeUndefined();
+});
+
+test("a refusal stating a wait carries both the flag and the wait", async () => {
+  service(answered(429, {}, { "retry-after": "45" }));
+
+  const result = refusal(await fetchClaudeUsage(await signedIn()));
+
+  expect(result.rateLimited).toBe(true);
+  expect(result.retryAt).toBeInstanceOf(Date);
 });
 
 test("each way the service can decline says which one it was", async () => {

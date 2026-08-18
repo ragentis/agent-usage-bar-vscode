@@ -15,6 +15,12 @@ const TICK_INTERVAL_MS = 5_000;
 /** How long an unused provider process is kept before it is stopped; see `stopIfIdle`. */
 const IDLE_STOP_MS = 10 * 60_000;
 const HOLD_JITTER_MS = 2_000;
+/**
+ * A refusal that states no wait is retried after a minute, then after twice the previous wait. The
+ * limit is shared with other clients, so a fixed minute could keep it tripped by the retries alone.
+ */
+const REFUSAL_BASE_WAIT_MS = 60_000;
+const REFUSAL_MAX_WAIT_MS = 15 * 60_000;
 
 export interface ProviderDisplay {
   render(
@@ -204,7 +210,12 @@ export class UsageBar {
       await this.reads.abandon(provider.id);
       return;
     }
-    const retryAt = result.status === "ok" ? undefined : result.retryAt;
+    const refused = result.status === "unavailable" && result.rateLimited === true;
+    const refusals = refused ? (this.reads.latest(provider.id)?.refusals ?? 0) + 1 : 0;
+    const retryAt =
+      result.status === "ok"
+        ? undefined
+        : (result.retryAt ?? (refused ? refusalRetryAt(refusals) : undefined));
     if (retryAt) {
       this.hold(provider, retryAt);
     } else {
@@ -213,7 +224,7 @@ export class UsageBar {
     const view = nextView(provider.state.view, result);
     provider.state.view = view;
     this.paint(provider);
-    await this.reads.publish(provider.id, view, retryAt ?? null);
+    await this.reads.publish(provider.id, view, retryAt ?? null, refusals);
   }
 
   /**
@@ -367,6 +378,11 @@ export class UsageBar {
       }
     }
   }
+}
+
+function refusalRetryAt(refusals: number): Date {
+  const wait = Math.min(REFUSAL_BASE_WAIT_MS * 2 ** Math.max(0, refusals - 1), REFUSAL_MAX_WAIT_MS);
+  return new Date(Date.now() + wait);
 }
 
 function nextView(previous: ProviderView | null, result: ProviderResult): ProviderView {

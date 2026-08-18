@@ -200,7 +200,9 @@ A first scan reads every transcript once. Later scans read only files modified s
 
 Codex also sends an `account/rateLimits/updated` notification while its app server is running. The extension stops an idle app server after ten minutes instead of keeping a child process alive only for that notification. It also drops one whose read produced no reading, because such an app server tends to answer the same way until it is replaced. File watching covers later activity and triggers a fresh app server when another reading is needed.
 
-Every automatic read has a minimum interval of thirty seconds per provider, regardless of which trigger requested it. A long agent turn can write its transcript in several bursts, and those small updates do not justify a request each. A manual menu refresh bypasses this minimum.
+Every automatic read has a minimum interval of one minute per provider, regardless of which trigger requested it. A long agent turn can write its transcript in several bursts, and those small updates do not justify a request each. A manual menu refresh bypasses this minimum.
+
+When the Anthropic usage endpoint refuses a read with a stated wait, that wait is honoured, by the manual refresh too. When it refuses without one, the extension waits a minute, then doubles the wait on each further refusal up to fifteen minutes, so a limit shared with other clients is not kept tripped by the retries themselves. Any answer that is not a refusal resets the wait, and windows share the count.
 
 ### What is stored, and what never leaves
 

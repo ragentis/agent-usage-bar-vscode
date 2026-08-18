@@ -59,6 +59,10 @@ function refusedAt(afterMs: number): Date {
   return new Date(Date.now() + afterMs);
 }
 
+function refusedSilently(): ProviderResult {
+  return { status: "unavailable", message: "rate limited", rateLimited: true };
+}
+
 async function flush(): Promise<void> {
   await vi.advanceTimersByTimeAsync(0);
 }
@@ -212,13 +216,94 @@ test("a refusal shorter than the floor costs the floor, not the whole interval",
   expect(window.counts.read).toBe(1);
 
   window.answers(() => Promise.resolve(ok(7)));
-  await vi.advanceTimersByTimeAsync(25_000);
+  await vi.advanceTimersByTimeAsync(55_000);
   expect(window.counts.read).toBe(1);
 
   await vi.advanceTimersByTimeAsync(15_000);
   expect(window.counts.read).toBe(2);
   expect(window.last()?.snapshot?.windows[0]?.usedPercent).toBe(7);
   expect(window.last()?.message).toBeNull();
+});
+
+test("refusals that state no wait are retried after a minute, then twice as long each time", async () => {
+  const window = profile().window();
+  window.answers(() => Promise.resolve(refusedSilently()));
+  window.bar.start();
+  await flush();
+  expect(window.counts.read).toBe(1);
+  expect(window.last()?.message).toMatch(/^Rate limited, retrying at/);
+
+  // Each retry lands within two seconds of jitter after its wait, so the checks bracket that.
+  await vi.advanceTimersByTimeAsync(58_000);
+  expect(window.counts.read).toBe(1);
+  await vi.advanceTimersByTimeAsync(5_000);
+  expect(window.counts.read).toBe(2);
+
+  await vi.advanceTimersByTimeAsync(115_000);
+  expect(window.counts.read).toBe(2);
+  await vi.advanceTimersByTimeAsync(8_000);
+  expect(window.counts.read).toBe(3);
+
+  await vi.advanceTimersByTimeAsync(233_000);
+  expect(window.counts.read).toBe(3);
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(window.counts.read).toBe(4);
+});
+
+test("the back-off never waits longer than a quarter of an hour", async () => {
+  const window = profile().window();
+  window.answers(() => Promise.resolve(refusedSilently()));
+  window.bar.start();
+  await flush();
+
+  await vi.advanceTimersByTimeAsync(3 * 60 * 60_000);
+  const reads = window.counts.read;
+  await vi.advanceTimersByTimeAsync(2 * 60 * 60_000);
+  expect(window.counts.read - reads).toBeGreaterThanOrEqual(7);
+  expect(window.counts.read - reads).toBeLessThanOrEqual(9);
+});
+
+test("an answer that is not a refusal starts the back-off over", async () => {
+  const window = profile().window();
+  window.answers(() => Promise.resolve(refusedSilently()));
+  window.bar.start();
+  await flush();
+  await vi.advanceTimersByTimeAsync(63_000);
+  await vi.advanceTimersByTimeAsync(123_000);
+  expect(window.counts.read).toBe(3);
+
+  window.answers(() => Promise.resolve(ok(9)));
+  await vi.advanceTimersByTimeAsync(243_000);
+  expect(window.counts.read).toBe(4);
+  expect(window.last()?.message).toBeNull();
+
+  window.answers(() => Promise.resolve(refusedSilently()));
+  await vi.advanceTimersByTimeAsync(SETTINGS.refreshIntervalSeconds * 1_000 + 3_000);
+  expect(window.counts.read).toBe(5);
+  await vi.advanceTimersByTimeAsync(63_000);
+  expect(window.counts.read).toBe(6);
+});
+
+test("a window joining during a back-off continues the count instead of restarting it", async () => {
+  const { coordinator, window } = profile();
+  const other = coordinator();
+  await other.take("claude");
+  await other.publish("claude", { snapshot: null, message: "rate limited" }, refusedAt(1_000), 3);
+
+  const joined = window();
+  joined.answers(() => Promise.resolve(refusedSilently()));
+  joined.bar.start();
+  await flush();
+  expect(joined.counts.read).toBe(0);
+
+  // The expired wait lets the read go as soon as the floor allows; it is the fourth refusal in a
+  // row for the account, so the next wait is eight minutes rather than one.
+  await vi.advanceTimersByTimeAsync(300_000);
+  expect(joined.counts.read).toBe(1);
+  await vi.advanceTimersByTimeAsync(240_000);
+  expect(joined.counts.read).toBe(1);
+  await vi.advanceTimersByTimeAsync(15_000);
+  expect(joined.counts.read).toBe(2);
 });
 
 test("another window getting through ends the wait for the ones still holding it", async () => {
