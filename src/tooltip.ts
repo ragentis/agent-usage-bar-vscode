@@ -514,12 +514,13 @@ export function buildTooltip(
       lines(`<b>Credits</b> ${dim(`· ${wrapped(`${snapshot.credits}${expiry}`, 10)}`)}`),
     );
   }
-  // PAD plus STEP creates the larger gap above the footer rule.
+  // PAD plus STEP creates the larger gap above the footer rule; EDGE plus STEP the one below it.
   blocks.push(
     PAD,
     STEP,
     RULE,
     EDGE,
+    STEP,
     footerBlock(snapshot, age, failure, configuration.locale),
     PAD,
     actionsBlock(),
