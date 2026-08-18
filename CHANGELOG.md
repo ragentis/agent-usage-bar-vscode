@@ -2,6 +2,25 @@
 
 Notable changes to Agent Usage Bar. Release Please builds this file from the [commit subjects](.github/commit-instructions.md) that land on `main`, and the versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.3.1...v0.4.0) (2026-08-18)
+
+
+### Added
+
+* **claude:** show per-model weekly limits as their own windows ([34aaadf](https://github.com/ragentis/agent-usage-bar-vscode/commit/34aaadf35814a86c2d5a779bbccc17a67a491d70))
+* **tooltip:** draw the provider mark larger in the title ([62f6635](https://github.com/ragentis/agent-usage-bar-vscode/commit/62f66351c6151c5d5a0d5a172cf6856ca94f9546))
+* **tooltip:** draw the weekly mark as a haloed glyph ([2b42447](https://github.com/ragentis/agent-usage-bar-vscode/commit/2b42447684b3ea434c2ea1ba4aa8a8912f0a4783))
+* **tooltip:** mark elapsed time on the weekly bar ([660830d](https://github.com/ragentis/agent-usage-bar-vscode/commit/660830d6faef37b41e78c998246a6b53c446741e))
+* **tooltip:** show daily activity from agent transcripts ([7e07fbb](https://github.com/ragentis/agent-usage-bar-vscode/commit/7e07fbb463731efff38832616629e2e81d5f12a6))
+
+
+### Fixed
+
+* **codex:** recover from stale app-server credentials ([381e22d](https://github.com/ragentis/agent-usage-bar-vscode/commit/381e22dcdc6983dc19165e5876b51cf613569065))
+* **codex:** replace a signed-out app server without watching auth.json ([00909e4](https://github.com/ragentis/agent-usage-bar-vscode/commit/00909e4de6a378adcf4125421f6d4ef6008087f3))
+* **refresh:** back off repeated rate limits and read no more than once a minute ([bad1b31](https://github.com/ragentis/agent-usage-bar-vscode/commit/bad1b3121eebe90bbbe73fd5eeecc194acda3756))
+* **tooltip:** give the footer more room under its rule ([421211f](https://github.com/ragentis/agent-usage-bar-vscode/commit/421211f5ad0dafd22b64f2cb079ced28c021875b))
+
 ## [0.3.1](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.3.0...v0.3.1) (2026-08-13)
 
 
