@@ -8,7 +8,7 @@ No configuration is required. Both providers are enabled by default and refresh 
 
 [![VS Marketplace](https://img.shields.io/badge/VS%20Marketplace-install-007ACC?style=flat-square)](https://marketplace.visualstudio.com/items?itemName=ragentis.agent-usage-bar) [![Open VSX](https://img.shields.io/open-vsx/v/ragentis/agent-usage-bar?style=flat-square&label=Open%20VSX&color=C160EF)](https://open-vsx.org/extension/ragentis/agent-usage-bar/) [![Downloads](https://img.shields.io/open-vsx/dt/ragentis/agent-usage-bar?style=flat-square&label=downloads&color=2EA44F)](https://open-vsx.org/extension/ragentis/agent-usage-bar/) [![License](https://img.shields.io/github/license/ragentis/agent-usage-bar-vscode?style=flat-square&label=license&color=2EA44F)](LICENSE)
 
-<img src="assets/screenshot.png" width="466" alt="The Claude and Codex items in the VS Code status bar, with the Claude tooltip open above them: a filled bar and reset time for the 5-hour window and for the weekly one, the pace beside each, and links to refresh or open the settings.">
+<img src="assets/screenshot.png" width="897" alt="The Codex and Claude items in the VS Code status bar, with both tooltips open above them: the plan name, then a filled bar, reset time and pace for each window, the thirty-day daily activity strip, and links to refresh or open the settings.">
 
 ## What it shows
 
