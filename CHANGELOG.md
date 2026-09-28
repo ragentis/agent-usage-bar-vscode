@@ -2,6 +2,13 @@
 
 Notable changes to Agent Usage Bar. Release Please builds this file from the [commit subjects](.github/commit-instructions.md) that land on `main`, and the versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.4.0...v0.4.1) (2026-09-28)
+
+
+### Fixed
+
+* **codex:** drop the rate-limit notice when a full window already shows it ([e0afc8b](https://github.com/ragentis/agent-usage-bar-vscode/commit/e0afc8b7069c61779f68fe21a9ddb04b33f98856))
+
 ## [0.4.0](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.3.1...v0.4.0) (2026-08-18)
 
 
