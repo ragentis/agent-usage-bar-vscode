@@ -99,6 +99,24 @@ test("surfaces a stopped account", () => {
   ).toBe("Rate limit reached: rate_limit_reached");
 });
 
+test("leaves a reached rate limit to the full window that already shows it", () => {
+  const primary = { usedPercent: 100, windowDurationMins: 300, resetsAt: 1786215418 };
+  expect(
+    parseRateLimitsResponse(
+      {
+        rateLimits: { ...response.rateLimits, primary, rateLimitReachedType: "rate_limit_reached" },
+      },
+      fetchedAt,
+    )?.blocked,
+  ).toBeNull();
+  expect(
+    parseRateLimitsResponse(
+      { rateLimits: { ...response.rateLimits, primary, spendControlReached: true } },
+      fetchedAt,
+    )?.blocked,
+  ).toBe("Spend control reached");
+});
+
 test("rejects a reply that carries no usable window", () => {
   expect(
     parseRateLimitsResponse({ rateLimits: { primary: null, secondary: null } }, fetchedAt),

@@ -140,9 +140,16 @@ function creditBalance(value: unknown): string | null {
     : validLabel(value.balance);
 }
 
-function blockedReason(rateLimits: Record<string, unknown>): string | null {
+function blockedReason(
+  rateLimits: Record<string, unknown>,
+  windows: readonly UsageWindow[],
+): string | null {
   if (rateLimits.spendControlReached === true) {
     return "Spend control reached";
+  }
+  // A full window already explains the stop, so the notice only covers a limit no window shows.
+  if (windows.some((window) => window.usedPercent >= 100)) {
+    return null;
   }
   // The reached-type values are backend-defined, so the raw label is surfaced rather than guessed at.
   const reached = validLabel(rateLimits.rateLimitReachedType);
@@ -214,7 +221,7 @@ export function parseRateLimitsResponse(value: unknown, fetchedAt: Date): UsageS
   return {
     windows,
     plan: validLabel(rateLimits.planType),
-    blocked: blockedReason(rateLimits),
+    blocked: blockedReason(rateLimits, windows),
     credits: credits.summary,
     creditsExpireAt: credits.expiresAt,
     fetchedAt,
