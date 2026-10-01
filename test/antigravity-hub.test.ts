@@ -202,6 +202,7 @@ function answering(overrides: Record<string, (attempt: number) => Answer> = {}) 
 function harness(respond: (method: string, attempt: number) => Answer = answering()) {
   const processes: FakeProcess[] = [];
   const calls: string[] = [];
+  const bodies: unknown[] = [];
   let launches = 0;
   let holdNext = false;
   let finishHeld: ((hub: Hub) => void) | null = null;
@@ -210,8 +211,9 @@ function harness(respond: (method: string, attempt: number) => Answer = answerin
     processes.push(process);
     return {
       process,
-      call: (method) => {
+      call: (method, body) => {
         calls.push(method);
+        bodies.push(body);
         const answer = respond(method, calls.filter((called) => called === method).length);
         return answer instanceof Error ? Promise.reject(answer) : Promise.resolve(answer);
       },
@@ -231,6 +233,7 @@ function harness(respond: (method: string, attempt: number) => Answer = answerin
     hub,
     processes,
     calls,
+    bodies,
     latest: (): FakeProcess => {
       const process = processes.at(-1);
       if (!process) {
@@ -467,4 +470,78 @@ test("a disposed provider rules out every later read", async () => {
 
   await expect(world.hub.readUsage()).resolves.toMatchObject({ status: "unavailable" });
   expect(world.attempts()).toBe(0);
+});
+
+test("other questions are asked of one hub once it answers, and the hub is then stopped", async () => {
+  const world = harness(
+    answering({
+      GetAuthStatus: (attempt) => (attempt < 3 ? REFUSED : ok(SIGNED_IN)),
+      GetCascadeTrajectorySteps: () => ok({ steps: [] }),
+    }),
+  );
+  const asking = world.hub.query(async (call) => {
+    const first = await call("GetCascadeTrajectorySteps", { cascadeId: "one" });
+    const second = await call("GetCascadeTrajectorySteps", { cascadeId: "two" });
+    return [first.status, second.status];
+  });
+  await vi.advanceTimersByTimeAsync(1_000);
+
+  await expect(asking).resolves.toEqual([200, 200]);
+  expect(world.calls).toEqual([
+    "GetAuthStatus",
+    "GetAuthStatus",
+    "GetAuthStatus",
+    "GetCascadeTrajectorySteps",
+    "GetCascadeTrajectorySteps",
+  ]);
+  expect(world.bodies.slice(3)).toEqual([{ cascadeId: "one" }, { cascadeId: "two" }]);
+  expect(world.processes.map((process) => process.killed)).toEqual([1]);
+});
+
+test("questions that fail part way still stop the hub, and the failure is passed on", async () => {
+  const world = harness();
+
+  await expect(
+    world.hub.query(() => Promise.reject(new Error("the answer could not be read"))),
+  ).rejects.toThrow("the answer could not be read");
+  expect(world.latest().killed).toBe(1);
+});
+
+test("with no hub to ask, the questions are never put", async () => {
+  const world = harness(answering({ GetAuthStatus: () => REFUSED }));
+  let asked = 0;
+  const asking = world.hub.query(() => {
+    asked += 1;
+    return Promise.resolve(null);
+  });
+  // Observed before the timers run, so the rejection is never left unhandled.
+  const failure = asking.then(
+    () => null,
+    (error: unknown) => error,
+  );
+  await flush();
+  world.latest().fires("error", NO_SUCH_PROGRAM);
+
+  expect(await failure).toMatchObject({
+    message: "Antigravity could not be started. Check that the agy CLI is installed.",
+  });
+  expect(asked).toBe(0);
+  await expect(world.hub.query(() => Promise.resolve(null))).rejects.toThrow(
+    "Antigravity could not be started.",
+  );
+  expect(world.attempts()).toBe(1);
+});
+
+test("a hub that never answers is given up on before any question is put", async () => {
+  const world = harness(answering({ GetAuthStatus: () => REFUSED }));
+  const failure = world.hub
+    .query(() => Promise.resolve(null))
+    .then(
+      () => null,
+      (error: unknown) => error,
+    );
+  await vi.advanceTimersByTimeAsync(60_000);
+
+  expect(await failure).toMatchObject({ message: "Antigravity did not answer in time." });
+  expect(world.latest().killed).toBe(1);
 });

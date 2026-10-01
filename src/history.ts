@@ -1,7 +1,7 @@
 /**
- * Daily totals are derived from provider transcripts rather than sampled over time, so every window
- * recomputes the same day to the same value and no coordination is needed. Units differ per provider
- * and are never mixed or compared.
+ * Daily totals are derived from what the providers recorded rather than sampled over time, so every
+ * window recomputes the same day to the same value and no coordination is needed. Units differ per
+ * provider and are never mixed or compared.
  */
 
 export type HistoryUnit = "percent" | "tokens";
@@ -50,6 +50,10 @@ export interface HistoryScan {
   days: Record<string, number>;
   /** Newest sample seen, carried into the next scan; null for providers without a counter. */
   last: UsageSample | null;
+  /** Some record could not be read yet, so the days are a floor and the scan is worth repeating. */
+  pending?: boolean;
+  /** Nothing was written since the last scan, so nothing was read and what is stored stands. */
+  unchanged?: boolean;
 }
 
 /**
@@ -100,6 +104,21 @@ export function mergeDays(
     }
   }
   return merged;
+}
+
+/**
+ * A day's total only grows, so when a scan could not read everything, the stored figure for a day
+ * stands wherever it is the higher one.
+ */
+export function keepHigher(
+  days: Record<string, number>,
+  stored: Record<string, number>,
+): Record<string, number> {
+  const kept = { ...days };
+  for (const [day, value] of Object.entries(stored)) {
+    kept[day] = Math.max(kept[day] ?? 0, value);
+  }
+  return kept;
 }
 
 export function pruneDays(

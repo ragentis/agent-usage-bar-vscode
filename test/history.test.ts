@@ -3,6 +3,7 @@ import {
   dayStart,
   historyStrip,
   HISTORY_LEVELS,
+  keepHigher,
   localDay,
   mergeDays,
   pruneDays,
@@ -89,6 +90,16 @@ test("a scan replaces the days it covers and leaves earlier ones alone", () => {
     "2026-08-01": 12,
     "2026-08-09": 3,
     "2026-08-10": 8,
+    "2026-08-11": 6,
+  });
+});
+
+test("a scan that could not read everything never lowers a day it already had", () => {
+  const stored = { "2026-08-09": 30, "2026-08-10": 40 };
+  const merged = { "2026-08-09": 30, "2026-08-10": 25, "2026-08-11": 6 };
+  expect(keepHigher(merged, stored)).toEqual({
+    "2026-08-09": 30,
+    "2026-08-10": 40,
     "2026-08-11": 6,
   });
 });

@@ -51,14 +51,15 @@ Pace remains hidden until the window has been open for fifteen minutes, and the 
 
 Under the windows, the tooltip draws the last thirty days as one bar per day: the busier the day, the taller and darker the bar; a day the agent was not used is a flat mark on the baseline. Each day is placed in one of five steps relative to the busiest day in view, so a bar says which band a day fell in — twice the height is not twice the work.
 
-The days are counted from the session transcripts Claude Code and Codex already write on this machine, so the strip is complete on the first hover and includes work done outside VS Code. Only recorded numbers and times are read from those files; see [Data access](#data-access). Antigravity keeps its conversations in databases rather than line transcripts, so its tooltip has no strip.
+The days are counted from what the agents already recorded on this machine, so the strip is complete on the first hover and includes work done outside VS Code. For Claude Code and Codex that is their session transcripts. Antigravity keeps each conversation in a database of its own, so its days are asked of the Antigravity CLI instead. Only recorded numbers and times are taken; see [Data access](#data-access).
 
-Each provider is measured in the unit it records, and the two are never compared:
+Each provider is measured in the unit it records, and the units are never compared:
 
 | Provider | What a day counts |
 | --- | --- |
 | Codex | Percent of the weekly limit spent that day. Codex records the account's own percentages, so a day is exact. |
 | Claude Code | Tokens written that day. Claude Code records tokens, not percentages, so its strip shows relative activity only. |
+| Antigravity | Input and output tokens of that day's model calls, which is relative activity only, like Claude Code's. A conversation is counted once it has been quiet for a minute, so today's bar trails a conversation in progress. |
 
 A day from before the first scan is drawn like an unused one. That matters for Claude Code, which deletes its transcripts after `cleanupPeriodDays` (thirty days by default): the oldest cells may stay empty however much work they held. Once a day has been counted it is kept, so the strip fills in from there. Nothing is drawn when no day in view has activity.
 
@@ -187,6 +188,21 @@ The hub is asked to write no log file. On each start it still leaves an empty cr
 
 This interface is not documented by Google. It is the one Antigravity's own extension uses, and it can change with any Antigravity update. When it does, the item reports that no reading is available and the other providers are unaffected.
 
+#### Antigravity conversations
+
+**The daily activity strip has the hub read your conversations, and takes two things out of them.** A conversation is a SQLite database under `~/.gemini/antigravity/conversations` that only Antigravity's own program can read, so the extension starts a hub and asks it two questions per conversation:
+
+| Question | What is taken |
+| --- | --- |
+| The model calls of the conversation | The input and output token counts of each call, and which step it belongs to. Cached input is left out. |
+| The steps of the conversation | The time each step was made. This answer also carries the conversation itself: your prompts, the replies, and the commands that were run. |
+
+Nothing but a step's time is read out of the second answer, and no prompt, reply, command, or file content is kept, stored, logged, or shown. What outlives the scan is one number per calendar day.
+
+**A conversation in use is not opened.** Opening one that still has unsaved changes makes SQLite move them into the database file, which would change a file Antigravity is working on. A conversation is therefore read only once it has been quiet for a minute and its write-ahead log holds nothing newer than the database. One that still has such a log after half an hour without a write is treated as left behind and read anyway. Reading a conversation does recreate the two empty companion files SQLite keeps beside a database; the database itself is not written.
+
+A hub is started for a scan only when a conversation that can be read has changed since this window last read it, and at most once in ten minutes across all windows. What a window has read it keeps in memory. A newly opened window therefore reads the conversations of the last few days once, unless none was written since the last scan; then it shows the stored days and starts no hub. The very first scan reads every conversation of the last sixty days. Setting `agentUsageBar.showHistory` to `false` stops these scans entirely.
+
 ### Claude Code
 
 **The extension reads the token stored by Claude Code, uses it for one request, and discards it.** The request goes to `https://api.anthropic.com/api/oauth/usage`, the same endpoint used by the official Claude Code extension for usage data.
@@ -224,9 +240,9 @@ The extension distinguishes these outcomes through the exit code returned by `se
 
 ### Agent transcripts
 
-The extension watches `~/.codex/sessions` and `~/.claude/projects` for the fact that a `.jsonl` file changed, and `~/.gemini/antigravity/conversations` for the fact that any file in it changed. After the writes settle, that change requests a usage refresh. Antigravity's conversation files are never opened.
+The extension watches `~/.codex/sessions` and `~/.claude/projects` for the fact that a `.jsonl` file changed, and `~/.gemini/antigravity/conversations` for the fact that any file in it changed. After the writes settle, that change requests a usage refresh. Antigravity's conversation files are never opened by this extension itself; see [Antigravity conversations](#antigravity-conversations) for what its hub is asked.
 
-**Those files are also read, for the daily activity strip only.** They contain your prompts and your code, so what is taken out of them is worth stating exactly. Each line is parsed as JSON and one of two things is kept:
+**The Claude Code and Codex transcripts are also read, for the daily activity strip only.** They contain your prompts and your code, so what is taken out of them is worth stating exactly. Each line is parsed as JSON and one of two things is kept:
 
 | Provider | What is taken |
 | --- | --- |

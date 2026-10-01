@@ -207,7 +207,7 @@
           "type": "boolean",
           "default": true,
           "order": 4,
-          "markdownDescription": "Show a strip of the last thirty days of activity in the tooltip. Days are counted from the session transcripts the agents already write on this machine, so work done outside VS Code is included. Only recorded numbers and times are read from those files, and nothing is sent anywhere; see [Agent transcripts](https://github.com/ragentis/agent-usage-bar-vscode#agent-transcripts) for exactly what is taken."
+          "markdownDescription": "Show a strip of the last thirty days of activity in the tooltip. Days are counted from what the agents already recorded on this machine, so work done outside VS Code is included: the session transcripts of Claude Code and Codex, and for Antigravity the token counts its own CLI reports for your conversations. Only recorded numbers and times are taken, and nothing is sent anywhere; see [Agent transcripts](https://github.com/ragentis/agent-usage-bar-vscode#agent-transcripts) and [Antigravity conversations](https://github.com/ragentis/agent-usage-bar-vscode#antigravity-conversations) for exactly what is taken."
         },
         "agentUsageBar.warningThreshold": {
           "type": "number",

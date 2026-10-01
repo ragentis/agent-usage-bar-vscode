@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { antigravityConversationsPath, antigravityDirectory } from "./antigravity";
+import { AntigravityHistory, realWritesOnly } from "./antigravity-history";
 import { AntigravityHub } from "./antigravity-hub";
 import { claudeDirectory, claudeSessionsPath, nativeCliVersions } from "./claude";
 import { fetchClaudeUsage, newestCliVersion } from "./claude-api";
@@ -51,12 +52,15 @@ function providers(onCodexPush: () => void): ProviderPort[] {
     fileSuffix: ".jsonl",
     recursive: true,
   });
-  // Conversations are databases with companion files, so every write in the directory counts.
-  const antigravityWatcher = new FileWatcher({
-    directory: antigravityConversationsPath(),
-    fileSuffix: "",
-    recursive: false,
-  });
+  // A conversation in use is written to its log rather than its database, so no suffix is singled
+  // out here; the wrapper tells real writes from the files a history scan leaves behind.
+  const antigravityWatcher = realWritesOnly(
+    new FileWatcher({
+      directory: antigravityConversationsPath(),
+      fileSuffix: "",
+      recursive: false,
+    }),
+  );
   let codexAppServer: CodexAppServer | null = null;
   let antigravityHub: AntigravityHub | null = null;
   const claudeRequest = { plainOnly: false };
@@ -108,10 +112,14 @@ export function activate(context: vscode.ExtensionContext): void {
   // oxlint-disable-next-line prefer-const -- assigned on the next line, read only from the closure
   let usageBar: UsageBar;
   const ports = providers(() => void usageBar.refresh({ only: "codex" }));
+  // History scans run a hub of their own, so one is never stopped along with a usage read.
+  const antigravityScans = new AntigravityHub();
+  const antigravityHistory = new AntigravityHistory((use) => antigravityScans.query(use));
   const history = new HistoryService(
     new UsageHistoryState(context.globalState),
     (provider, totals) => usageBar.setHistory(provider, totals),
     readConfiguration,
+    (since, scannedAt) => antigravityHistory.scan(since, scannedAt),
   );
   usageBar = new UsageBar(ports, reads, readConfiguration, (provider) =>
     history.handleActivity(provider),
@@ -120,6 +128,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     usageBar,
     history,
+    { dispose: () => antigravityScans.dispose() },
     vscode.window.onDidChangeActiveColorTheme(() => usageBar.handleConfigurationChange()),
     vscode.commands.registerCommand("agentUsageBar.refresh", () =>
       usageBar.refresh({ showLoading: true, force: true }),

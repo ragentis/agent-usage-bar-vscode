@@ -59,6 +59,7 @@ The layout follows one rule: **testable modules do not import anything that requ
 | `claude-credentials.ts` | node | Reading token sources: the credentials file and macOS keychain. |
 | `codex-appserver.ts` | node | Discovering the CLI, managing JSON-RPC, and parsing replies. |
 | `antigravity-hub.ts` | node, `fetch` | Starting a hub per read, asking it over loopback HTTP, and parsing replies. |
+| `antigravity-history.ts` | node | Deciding which conversations can be read, and taking daily tokens out of the hub's answers. |
 | `presence.ts` | node | Confirming that an agent a read could not find left no data directory either. |
 | `watcher.ts` | node | Watching files with debounce and retry backoff. |
 | `transcripts.ts` | node | Walking a transcript tree and handing out its lines. |
@@ -84,6 +85,8 @@ Tests cover every provider's response parser, `watcher.ts`, `formatting.ts`, `sh
 `codex-appserver.ts` starts Codex through `LaunchCodex` for the same reason. Tests can then simulate partial frames, a silent server, or a stop that arrives during startup. A real Codex installation cannot reproduce those cases on demand. `antigravity-hub.ts` takes its hub through `LaunchHub` on the same terms: a hub that is still starting, one that never listens, a missing CLI, and a stop that arrives mid-read.
 
 An item is hidden only when its agent is `absent`, and a wrong `absent` takes a working item away from someone who has the agent, with no setting to bring it back. Two independent signals must therefore agree. The provider sets `absent` only on the one failure that means nothing exists to run or read: `ENOENT` from `spawn` for Codex and Antigravity, no credential in any source for Claude Code. `confirmAbsence` then clears it unless the agent's data directory is missing too, and treats a directory it cannot check as present. Every other failure, including a program that exists but will not start, keeps the item. When adding a failure path to a provider, leave `absent` unset unless it meets that bar. `usage-bar.ts` decides what an absent agent's item does, because that depends on the other providers: it is hidden unless every provider is on and every agent is absent.
+
+The Antigravity strip is the one part that reads through another program rather than from files, and two things about it are easy to break. A history scan must never open a conversation with unsaved changes in its write-ahead log, because SQLite then rewrites the database Antigravity is using; `isSettled` holds that rule and its tests name each case. And reading a conversation recreates its empty companion files, which the watcher reports as a change; `realWritesOnly` drops those, or every scan would be answered by another in each open window.
 
 The Antigravity replies are pinned against shapes captured from a live hub, including the one that is easy to get wrong: the hub answers in proto3 JSON, which omits a zero, so a spent bucket arrives with a reset time and no `remainingFraction`.
 

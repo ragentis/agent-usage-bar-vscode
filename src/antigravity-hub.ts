@@ -28,6 +28,7 @@ const SERVICE_PATH = "/exa.language_server_pb.LanguageServerService/";
 
 const NOT_STARTED = "Antigravity could not be started. Check that the agy CLI is installed.";
 const STOPPED = "The Antigravity read was stopped.";
+const TIMED_OUT = "Antigravity did not answer in time.";
 
 const WINDOWS = new Map<string, { kind: WindowKind; minutes: number }>([
   ["5h", { kind: "session", minutes: 300 }],
@@ -48,7 +49,7 @@ export interface HubProcess {
 export interface Hub {
   process: HubProcess;
   /** Rejects while the hub is not listening yet; any HTTP answer resolves, whatever its status. */
-  call(method: string): Promise<HubReply>;
+  call(method: string, body?: Record<string, unknown>): Promise<HubReply>;
 }
 
 export type LaunchHub = () => Promise<Hub>;
@@ -166,7 +167,7 @@ async function launchHub(): Promise<Hub> {
   child.stderr.resume();
   return {
     process: child,
-    call: async (method) => {
+    call: async (method, request = {}) => {
       const response = await fetch(`${HUB_ORIGIN}:${port}${SERVICE_PATH}${method}`, {
         method: "POST",
         headers: {
@@ -174,7 +175,7 @@ async function launchHub(): Promise<Hub> {
           "connect-protocol-version": "1",
           "x-codeium-csrf-token": token,
         },
-        body: "{}",
+        body: JSON.stringify(request),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
       });
       const body: unknown = await response.json().catch(() => null);
@@ -187,14 +188,16 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function unavailable(message: string): ProviderResult {
+type UnavailableResult = Extract<ProviderResult, { status: "unavailable" }>;
+
+function unavailable(message: string): UnavailableResult {
   return { status: "unavailable", message };
 }
 
 /**
  * One hub per read: started, asked, and stopped. A running hub holds well over a hundred megabytes
  * and answers a repeated question from its own cache, so keeping one between reads would cost
- * memory and return a reading of unknown age.
+ * memory and return a reading of unknown age. An instance runs one hub at a time.
  */
 export class AntigravityHub {
   private child: HubProcess | null = null;
@@ -221,32 +224,58 @@ export class AntigravityHub {
   }
 
   async readUsage(): Promise<ProviderResult> {
+    const session = await this.session((hub) => this.ask(hub));
+    return "value" in session ? session.value : session.failure;
+  }
+
+  /**
+   * Runs `use` against a hub of its own, once that hub answers, and stops the hub afterwards.
+   * Throws when no hub could be asked, and passes on whatever `use` throws.
+   */
+  async query<T>(use: (call: Hub["call"]) => Promise<T>): Promise<T> {
+    const session = await this.session(async (hub) => {
+      if (!(await this.firstReply(hub, "GetAuthStatus"))) {
+        throw new Error(this.child === hub.process ? TIMED_OUT : STOPPED);
+      }
+      return use((method, body) => hub.call(method, body));
+    });
+    if ("value" in session) {
+      return session.value;
+    }
+    throw new Error(session.failure.message);
+  }
+
+  private async session<T>(
+    use: (hub: Hub) => Promise<T>,
+  ): Promise<{ value: T } | { failure: UnavailableResult }> {
     if (this.disposed) {
-      return unavailable(STOPPED);
+      return { failure: unavailable(STOPPED) };
     }
     if (Date.now() - this.lastSpawnFailedAt < RESPAWN_COOLDOWN_MS) {
-      return this.lastSpawnFailure;
+      return { failure: this.lastSpawnFailure };
     }
     const generation = this.generation;
     let hub: Hub;
     try {
       hub = await this.launch();
     } catch {
-      return this.spawnFailed(false);
+      return { failure: this.spawnFailed(false) };
     }
     // A stop during async launch leaves the returned process unowned, so stop it immediately.
     if (this.generation !== generation) {
       hub.process.kill();
-      return unavailable(STOPPED);
+      return { failure: unavailable(STOPPED) };
     }
     this.child = hub.process;
-    const ended = new Promise<ProviderResult>((resolve) => {
+    const ended = new Promise<{ failure: UnavailableResult }>((resolve) => {
       // A missing binary is reported here rather than by `spawn` itself.
-      hub.process.on("error", (error) => resolve(this.spawnFailed(isNotFound(error))));
-      hub.process.on("exit", () => resolve(unavailable("Antigravity stopped before answering.")));
+      hub.process.on("error", (error) => resolve({ failure: this.spawnFailed(isNotFound(error)) }));
+      hub.process.on("exit", () =>
+        resolve({ failure: unavailable("Antigravity stopped before answering.") }),
+      );
     });
     try {
-      return await Promise.race([this.ask(hub), ended]);
+      return await Promise.race([use(hub).then((value) => ({ value })), ended]);
     } finally {
       if (this.child === hub.process) {
         this.release();
@@ -254,7 +283,7 @@ export class AntigravityHub {
     }
   }
 
-  private spawnFailed(absent: boolean): ProviderResult {
+  private spawnFailed(absent: boolean): UnavailableResult {
     this.lastSpawnFailedAt = Date.now();
     this.lastSpawnFailure = absent
       ? { status: "unavailable", message: NOT_STARTED, absent }
@@ -263,11 +292,9 @@ export class AntigravityHub {
   }
 
   private async ask(hub: Hub): Promise<ProviderResult> {
-    const reply = await this.firstReply(hub);
+    const reply = await this.firstReply(hub, "RetrieveUserQuotaSummary");
     if (!reply) {
-      return unavailable(
-        this.child === hub.process ? "Antigravity did not answer in time." : STOPPED,
-      );
+      return unavailable(this.child === hub.process ? TIMED_OUT : STOPPED);
     }
     const snapshot = reply.status === 200 ? parseQuotaSummary(reply.body, new Date()) : null;
     if (snapshot) {
@@ -287,13 +314,13 @@ export class AntigravityHub {
    * The hub refuses connections until it listens, so a rejected call means it is still starting.
    * Nothing is returned once the wait runs out or the hub is no longer this read's own.
    */
-  private async firstReply(hub: Hub): Promise<HubReply | null> {
+  private async firstReply(hub: Hub, method: string): Promise<HubReply | null> {
     const deadline = Date.now() + STARTUP_TIMEOUT_MS;
     while (this.child === hub.process) {
       try {
         // Each attempt depends on the previous one having failed.
         // oxlint-disable-next-line no-await-in-loop
-        return await hub.call("RetrieveUserQuotaSummary");
+        return await hub.call(method);
       } catch {
         if (Date.now() >= deadline) {
           return null;
