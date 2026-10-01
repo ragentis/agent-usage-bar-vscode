@@ -7,6 +7,7 @@ import {
   isNotFound,
   isRecord,
   sortWindows,
+  unavailable,
   validDate,
   validLabel,
   validMessage,
@@ -314,10 +315,7 @@ export class CodexAppServer {
         return { status: "ok", snapshot };
       }
       this.stop();
-      return {
-        status: "unavailable",
-        message: "Codex reported no usage windows. Sign in to Codex.",
-      };
+      return unavailable("Codex reported no usage windows. Sign in to Codex.");
     } catch (error) {
       this.stop();
       const message =

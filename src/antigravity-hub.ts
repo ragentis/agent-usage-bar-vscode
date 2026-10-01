@@ -7,11 +7,13 @@ import {
   isNotFound,
   isRecord,
   sortWindows,
+  unavailable,
   validDate,
   validLabel,
   validMessage,
   validUsedPercent,
   type ProviderResult,
+  type UnavailableResult,
   type UsageSnapshot,
   type UsageWindow,
   type WindowKind,
@@ -186,12 +188,6 @@ async function launchHub(): Promise<Hub> {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-type UnavailableResult = Extract<ProviderResult, { status: "unavailable" }>;
-
-function unavailable(message: string): UnavailableResult {
-  return { status: "unavailable", message };
 }
 
 /**

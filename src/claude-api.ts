@@ -8,6 +8,7 @@ import {
   cappedRetryAt,
   isRecord,
   sortWindows,
+  unavailable,
   validDate,
   validLabel,
   validUsedPercent,
@@ -237,10 +238,7 @@ export async function fetchClaudeUsage(
     };
   }
   if (hasExpired(credentials)) {
-    return {
-      status: "unavailable",
-      message: "The Claude Code sign-in has expired. Run Claude Code to renew it.",
-    };
+    return unavailable("The Claude Code sign-in has expired. Run Claude Code to renew it.");
   }
 
   const send = (withResets: boolean): Promise<Response> =>
@@ -265,14 +263,11 @@ export async function fetchClaudeUsage(
     }
   } catch {
     // The message never carries the thrown error, which can quote the request headers.
-    return { status: "unavailable", message: "The usage service could not be reached." };
+    return unavailable("The usage service could not be reached.");
   }
 
   if (response.status === 401 || response.status === 403) {
-    return {
-      status: "unavailable",
-      message: "Claude Code is no longer signed in. Run Claude Code to renew it.",
-    };
+    return unavailable("Claude Code is no longer signed in. Run Claude Code to renew it.");
   }
   if (response.status === 429) {
     // `retryAt` carries the wait; embedding it in the message would leave stale countdown text.
@@ -285,21 +280,16 @@ export async function fetchClaudeUsage(
     };
   }
   if (!response.ok) {
-    return {
-      status: "unavailable",
-      message: `The usage service answered ${response.status}.`,
-    };
+    return unavailable(`The usage service answered ${response.status}.`);
   }
 
   let payload: unknown;
   try {
     payload = await response.json();
   } catch {
-    return { status: "unavailable", message: "The usage response could not be read." };
+    return unavailable("The usage response could not be read.");
   }
 
   const snapshot = parseClaudeUsageResponse(payload, credentials.plan, new Date());
-  return snapshot
-    ? { status: "ok", snapshot }
-    : { status: "unavailable", message: "The usage response held no windows." };
+  return snapshot ? { status: "ok", snapshot } : unavailable("The usage response held no windows.");
 }

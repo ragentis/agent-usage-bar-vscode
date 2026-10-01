@@ -1,6 +1,6 @@
 import { DAY_PATTERN, type DailyTotals, type HistoryUnit, type UsageSample } from "./history";
 import type { SharedStore } from "./shared-state";
-import { isRecord, validUsedPercent, type ProviderId } from "./usage";
+import { isRecord, validMillis, validUsedPercent, type ProviderId } from "./usage";
 
 /**
  * Stored totals are kept after their transcripts are gone; Claude Code deletes its transcripts
@@ -19,10 +19,6 @@ export interface StoredHistory extends DailyTotals {
   claimedAt: number;
   /** Newest sample of the last scan: the baseline for the first reading after an idle period. */
   last: UsageSample | null;
-}
-
-function millis(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 }
 
 function historyUnit(value: unknown): HistoryUnit | null {
@@ -51,7 +47,7 @@ function parseSample(value: unknown): UsageSample | null {
   if (!isRecord(value)) {
     return null;
   }
-  const at = millis(value.at);
+  const at = validMillis(value.at);
   const usedPercent = validUsedPercent(value.usedPercent);
   return at === null || usedPercent === null ? null : { at, usedPercent };
 }
@@ -66,8 +62,8 @@ function parseHistory(value: unknown): StoredHistory | null {
     : {
         unit,
         days: parseDays(value.days),
-        scannedAt: millis(value.scannedAt) ?? 0,
-        claimedAt: millis(value.claimedAt) ?? 0,
+        scannedAt: validMillis(value.scannedAt) ?? 0,
+        claimedAt: validMillis(value.claimedAt) ?? 0,
         last: parseSample(value.last),
       };
 }

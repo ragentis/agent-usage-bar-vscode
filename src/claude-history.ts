@@ -1,5 +1,5 @@
 import { claudeSessionsPath } from "./claude";
-import { addDay, localDay, type HistoryScan } from "./history";
+import { addDay, localDay, tokenCount, type HistoryScan } from "./history";
 import { forEachTranscriptLine } from "./transcripts";
 import { isRecord, validDate } from "./usage";
 
@@ -14,21 +14,11 @@ const MARKER = '"usage"';
 /** Claude Code writes local notices, such as a limit being reached, under this model name. */
 const SYNTHETIC_MODEL = "<synthetic>";
 
-/** Above any real message. Caps a malformed count so it cannot dominate the scale. */
-const MAX_MESSAGE_TOKENS = 5_000_000;
-
 export interface ClaudeUsageRecord {
   at: number;
   /** Deduplication key; a resumed session replays earlier messages into its own transcript. */
   id: string;
   tokens: number;
-}
-
-function count(value: unknown): number {
-  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
-    return 0;
-  }
-  return Math.min(value, MAX_MESSAGE_TOKENS);
 }
 
 /**
@@ -71,9 +61,9 @@ export function claudeUsage(line: string): ClaudeUsageRecord | null {
     return null;
   }
   const tokens =
-    count(usage.input_tokens) +
-    count(usage.output_tokens) +
-    count(usage.cache_creation_input_tokens);
+    tokenCount(usage.input_tokens) +
+    tokenCount(usage.output_tokens) +
+    tokenCount(usage.cache_creation_input_tokens);
   return tokens > 0 ? { at: at.getTime(), id, tokens } : null;
 }
 

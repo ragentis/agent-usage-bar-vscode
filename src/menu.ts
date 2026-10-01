@@ -1,10 +1,11 @@
 import * as vscode from "vscode";
-import type { ExtensionConfiguration } from "./configuration";
+import { providerEnabled, type ExtensionConfiguration } from "./configuration";
 import { updateSetting } from "./settings";
-import type { ProviderId } from "./usage";
+import { PROVIDER_IDS, PROVIDER_NAMES, type ProviderId } from "./usage";
 
 interface MenuItem extends vscode.QuickPickItem {
-  action?: "toggleClaude" | "toggleCodex" | "toggleAntigravity" | "settings" | "refresh";
+  action?: "settings" | "refresh";
+  toggles?: ProviderId;
 }
 
 export function openSettings(extensionId: string): Thenable<unknown> {
@@ -18,45 +19,33 @@ export async function showMenu(
   hidden: (provider: ProviderId) => boolean,
 ): Promise<void> {
   // An enabled provider whose agent is not on this machine has no status bar item.
-  const state = (provider: ProviderId, enabled: boolean): string => {
-    if (!enabled) {
+  const state = (provider: ProviderId): string => {
+    if (!providerEnabled(configuration, provider)) {
       return "Off";
     }
     return hidden(provider) ? "Not found on this machine" : "On";
   };
   const choice = await vscode.window.showQuickPick<MenuItem>(
     [
-      {
-        label: "$(agent-usage-bar-claude) Claude Code",
-        description: state("claude", configuration.claudeEnabled),
-        action: "toggleClaude",
-      },
-      {
-        label: "$(agent-usage-bar-codex) Codex",
-        description: state("codex", configuration.codexEnabled),
-        action: "toggleCodex",
-      },
-      {
-        label: "$(agent-usage-bar-antigravity) Antigravity",
-        description: state("antigravity", configuration.antigravityEnabled),
-        action: "toggleAntigravity",
-      },
+      ...PROVIDER_IDS.map((provider) => ({
+        label: `$(agent-usage-bar-${provider}) ${PROVIDER_NAMES[provider]}`,
+        description: state(provider),
+        toggles: provider,
+      })),
       { label: "", kind: vscode.QuickPickItemKind.Separator },
       { label: "$(settings-gear) Open settings", action: "settings" },
       { label: "$(refresh) Refresh usage", action: "refresh" },
     ],
     { placeHolder: "Agent Usage Bar" },
   );
+  if (choice?.toggles) {
+    await updateSetting(
+      `${choice.toggles}.enabled`,
+      !providerEnabled(configuration, choice.toggles),
+    );
+    return;
+  }
   switch (choice?.action) {
-    case "toggleClaude":
-      await updateSetting("claude.enabled", !configuration.claudeEnabled);
-      break;
-    case "toggleCodex":
-      await updateSetting("codex.enabled", !configuration.codexEnabled);
-      break;
-    case "toggleAntigravity":
-      await updateSetting("antigravity.enabled", !configuration.antigravityEnabled);
-      break;
     case "settings":
       await openSettings(extensionId);
       break;

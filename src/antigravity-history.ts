@@ -2,7 +2,8 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { antigravityConversationsPath } from "./antigravity";
 import type { Hub } from "./antigravity-hub";
-import { addDay, localDay, type HistoryScan } from "./history";
+import { addDay, localDay, tokenCount, type HistoryScan } from "./history";
+import type { ProviderWatcher } from "./usage-bar";
 import { isRecord, validDate } from "./usage";
 
 /**
@@ -27,9 +28,6 @@ const QUIET_MS = 60_000;
 
 /** A log not written for this long is treated as left over; the conversation is not in use. */
 const ABANDONED_MS = 30 * 60_000;
-
-/** Above any real call. Caps a malformed count so it cannot dominate the scale. */
-const MAX_CALL_TOKENS = 5_000_000;
 
 interface FileState {
   mtimeMs: number;
@@ -90,11 +88,7 @@ export function isSettled({ database, log }: Conversation, now: number): boolean
 
 /** The hub writes 64-bit counts as strings. */
 function count(value: unknown): number {
-  const tokens = typeof value === "string" ? Number(value) : value;
-  if (typeof tokens !== "number" || !Number.isFinite(tokens) || tokens <= 0) {
-    return 0;
-  }
-  return Math.min(tokens, MAX_CALL_TOKENS);
+  return tokenCount(typeof value === "string" ? Number(value) : value);
 }
 
 function firstStep(indices: unknown): number | null {
@@ -139,12 +133,6 @@ export function tokensByDay(metadata: unknown, steps: unknown): Record<string, n
   return days;
 }
 
-interface ChangeWatcher {
-  start(onChange: () => void): void;
-  stop(): void;
-  dispose(): void;
-}
-
 /** File times and the clock are compared across a debounce, so a write is given this much slack. */
 const WRITE_SLACK_MS = 1_000;
 
@@ -154,10 +142,10 @@ const WRITE_SLACK_MS = 1_000;
  * counts only when a conversation was written since the previous change.
  */
 export function realWritesOnly(
-  watcher: ChangeWatcher,
+  watcher: ProviderWatcher,
   directory: string = antigravityConversationsPath(),
   now: () => number = Date.now,
-): ChangeWatcher {
+): ProviderWatcher {
   return {
     start: (onChange) => {
       let seen = now();

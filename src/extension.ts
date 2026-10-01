@@ -74,7 +74,6 @@ function providers(onCodexPush: () => void): ProviderPort[] {
           claudeDirectory(),
         ),
       watcher: claudeWatcher,
-      isEnabled: (configuration) => configuration.claudeEnabled,
     },
     {
       id: "codex",
@@ -86,7 +85,6 @@ function providers(onCodexPush: () => void): ProviderPort[] {
           codexDirectory(),
         ),
       watcher: codexWatcher,
-      isEnabled: (configuration) => configuration.codexEnabled,
       stop: () => codexAppServer?.stop(),
       dispose: () => codexAppServer?.dispose(),
     },
@@ -99,7 +97,6 @@ function providers(onCodexPush: () => void): ProviderPort[] {
           antigravityDirectory(),
         ),
       watcher: antigravityWatcher,
-      isEnabled: (configuration) => configuration.antigravityEnabled,
       stop: () => antigravityHub?.stop(),
       dispose: () => antigravityHub?.dispose(),
     },

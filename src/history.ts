@@ -19,7 +19,18 @@ export interface UsageSample {
 
 export const DAY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-const MAX_STORED_DAYS = 60;
+/** Days kept in the store. The first scan reaches equally far back. */
+export const MAX_STORED_DAYS = 60;
+
+/** Above any real message or call. Caps a malformed count so it cannot dominate the scale. */
+const MAX_TOKENS = 5_000_000;
+
+export function tokenCount(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return 0;
+  }
+  return Math.min(value, MAX_TOKENS);
+}
 
 function pad(value: number): string {
   return `${value}`.padStart(2, "0");

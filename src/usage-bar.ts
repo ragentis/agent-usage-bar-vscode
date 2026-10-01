@@ -1,4 +1,4 @@
-import { configurationEffect, type ExtensionConfiguration } from "./configuration";
+import { configurationEffect, providerEnabled, type ExtensionConfiguration } from "./configuration";
 import { formatMoment } from "./formatting";
 import type { DailyTotals } from "./history";
 import type { ReadCoordinator } from "./read-coordinator";
@@ -44,7 +44,6 @@ export interface ProviderPort {
   display: ProviderDisplay;
   read: () => Promise<ProviderResult>;
   watcher: ProviderWatcher;
-  isEnabled: (configuration: ExtensionConfiguration) => boolean;
   stop?: () => void;
   dispose?: () => void;
 }
@@ -136,7 +135,7 @@ export class UsageBar {
     );
     if (options.showLoading) {
       for (const provider of targets) {
-        if (provider.isEnabled(this.configuration) && !this.hidden(provider)) {
+        if (this.enabled(provider) && !this.hidden(provider)) {
           provider.display.loading(this.configuration);
         }
       }
@@ -158,7 +157,7 @@ export class UsageBar {
       return;
     }
     target.state.history = history;
-    if (target.state.view && target.isEnabled(this.configuration)) {
+    if (target.state.view && this.enabled(target)) {
       this.paint(target);
     }
   }
@@ -177,8 +176,12 @@ export class UsageBar {
     }
   }
 
+  private enabled(provider: Provider): boolean {
+    return providerEnabled(this.configuration, provider.id);
+  }
+
   private async refreshProvider(provider: Provider, force: boolean): Promise<void> {
-    if (!provider.isEnabled(this.configuration)) {
+    if (!this.enabled(provider)) {
       this.forget(provider);
       return;
     }
@@ -211,7 +214,7 @@ export class UsageBar {
       return;
     }
     // The provider may have been switched off while the read was running.
-    if (!provider.isEnabled(this.configuration)) {
+    if (!this.enabled(provider)) {
       this.forget(provider);
       await this.reads.abandon(provider.id);
       return;
@@ -303,7 +306,7 @@ export class UsageBar {
 
   private tick(): void {
     for (const provider of this.providers) {
-      if (provider.isEnabled(this.configuration)) {
+      if (this.enabled(provider)) {
         const shared = this.adopt(provider);
         if (this.reads.overdue(shared, this.configuration.refreshIntervalSeconds)) {
           void this.refresh({ only: provider.id });
@@ -356,16 +359,14 @@ export class UsageBar {
   private hidden(provider: Provider): boolean {
     return (
       provider.state.view?.absent === true &&
-      !this.providers.every(
-        (other) => other.isEnabled(this.configuration) && other.state.view?.absent === true,
-      )
+      !this.providers.every((other) => this.enabled(other) && other.state.view?.absent === true)
     );
   }
 
   /** An absent agent's visibility depends on the other providers, so their changes repaint it. */
   private paintDependents(changed: Provider): void {
     for (const other of this.providers) {
-      if (other !== changed && other.state.view?.absent && other.isEnabled(this.configuration)) {
+      if (other !== changed && other.state.view?.absent && this.enabled(other)) {
         this.paint(other);
       }
     }
@@ -373,7 +374,7 @@ export class UsageBar {
 
   private redraw(): void {
     for (const provider of this.providers) {
-      if (provider.state.view && provider.isEnabled(this.configuration)) {
+      if (provider.state.view && this.enabled(provider)) {
         this.paint(provider);
       }
     }
@@ -402,7 +403,7 @@ export class UsageBar {
   private applyConfiguration(): void {
     for (const provider of this.providers) {
       provider.watcher.stop();
-      if (provider.isEnabled(this.configuration)) {
+      if (this.enabled(provider)) {
         provider.watcher.start(() => {
           void this.refresh({ only: provider.id });
           // The write that triggers a usage refresh also changes that day's history total.

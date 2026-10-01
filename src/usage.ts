@@ -1,4 +1,12 @@
-export type ProviderId = "claude" | "codex" | "antigravity";
+export const PROVIDER_IDS = ["claude", "codex", "antigravity"] as const;
+export type ProviderId = (typeof PROVIDER_IDS)[number];
+
+export const PROVIDER_NAMES: Record<ProviderId, string> = {
+  claude: "Claude Code",
+  codex: "Codex",
+  antigravity: "Antigravity",
+};
+
 export type WindowKind = "session" | "weekly";
 
 export type SnapshotSource = "claude-account-api" | "codex-app-server" | "antigravity-hub";
@@ -42,6 +50,12 @@ export type ProviderResult =
        */
       absent?: boolean;
     };
+
+export type UnavailableResult = Extract<ProviderResult, { status: "unavailable" }>;
+
+export function unavailable(message: string): UnavailableResult {
+  return { status: "unavailable", message };
+}
 
 export interface ProviderView {
   snapshot: UsageSnapshot | null;
@@ -89,6 +103,10 @@ export function cappedRetryAt(retryAt: Date, now = new Date()): Date {
 
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+export function validMillis(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
 }
 
 export function validUsedPercent(value: unknown): number | null {

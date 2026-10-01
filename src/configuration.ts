@@ -2,6 +2,8 @@
  * Settings and validation stay independent of `vscode`; only `settings.ts` crosses the host boundary.
  */
 
+import { PROVIDER_IDS, type ProviderId } from "./usage";
+
 export type DisplayMode = "compact" | "full";
 export type PercentageMode = "used" | "remaining";
 export type WarnWhen = "threshold" | "overPace";
@@ -25,6 +27,17 @@ export interface ExtensionConfiguration {
   refreshIntervalSeconds: number;
   showHistory: boolean;
   theme: ThemeKind;
+}
+
+export function providerEnabled(
+  configuration: ExtensionConfiguration,
+  provider: ProviderId,
+): boolean {
+  return configuration[`${provider}Enabled`];
+}
+
+export function providerLabel(configuration: ExtensionConfiguration, provider: ProviderId): string {
+  return configuration[`${provider}Label`];
 }
 
 /**
@@ -132,9 +145,9 @@ export function configurationEffect(
   next: ExtensionConfiguration,
 ): "none" | "redraw" | "refresh" {
   if (
-    previous.claudeEnabled !== next.claudeEnabled ||
-    previous.codexEnabled !== next.codexEnabled ||
-    previous.antigravityEnabled !== next.antigravityEnabled
+    PROVIDER_IDS.some(
+      (provider) => providerEnabled(previous, provider) !== providerEnabled(next, provider),
+    )
   ) {
     return "refresh";
   }

@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
-import type { ExtensionConfiguration } from "./configuration";
+import { providerLabel, type ExtensionConfiguration } from "./configuration";
 import { buildStatusText, formatAge, pickSeverity, type Severity } from "./formatting";
 import type { DailyTotals } from "./history";
 import { buildMessageTooltip, buildTooltip } from "./tooltip";
-import type { ProviderId, ProviderView } from "./usage";
+import { PROVIDER_NAMES, type ProviderId, type ProviderView } from "./usage";
 
 /**
  * Priorities just above the commonly used 100 keep the provider items adjacent when possible;
@@ -12,37 +12,30 @@ import type { ProviderId, ProviderView } from "./usage";
  * Tooltip icons use lifted font variants because Markdown baseline alignment places the status-bar
  * glyphs too low and the sanitizer disallows vertical positioning.
  */
-const PROVIDERS: Record<
-  ProviderId,
-  { title: string; icon: string; hoverIcon: string; priority: number }
-> = {
+const PROVIDERS: Record<ProviderId, { icon: string; hoverIcon: string; priority: number }> = {
   claude: {
-    title: "Claude Code usage",
     icon: "agent-usage-bar-claude",
     hoverIcon: "agent-usage-bar-claude-hover",
     priority: 100.02,
   },
   codex: {
-    title: "Codex usage",
     icon: "agent-usage-bar-codex",
     hoverIcon: "agent-usage-bar-codex-hover",
     priority: 100.01,
   },
   antigravity: {
-    title: "Antigravity usage",
     icon: "agent-usage-bar-antigravity",
     hoverIcon: "agent-usage-bar-antigravity-hover",
     priority: 100.005,
   },
 };
 
+function title(provider: ProviderId): string {
+  return `${PROVIDER_NAMES[provider]} usage`;
+}
+
 function prefix(provider: ProviderId, configuration: ExtensionConfiguration): string {
-  const labels: Record<ProviderId, string> = {
-    claude: configuration.claudeLabel,
-    codex: configuration.codexLabel,
-    antigravity: configuration.antigravityLabel,
-  };
-  return labels[provider] || `$(${PROVIDERS[provider].icon})`;
+  return providerLabel(configuration, provider) || `$(${PROVIDERS[provider].icon})`;
 }
 
 const STALE_AFTER_MS = 10 * 60_000;
@@ -54,13 +47,12 @@ const BACKGROUNDS: Record<Severity, vscode.ThemeColor | undefined> = {
 };
 
 export function createStatusBarItem(provider: ProviderId): vscode.StatusBarItem {
-  const { title, priority } = PROVIDERS[provider];
   const item = vscode.window.createStatusBarItem(
     `agentUsageBar.${provider}`,
     vscode.StatusBarAlignment.Right,
-    priority,
+    PROVIDERS[provider].priority,
   );
-  item.name = title;
+  item.name = title(provider);
   item.command = "agentUsageBar.openMenu";
   return item;
 }
@@ -70,10 +62,9 @@ export function showLoading(
   provider: ProviderId,
   configuration: ExtensionConfiguration,
 ): void {
-  const { title, hoverIcon } = PROVIDERS[provider];
   draw(item, {
     text: `${prefix(provider, configuration)} $(loading~spin)`,
-    tooltip: buildMessageTooltip(title, hoverIcon, "Reading usage…"),
+    tooltip: buildMessageTooltip(title(provider), PROVIDERS[provider].hoverIcon, "Reading usage…"),
     background: undefined,
   });
 }
@@ -86,13 +77,13 @@ export function renderStatusBarItem(
   history: DailyTotals | null = null,
   now = new Date(),
 ): void {
-  const { title, hoverIcon } = PROVIDERS[provider];
+  const { hoverIcon } = PROVIDERS[provider];
   const mark = prefix(provider, configuration);
   const { snapshot } = view;
   if (!snapshot) {
     draw(item, {
       text: `${mark} --`,
-      tooltip: buildMessageTooltip(title, hoverIcon, view.message ?? "No reading yet."),
+      tooltip: buildMessageTooltip(title(provider), hoverIcon, view.message ?? "No reading yet."),
       background: undefined,
     });
     return;
@@ -103,7 +94,7 @@ export function renderStatusBarItem(
   draw(item, {
     text: `${mark} ${blocked}${buildStatusText(snapshot, configuration, now)}${age ? " $(history)" : ""}`,
     tooltip: buildTooltip(
-      title,
+      title(provider),
       hoverIcon,
       snapshot,
       configuration,

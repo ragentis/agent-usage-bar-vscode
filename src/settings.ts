@@ -1,9 +1,10 @@
 import * as vscode from "vscode";
 import { resolveConfiguration, type ExtensionConfiguration, type ThemeKind } from "./configuration";
+import type { ProviderId } from "./usage";
 
 const SECTION = "agentUsageBar";
 
-export type WritableSetting = "claude.enabled" | "codex.enabled" | "antigravity.enabled";
+export type WritableSetting = `${ProviderId}.enabled`;
 
 /** Both high-contrast kinds resolve with their light or dark counterpart. */
 function themeKind(): ThemeKind {

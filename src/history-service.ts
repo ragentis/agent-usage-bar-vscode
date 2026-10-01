@@ -1,10 +1,11 @@
 import { scanClaudeHistory } from "./claude-history";
 import { scanCodexHistory } from "./codex-history";
-import type { ExtensionConfiguration } from "./configuration";
+import { providerEnabled, type ExtensionConfiguration } from "./configuration";
 import {
   dayStart,
   keepHigher,
   localDay,
+  MAX_STORED_DAYS,
   mergeDays,
   pruneDays,
   shiftDay,
@@ -13,7 +14,7 @@ import {
   type HistoryUnit,
 } from "./history";
 import type { StoredHistory, UsageHistoryState } from "./history-store";
-import type { ProviderId } from "./usage";
+import { PROVIDER_IDS, type ProviderId } from "./usage";
 
 const UNITS: Record<ProviderId, HistoryUnit> = {
   claude: "tokens",
@@ -21,15 +22,10 @@ const UNITS: Record<ProviderId, HistoryUnit> = {
   antigravity: "tokens",
 };
 
-const PROVIDERS = ["claude", "codex", "antigravity"] as const satisfies readonly ProviderId[];
-
 /** `scannedAt` is when the last stored scan began, or zero when there is none. */
 export type ScanAntigravity = (since: number, scannedAt: number) => Promise<HistoryScan>;
 
 const DAY_MS = 24 * 60 * 60_000;
-
-/** How far back the first scan reaches. The store keeps the same span. */
-const FIRST_SCAN_DAYS = 60;
 
 /**
  * A later scan recomputes only the days that can still change. It reads one more day back so the
@@ -54,12 +50,7 @@ const FOLLOW_UP_MARGIN_MS = 1_000;
 const START_DELAY_MS = 4_000;
 
 function isEnabled(provider: ProviderId, configuration: ExtensionConfiguration): boolean {
-  const enabled: Record<ProviderId, boolean> = {
-    claude: configuration.claudeEnabled,
-    codex: configuration.codexEnabled,
-    antigravity: configuration.antigravityEnabled,
-  };
-  return enabled[provider] && configuration.showHistory;
+  return providerEnabled(configuration, provider) && configuration.showHistory;
 }
 
 /**
@@ -108,7 +99,7 @@ export class HistoryService {
   }
 
   private refresh(): void {
-    for (const provider of PROVIDERS) {
+    for (const provider of PROVIDER_IDS) {
       void this.scan(provider);
     }
   }
@@ -153,7 +144,7 @@ export class HistoryService {
     const today = localDay(new Date(now));
     const from = stored?.scannedAt
       ? localDay(new Date(Math.min(stored.scannedAt, now) - RESCAN_BACK_MS))
-      : shiftDay(today, -(FIRST_SCAN_DAYS - 1));
+      : shiftDay(today, -(MAX_STORED_DAYS - 1));
     await this.state.claim(provider, unit, now);
     const scan = await this.read(provider, dayStart(shiftDay(from, -1)), stored);
     const merged = mergeDays(stored?.days ?? {}, scan.days, from);

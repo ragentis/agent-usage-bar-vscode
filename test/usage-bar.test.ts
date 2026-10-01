@@ -130,12 +130,7 @@ function tracked(id: ProviderId) {
       stop: () => void (watching = null),
       dispose: () => void (watching = null),
     },
-    isEnabled: (configuration) =>
-      ({
-        claude: configuration.claudeEnabled,
-        codex: configuration.codexEnabled,
-        antigravity: configuration.antigravityEnabled,
-      })[id],
+
     stop: () => void (counts.stopped += 1),
   };
 

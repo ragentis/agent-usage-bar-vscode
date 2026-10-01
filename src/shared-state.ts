@@ -3,6 +3,7 @@ import {
   MAX_RETRY_WAIT_MS,
   validLabel,
   validMessage,
+  validMillis,
   validUsedPercent,
   validWindowMinutes,
   type ProviderId,
@@ -40,10 +41,6 @@ export interface SharedEntry {
   view: ProviderView;
 }
 
-function millis(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
-}
-
 function count(value: unknown): number {
   return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : 0;
 }
@@ -53,7 +50,7 @@ function count(value: unknown): number {
  * delay in every window.
  */
 function retryMillis(value: unknown): number | null {
-  const retryAt = millis(value);
+  const retryAt = validMillis(value);
   return retryAt !== null && retryAt <= Date.now() + MAX_RETRY_WAIT_MS ? retryAt : null;
 }
 
@@ -78,7 +75,7 @@ function parseWindow(value: unknown): UsageWindow | null {
   if (!kind || usedPercent === null) {
     return null;
   }
-  const resetsAt = millis(value.resetsAt);
+  const resetsAt = validMillis(value.resetsAt);
   return {
     kind,
     usedPercent,
@@ -92,13 +89,13 @@ function parseSnapshot(value: unknown): UsageSnapshot | null {
   if (!isRecord(value) || !Array.isArray(value.windows)) {
     return null;
   }
-  const fetchedAt = millis(value.fetchedAt);
+  const fetchedAt = validMillis(value.fetchedAt);
   const source = snapshotSource(value.source);
   if (fetchedAt === null || !source) {
     return null;
   }
   const windows = value.windows.map(parseWindow).filter((window) => window !== null);
-  const creditsExpireAt = millis(value.creditsExpireAt);
+  const creditsExpireAt = validMillis(value.creditsExpireAt);
   return windows.length === 0
     ? null
     : {
@@ -116,14 +113,14 @@ function parseEntry(value: unknown): SharedEntry | null {
   if (!isRecord(value)) {
     return null;
   }
-  const readAt = millis(value.readAt);
+  const readAt = validMillis(value.readAt);
   if (readAt === null) {
     return null;
   }
   const retryAt = retryMillis(value.retryAt);
   return {
     readAt,
-    publishedAt: millis(value.publishedAt) ?? 0,
+    publishedAt: validMillis(value.publishedAt) ?? 0,
     owner: validLabel(value.owner) ?? "",
     retryAt: retryAt === null ? null : new Date(retryAt),
     refusals: count(value.refusals),
