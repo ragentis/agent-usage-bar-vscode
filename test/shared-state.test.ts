@@ -50,6 +50,40 @@ test("a published reading survives the round trip through storage", async () => 
   expect(entry?.view.snapshot?.fetchedAt).toBeInstanceOf(Date);
 });
 
+test("an Antigravity reading keeps its source and its group names across storage", async () => {
+  const grouped: UsageSnapshot = {
+    ...snapshot,
+    windows: [
+      {
+        kind: "session",
+        usedPercent: 10,
+        resetsAt: new Date("2026-10-01T05:31:55Z"),
+        windowMinutes: 300,
+        label: "Claude and GPT",
+      },
+      {
+        kind: "weekly",
+        usedPercent: 25,
+        resetsAt: new Date("2026-10-05T23:57:28Z"),
+        windowMinutes: 10_080,
+        label: "Gemini",
+      },
+    ],
+    credits: null,
+    creditsExpireAt: null,
+    source: "antigravity-hub",
+  };
+  const shared = new SharedUsageState(memento());
+  await shared.publish("antigravity", {
+    owner: "abc",
+    view: { snapshot: grouped, message: null },
+    retryAt: null,
+  });
+
+  expect(shared.read("antigravity")?.view.snapshot).toEqual(grouped);
+  expect(shared.read("claude")).toBeNull();
+});
+
 test("a claim stamps the lease without discarding the reading it already holds", async () => {
   const shared = new SharedUsageState(memento());
   await shared.publish("codex", { owner: "abc", view: { snapshot, message: null }, retryAt: null });

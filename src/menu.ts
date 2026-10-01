@@ -3,7 +3,7 @@ import type { ExtensionConfiguration } from "./configuration";
 import { updateSetting } from "./settings";
 
 interface MenuItem extends vscode.QuickPickItem {
-  action?: "toggleClaude" | "toggleCodex" | "settings" | "refresh";
+  action?: "toggleClaude" | "toggleCodex" | "toggleAntigravity" | "settings" | "refresh";
 }
 
 export function openSettings(extensionId: string): Thenable<unknown> {
@@ -28,6 +28,11 @@ export async function showMenu(
         description: state(configuration.codexEnabled),
         action: "toggleCodex",
       },
+      {
+        label: "$(agent-usage-bar-antigravity) Antigravity",
+        description: state(configuration.antigravityEnabled),
+        action: "toggleAntigravity",
+      },
       { label: "", kind: vscode.QuickPickItemKind.Separator },
       { label: "$(settings-gear) Open settings", action: "settings" },
       { label: "$(refresh) Refresh usage", action: "refresh" },
@@ -40,6 +45,9 @@ export async function showMenu(
       break;
     case "toggleCodex":
       await updateSetting("codex.enabled", !configuration.codexEnabled);
+      break;
+    case "toggleAntigravity":
+      await updateSetting("antigravity.enabled", !configuration.antigravityEnabled);
       break;
     case "settings":
       await openSettings(extensionId);

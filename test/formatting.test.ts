@@ -33,8 +33,10 @@ function configure(overrides: Partial<ExtensionConfiguration> = {}): ExtensionCo
     warnWhen: "threshold",
     codexEnabled: true,
     claudeEnabled: true,
+    antigravityEnabled: true,
     claudeLabel: "",
     codexLabel: "",
+    antigravityLabel: "",
     refreshIntervalSeconds: 300,
     showHistory: true,
     theme: "dark",
@@ -84,6 +86,31 @@ test("compact mode swaps to the scoped window that drives the color", () => {
   expect(buildStatusText(scoped, configure({ warningThreshold: 60 }), now)).toBe(
     "7d Fable 62% (2d 5h)",
   );
+});
+
+/** Shaped after an Antigravity reading, where every window belongs to a model group. */
+const grouped: UsageSnapshot = {
+  ...snapshot,
+  windows: [
+    { ...snapshot.windows[0]!, usedPercent: 30, label: "Gemini" },
+    { ...snapshot.windows[0]!, usedPercent: 4, label: "Claude and GPT" },
+    { ...snapshot.windows[1]!, usedPercent: 51, label: "Claude and GPT" },
+    { ...snapshot.windows[1]!, usedPercent: 9, label: "Gemini" },
+  ],
+  source: "antigravity-hub",
+};
+
+test("a kind that has only scopes is stood for by its most used one", () => {
+  expect(buildStatusText(grouped, configure(), now)).toBe("5h Gemini 30% (3h 12m)");
+  expect(buildStatusText(grouped, configure({ displayMode: "full" }), now)).toBe(
+    "5h Gemini 30% (3h 12m) · 7d Claude and GPT 51% (2d 5h)",
+  );
+});
+
+test("a second scope of such a kind still waits until it is loud", () => {
+  expect(
+    buildStatusText(grouped, configure({ displayMode: "full", warningThreshold: 9 }), now),
+  ).toBe("5h Gemini 30% (3h 12m) · 7d Claude and GPT 51% (2d 5h) · 7d Gemini 9% (2d 5h)");
 });
 
 test("formats reset countdown boundaries", () => {

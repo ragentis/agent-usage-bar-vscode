@@ -97,10 +97,16 @@ export function buildStatusText(
   const prefix = windows.some((window) => window.reset) ? "~" : "";
   if (configuration.displayMode === "full") {
     // Every scope would make the status bar grow with the plan, so a scoped window earns its place
-    // only once it is the one worth watching. The tooltip lists them all regardless.
+    // only once it is the one worth watching. The tooltip lists them all regardless. A kind that
+    // has only scopes is stood for by its first one, which `sortWindows` made the most used.
+    const whole = new Set(windows.filter((window) => !window.label).map((window) => window.kind));
+    const leads = (window: ResolvedWindow): boolean =>
+      !whole.has(window.kind) && windows.find(({ kind }) => kind === window.kind) === window;
     const shown = windows.filter(
       (window) =>
-        !window.label || severityFor(window, configuration, snapshot.fetchedAt) !== "normal",
+        !window.label ||
+        leads(window) ||
+        severityFor(window, configuration, snapshot.fetchedAt) !== "normal",
     );
     return (
       prefix +

@@ -23,8 +23,10 @@ function configure(overrides: Partial<ExtensionConfiguration> = {}): ExtensionCo
     warnWhen: "threshold",
     codexEnabled: true,
     claudeEnabled: false,
+    antigravityEnabled: true,
     claudeLabel: "",
     codexLabel: "",
+    antigravityLabel: "",
     refreshIntervalSeconds: 300,
     showHistory: true,
     theme: "dark",
@@ -39,7 +41,11 @@ test("only source settings trigger a provider read", () => {
   expect(configurationEffect(configure(), configure({ showPace: false }))).toBe("redraw");
   expect(configurationEffect(configure(), configure({ warnWhen: "overPace" }))).toBe("redraw");
   expect(configurationEffect(configure(), configure({ claudeEnabled: true }))).toBe("refresh");
+  expect(configurationEffect(configure(), configure({ antigravityEnabled: false }))).toBe(
+    "refresh",
+  );
   expect(configurationEffect(configure(), configure({ codexLabel: "CX" }))).toBe("redraw");
+  expect(configurationEffect(configure(), configure({ antigravityLabel: "AG" }))).toBe("redraw");
   expect(configurationEffect(configure(), configure({ locale: "de-DE" }))).toBe("redraw");
   expect(configurationEffect(configure(), configure({ refreshIntervalSeconds: 60 }))).toBe("none");
 });
@@ -96,8 +102,10 @@ test("an unset section is the manifest's defaults, whole", () => {
     warnWhen: "threshold",
     codexEnabled: true,
     claudeEnabled: true,
+    antigravityEnabled: true,
     codexLabel: "",
     claudeLabel: "",
+    antigravityLabel: "",
     refreshIntervalSeconds: DEFAULT_REFRESH_INTERVAL_SECONDS,
     showHistory: true,
     theme: "dark",

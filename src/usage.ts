@@ -1,7 +1,7 @@
-export type ProviderId = "claude" | "codex";
+export type ProviderId = "claude" | "codex" | "antigravity";
 export type WindowKind = "session" | "weekly";
 
-export type SnapshotSource = "claude-account-api" | "codex-app-server";
+export type SnapshotSource = "claude-account-api" | "codex-app-server" | "antigravity-hub";
 
 export interface UsageWindow {
   kind: WindowKind;

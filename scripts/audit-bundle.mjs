@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 
-// Machine-check the bundle claims readers cannot observe: project-owned inputs, one remote host, no
-// shell, and no disk writes. This audits literal shipped text, not values assembled at runtime.
+// Machine-check the bundle claims readers cannot observe: project-owned inputs, one remote host and
+// the loopback address, no shell, and no disk writes. This audits literal shipped text, not values
+// assembled at runtime.
 
 const manifest = JSON.parse(await readFile("package.json", "utf8"));
 if (Object.keys(manifest.dependencies ?? {}).length > 0) {
@@ -17,11 +18,12 @@ if (foreign.length > 0) {
 
 const bundle = await readFile("dist/extension.js", "utf8");
 
-// Pin the literal remotes, both on the one usage endpoint; runtime-assembled targets are outside
-// this text audit.
+// Pin the literal targets: the one usage endpoint, in both forms, and the loopback origin of the
+// Antigravity hub this extension starts. Runtime-assembled targets are outside this text audit.
 const ALLOWED_URLS = new Set([
   "https://api.anthropic.com/api/oauth/usage",
   "https://api.anthropic.com/api/oauth/usage?cedar_ember=1",
+  "http://127.0.0.1",
 ]);
 const urls = [...new Set(bundle.match(/https?:\/\/[^\s"'`\\]+/g) ?? [])];
 const unexpected = urls.filter((url) => !ALLOWED_URLS.has(url));
@@ -35,6 +37,7 @@ const READ_ONLY_MEMBERS = {
   fs: ["existsSync", "watch"],
   "fs/promises": ["readFile", "readdir", "stat", "lstat"],
   child_process: ["spawn"],
+  net: ["createServer"],
 };
 
 for (const [specifier, allowed] of Object.entries(READ_ONLY_MEMBERS)) {

@@ -66,8 +66,10 @@ function configure(overrides: Partial<ExtensionConfiguration> = {}): ExtensionCo
     warnWhen: "threshold",
     codexEnabled: true,
     claudeEnabled: true,
+    antigravityEnabled: true,
     claudeLabel: "",
     codexLabel: "",
+    antigravityLabel: "",
     refreshIntervalSeconds: 300,
     showHistory: true,
     theme: "dark",
@@ -886,6 +888,10 @@ test("a scope name is provider text and cannot become markup", () => {
 
 test("a Codex reading names Codex as where it came from", () => {
   expect(tooltip({ source: "codex-app-server" })).toContain("From Codex account · as of ");
+});
+
+test("an Antigravity reading names Antigravity as where it came from", () => {
+  expect(tooltip({ source: "antigravity-hub" })).toContain("From Antigravity account · as of ");
 });
 
 test("a tooltip with no reading still says whose it is and offers a way back", () => {

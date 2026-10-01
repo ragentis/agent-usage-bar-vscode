@@ -1,10 +1,10 @@
 # Agent Usage Bar
 
-See Claude Code and Codex usage, reset times, and pace directly in the VS Code status bar.
+See Claude Code, Codex, and Antigravity usage, reset times, and pace directly in the VS Code status bar.
 
 Usage is read at the account level, not inferred from local activity, so activity from other machines, terminals, and editors is included.
 
-No configuration is required. Both providers are enabled by default and refresh automatically.
+No configuration is required. All three providers are enabled by default and refresh automatically.
 
 [![VS Marketplace](https://img.shields.io/badge/VS%20Marketplace-install-007ACC?style=flat-square)](https://marketplace.visualstudio.com/items?itemName=ragentis.agent-usage-bar) [![Open VSX](https://img.shields.io/open-vsx/v/ragentis/agent-usage-bar?style=flat-square&label=Open%20VSX&color=C160EF)](https://open-vsx.org/extension/ragentis/agent-usage-bar/) [![Downloads](https://img.shields.io/open-vsx/dt/ragentis/agent-usage-bar?style=flat-square&label=downloads&color=2EA44F)](https://open-vsx.org/extension/ragentis/agent-usage-bar/) [![License](https://img.shields.io/github/license/ragentis/agent-usage-bar-vscode?style=flat-square&label=license&color=2EA44F)](LICENSE)
 
@@ -19,6 +19,7 @@ One status bar item per provider, each with its own monochrome glyph:
 | `5h 42% (2h 15m)` | 42% of the 5-hour window used, which refills in 2h 15m. |
 | `5h 42% (2h 15m) · 7d 18% (4d 6h)` | Both windows, in `full` display mode. |
 | `7d Fable 86% (4d 6h)` | A weekly limit for one model. Plans that carry these get a bar per limit in the tooltip; the status bar names one only while it is the window driving the color. |
+| `5h Gemini 42% (2h 15m)` | An Antigravity window. Antigravity keeps a 5-hour and a weekly limit for each model group, so the status bar shows the most used group of each window and names it; the tooltip has a bar for every one. |
 | `5h 58% left (2h 15m)` | The same reading with `percentageMode` set to `remaining`. |
 | `~5h 0%` | The window reset since this reading; `0%` is assumed, not read, and no color is raised on it. |
 | `$(history) 5h 42% (2h 15m)` | The reading is more than ten minutes old. |
@@ -26,7 +27,7 @@ One status bar item per provider, each with its own monochrome glyph:
 
 By default, the item turns yellow when usage reaches the warning threshold and red at the error threshold. Set `agentUsageBar.warnWhen` to `overPace` to show yellow only when the warning threshold is reached ahead of schedule—for example, 80% used before 80% of the window has passed. The red threshold always applies. Colors use the percentage **used**, regardless of the selected display mode. The item also turns red when a provider reports that the account is stopped by a spend limit or hard rate limit, even when the percentage is low; the tooltip states the reason.
 
-Hover to see the plan name, a themed progress bar for each window, exact reset times, pace, any credit balance, Codex reset credits and Claude limit resets with the date the soonest one expires, and the last refresh error. The bars use the same warning and error thresholds as the status item. The tooltip also links to refresh and settings. Click either status item to toggle that provider, refresh usage, or open settings.
+Hover to see the plan name, a themed progress bar for each window, exact reset times, pace, any credit balance, Codex reset credits and Claude limit resets with the date the soonest one expires, and the last refresh error. The bars use the same warning and error thresholds as the status item. The tooltip also links to refresh and settings. Click any status item to toggle a provider, refresh usage, or open settings.
 
 ## Pace
 
@@ -50,7 +51,7 @@ Pace remains hidden until the window has been open for fifteen minutes, and the 
 
 Under the windows, the tooltip draws the last thirty days as one bar per day: the busier the day, the taller and darker the bar; a day the agent was not used is a flat mark on the baseline. Each day is placed in one of five steps relative to the busiest day in view, so a bar says which band a day fell in — twice the height is not twice the work.
 
-The days are counted from the session transcripts both agents already write on this machine, so the strip is complete on the first hover and includes work done outside VS Code. Only recorded numbers and times are read from those files; see [Data access](#data-access).
+The days are counted from the session transcripts Claude Code and Codex already write on this machine, so the strip is complete on the first hover and includes work done outside VS Code. Only recorded numbers and times are read from those files; see [Data access](#data-access). Antigravity keeps its conversations in databases rather than line transcripts, so its tooltip has no strip.
 
 Each provider is measured in the unit it records, and the two are never compared:
 
@@ -81,8 +82,9 @@ There is no elected leader. The window that completed the previous read gets a s
 - VS Code 1.100.0 or newer, desktop.
 - For the Claude item: [Claude Code](https://claude.com/claude-code) installed and signed in, either as the standalone CLI or as the official Claude Code extension, which ships its own copy of it. Signing in to the Claude desktop app is not enough on its own; it keeps its sign-in somewhere else entirely.
 - For the Codex item: [Codex](https://chatgpt.com/download/) installed and signed in, either through the desktop app or as the standalone [CLI](https://github.com/openai/codex). The extension finds whichever you have, including the copy the Codex IDE extension ships.
+- For the Antigravity item: the Antigravity CLI (`agy`) installed and signed in. The official Antigravity extension for VS Code installs it to `~/.gemini/bin` on first run, and the standalone CLI installer puts it in the same place.
 
-Neither is required for the other. A provider that is not installed or not signed in says so in its tooltip; switch it off in the settings and its item disappears.
+None is required for the others. A provider that is not installed or not signed in says so in its tooltip; switch it off in the settings and its item disappears.
 
 ## Install
 
@@ -95,7 +97,7 @@ To install a `.vsix` by hand instead:
 
 ## Settings
 
-Run **Agent Usage Bar: Open settings**, or click either status bar item and pick **Open settings**.
+Run **Agent Usage Bar: Open settings**, or click any status bar item and pick **Open settings**.
 
 | Setting | Default | Purpose |
 | --- | --- | --- |
@@ -108,8 +110,10 @@ Run **Agent Usage Bar: Open settings**, or click either status bar item and pick
 | `agentUsageBar.warnWhen` | `threshold` | `overPace` warns only when usage reaches the threshold ahead of schedule. |
 | `agentUsageBar.claude.enabled` | `true` | Show Claude Code usage. |
 | `agentUsageBar.codex.enabled` | `true` | Show Codex usage. |
+| `agentUsageBar.antigravity.enabled` | `true` | Show Antigravity usage. |
 | `agentUsageBar.claude.label` | `""` | Text to show instead of the Claude mark. |
 | `agentUsageBar.codex.label` | `""` | Text to show instead of the Codex mark. |
+| `agentUsageBar.antigravity.label` | `""` | Text to show instead of the Antigravity mark. |
 | `agentUsageBar.locale` | `""` | Language tag for dates and times; empty follows VS Code. |
 | `agentUsageBar.refreshIntervalSeconds` | `300` | Background refresh interval, clamped to 30–3600. |
 
@@ -133,6 +137,9 @@ After a refresh failure, the last good reading remains visible instead of being 
 | Codex reported no usage windows | Sign in to Codex, or the account has no windows to report. Signing in is picked up on the next read. |
 | The Codex CLI could not be started | Codex was not found in a supported local installation; see [Platform scope](#platform-scope). |
 | The Codex app server timed out | The CLI stopped responding. The next read starts a fresh one automatically. |
+| Antigravity could not be started | The `agy` CLI was not found in `~/.gemini/bin`. Install the CLI, or switch the item off. |
+| Antigravity is not signed in | Sign in through the Antigravity CLI or its extension. Signing in is picked up on the next read. |
+| Antigravity did not answer in time | The CLI started but did not come up within twenty seconds. The next read starts a fresh one. |
 
 **Rate limited.** A `Retry-After` response pauses background polling, refreshes triggered by local agent activity, and menu refreshes alike. The tooltip shows when reading will resume. A response without a delay pauses reads for one minute. A delay longer than one hour is capped at one hour so an excessive or invalid value cannot leave the extension stalled beyond its longest refresh interval.
 
@@ -149,6 +156,18 @@ Account usage cannot be calculated reliably from activity on one machine, so the
 ### Codex
 
 The extension starts `codex app-server` and requests usage over JSON-RPC through stdin and stdout. Codex manages and refreshes its own credentials, so this extension never reads or handles a Codex token. `~/.codex/auth.json` remains outside the boundary, and `npm run audit:bundle` fails if that path appears in the shipped bundle. If the CLI cannot be found or is signed out, the status item reports that state instead of inferring usage from local files.
+
+### Antigravity
+
+For each reading, the extension starts the Antigravity CLI as `agy --hub`, asks it for the account's limits over HTTP on the loopback address, and stops it again. Antigravity manages and refreshes its own Google sign-in, so this extension never reads or handles a Google token, and it makes no request to a Google service itself.
+
+The hub is started on a free local port with an access token generated for that one start. Antigravity's own extension runs a hub per VS Code window in the same way; this extension does not look for those or read their tokens. It asks its own hub three questions: the quota summary, the plan name, and, only when no limits came back, whether the CLI is signed in. The answer carrying the plan name also names the account holder; only the plan name is taken out of it.
+
+A hub is stopped after every reading instead of being kept. A running hub holds well over a hundred megabytes and answers a repeated question from its own cache, so one kept between readings would cost memory and return a reading of unknown age. Starting one takes about two seconds.
+
+The hub is asked to write no log file. On each start it still leaves an empty crash marker under `~/.gemini/antigravity/crashes`, which a later start cleans up, and it opens Antigravity's own state files beside that directory. Those writes are Antigravity's, not this extension's.
+
+This interface is not documented by Google. It is the one Antigravity's own extension uses, and it can change with any Antigravity update. When it does, the item reports that no reading is available and the other providers are unaffected.
 
 ### Claude Code
 
@@ -187,7 +206,7 @@ The extension distinguishes these outcomes through the exit code returned by `se
 
 ### Agent transcripts
 
-The extension watches `~/.codex/sessions` and `~/.claude/projects` for the fact that a `.jsonl` file changed. After the writes settle, that change requests a usage refresh.
+The extension watches `~/.codex/sessions` and `~/.claude/projects` for the fact that a `.jsonl` file changed, and `~/.gemini/antigravity/conversations` for the fact that any file in it changed. After the writes settle, that change requests a usage refresh. Antigravity's conversation files are never opened.
 
 **Those files are also read, for the daily activity strip only.** They contain your prompts and your code, so what is taken out of them is worth stating exactly. Each line is parsed as JSON and one of two things is kept:
 
@@ -208,9 +227,9 @@ When the Anthropic usage endpoint refuses a read with a stated wait, that wait i
 
 ### What is stored, and what never leaves
 
-The Anthropic usage endpoint is the extension's only direct network target. The extension opens files only for parsing and performs no direct filesystem writes.
+The Anthropic usage endpoint is the extension's only remote network target. Its one other request stays on this machine: the loopback address of the Antigravity hub it started itself. The extension opens files only for parsing and performs no direct filesystem writes.
 
-`npm run audit:bundle` checks the shipped code on every build. For the member-access forms produced by the current build, it rejects `node:fs` members outside the explicit read-only set. It permits only `spawn` from `node:child_process` and rejects literal `shell: true` options.
+`npm run audit:bundle` checks the shipped code on every build. For the member-access forms produced by the current build, it rejects `node:fs` members outside the explicit read-only set. It permits only `spawn` from `node:child_process` and rejects literal `shell: true` options, and permits only `createServer` from `node:net`, which is how a free local port is found.
 
 The shipped text leaves two things for code review to establish. The URL allowlist can inspect only addresses written out in full; a URL assembled from parts at runtime is outside its reach. Likewise, because the program passed to `spawn` is resolved at runtime, the audit constrains how a process is started but cannot prove which one. The audit catches accidental violations of these promises; code review remains responsible for runtime-computed behavior.
 
@@ -224,9 +243,9 @@ No stored value contains a token, prompt, or file content. The extension has no 
 
 ## Platform scope
 
-Desktop VS Code on Windows, macOS, and Linux, hand-tested on all three against real installs of both agents. The per-platform paths are covered by tests on all three CI runners as well: the Codex install layouts, the macOS keychain read, and the file watcher against the real `recursive` implementation.
+Desktop VS Code on Windows, macOS, and Linux, hand-tested on all three against real installs of all three agents. The per-platform paths are covered by tests on all three CI runners as well: the Codex install layouts, the macOS keychain read, and the file watcher against the real `recursive` implementation.
 
-The extension runs on the same machine as the VS Code user interface, where both agents keep their sign-ins. In a Remote-SSH, WSL, or dev container window, it therefore reports usage for the local account. It does not read an agent sign-in that exists only on the remote side.
+The extension runs on the same machine as the VS Code user interface, where the agents keep their sign-ins. In a Remote-SSH, WSL, or dev container window, it therefore reports usage for the local account. It does not read an agent sign-in that exists only on the remote side.
 
 There is no web build. It reads local files and starts a local process, neither of which exists in a browser.
 
@@ -240,6 +259,6 @@ MIT; see [LICENSE](LICENSE).
 
 The icon font in `assets/agent-usage-bar.woff` was created specifically for this project and does not include third-party font files.
 
-Claude and Anthropic are trademarks of Anthropic. Codex and OpenAI are trademarks of OpenAI. The monochrome provider glyphs are used solely to identify the services whose usage is being displayed.
+Claude and Anthropic are trademarks of Anthropic. Codex and OpenAI are trademarks of OpenAI. Antigravity and Google are trademarks of Google. The monochrome provider glyphs are used solely to identify the services whose usage is being displayed.
 
-This project is independent and is not affiliated with, endorsed by, or sponsored by Anthropic or OpenAI. Either glyph can be replaced with your own text or a codicon; see [Settings](#settings).
+This project is independent and is not affiliated with, endorsed by, or sponsored by Anthropic, OpenAI, or Google. Any glyph can be replaced with your own text or a codicon; see [Settings](#settings).

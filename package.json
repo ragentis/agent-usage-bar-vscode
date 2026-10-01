@@ -1,7 +1,7 @@
 {
   "name": "agent-usage-bar",
   "displayName": "Agent Usage Bar",
-  "description": "Show Claude Code and Codex account usage windows in the VS Code status bar.",
+  "description": "Show Claude Code, Codex, and Antigravity account usage windows in the VS Code status bar.",
   "version": "0.4.1",
   "publisher": "ragentis",
   "license": "MIT",
@@ -25,6 +25,8 @@
     "claude code",
     "codex",
     "openai codex",
+    "antigravity",
+    "google antigravity",
     "account usage",
     "usage limits",
     "rate limits",
@@ -62,6 +64,13 @@
           "fontCharacter": "\\E800"
         }
       },
+      "agent-usage-bar-antigravity": {
+        "description": "Antigravity provider mark",
+        "default": {
+          "fontPath": "./assets/agent-usage-bar.woff",
+          "fontCharacter": "\\E804"
+        }
+      },
       "agent-usage-bar-claude-hover": {
         "description": "Claude Code provider mark, aligned for tooltips",
         "default": {
@@ -74,6 +83,13 @@
         "default": {
           "fontPath": "./assets/agent-usage-bar.woff",
           "fontCharacter": "\\E803"
+        }
+      },
+      "agent-usage-bar-antigravity-hover": {
+        "description": "Antigravity provider mark, aligned for tooltips",
+        "default": {
+          "fontPath": "./assets/agent-usage-bar.woff",
+          "fontCharacter": "\\E805"
         }
       },
       "agent-usage-bar-day-none": {
@@ -235,22 +251,34 @@
           "order": 9,
           "markdownDescription": "Show Codex usage in the status bar. Your local Codex CLI is asked for the limits it already knows for your account. Codex keeps its own sign-in, so this extension never reads or stores your Codex credentials. Nothing is shown when Codex is not installed or is signed out."
         },
+        "agentUsageBar.antigravity.enabled": {
+          "type": "boolean",
+          "default": true,
+          "order": 10,
+          "markdownDescription": "Show Antigravity usage in the status bar. Your local Antigravity CLI (`agy`) is started for each reading and asked for the limits it already knows for your account. Antigravity keeps its own sign-in, so this extension never reads or stores your Google credentials. Nothing is read when the CLI is not installed or is signed out."
+        },
         "agentUsageBar.claude.label": {
           "type": "string",
           "default": "",
-          "order": 10,
+          "order": 11,
           "markdownDescription": "Replace the Claude mark in the status bar with your own text. Leave empty for the icon. A codicon reference such as `$(sparkle)` also works."
         },
         "agentUsageBar.codex.label": {
           "type": "string",
           "default": "",
-          "order": 11,
+          "order": 12,
           "markdownDescription": "Replace the Codex mark in the status bar with your own text. Leave empty for the icon. A codicon reference such as `$(hubot)` also works."
+        },
+        "agentUsageBar.antigravity.label": {
+          "type": "string",
+          "default": "",
+          "order": 13,
+          "markdownDescription": "Replace the Antigravity mark in the status bar with your own text. Leave empty for the icon. A codicon reference such as `$(rocket)` also works."
         },
         "agentUsageBar.locale": {
           "type": "string",
           "default": "",
-          "order": 12,
+          "order": 14,
           "examples": [
             "en-GB",
             "de-DE",
@@ -263,7 +291,7 @@
           "default": 300,
           "minimum": 60,
           "maximum": 3600,
-          "order": 13,
+          "order": 15,
           "description": "How often to re-read usage in the background, so this mainly covers usage spent on other machines or in other clients. Local agent activity also triggers a refresh, and no automatic read happens less than a minute after the last one."
         }
       }

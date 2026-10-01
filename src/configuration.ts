@@ -18,15 +18,17 @@ export interface ExtensionConfiguration {
   warnWhen: WarnWhen;
   codexEnabled: boolean;
   claudeEnabled: boolean;
+  antigravityEnabled: boolean;
   codexLabel: string;
   claudeLabel: string;
+  antigravityLabel: string;
   refreshIntervalSeconds: number;
   showHistory: boolean;
   theme: ThemeKind;
 }
 
 /**
- * This bounds both the setting and every automatic trigger. Neither provider publishes its limit,
+ * This bounds both the setting and every automatic trigger. No provider publishes its limit,
  * so `Retry-After` still controls any refusal. The account endpoint is shared with the agent itself
  * and every other client, and a transcript-driven read every half minute was enough to be refused.
  */
@@ -91,8 +93,10 @@ export function resolveConfiguration(
     warnWhen: read<WarnWhen>("warnWhen", "threshold"),
     codexEnabled: read("codex.enabled", true),
     claudeEnabled: read("claude.enabled", true),
+    antigravityEnabled: read("antigravity.enabled", true),
     codexLabel: label(read("codex.label", "")),
     claudeLabel: label(read("claude.label", "")),
+    antigravityLabel: label(read("antigravity.label", "")),
     refreshIntervalSeconds: bounded(
       read("refreshIntervalSeconds", DEFAULT_REFRESH_INTERVAL_SECONDS),
       DEFAULT_REFRESH_INTERVAL_SECONDS,
@@ -114,6 +118,7 @@ const PRESENTATION_KEYS = [
   "warnWhen",
   "claudeLabel",
   "codexLabel",
+  "antigravityLabel",
   "showHistory",
   "theme",
 ] as const satisfies readonly (keyof ExtensionConfiguration)[];
@@ -128,7 +133,8 @@ export function configurationEffect(
 ): "none" | "redraw" | "refresh" {
   if (
     previous.claudeEnabled !== next.claudeEnabled ||
-    previous.codexEnabled !== next.codexEnabled
+    previous.codexEnabled !== next.codexEnabled ||
+    previous.antigravityEnabled !== next.antigravityEnabled
   ) {
     return "refresh";
   }

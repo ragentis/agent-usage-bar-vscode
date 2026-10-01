@@ -28,11 +28,21 @@ const PROVIDERS: Record<
     hoverIcon: "agent-usage-bar-codex-hover",
     priority: 100.01,
   },
+  antigravity: {
+    title: "Antigravity usage",
+    icon: "agent-usage-bar-antigravity",
+    hoverIcon: "agent-usage-bar-antigravity-hover",
+    priority: 100.005,
+  },
 };
 
 function prefix(provider: ProviderId, configuration: ExtensionConfiguration): string {
-  const label = provider === "claude" ? configuration.claudeLabel : configuration.codexLabel;
-  return label || `$(${PROVIDERS[provider].icon})`;
+  const labels: Record<ProviderId, string> = {
+    claude: configuration.claudeLabel,
+    codex: configuration.codexLabel,
+    antigravity: configuration.antigravityLabel,
+  };
+  return labels[provider] || `$(${PROVIDERS[provider].icon})`;
 }
 
 const STALE_AFTER_MS = 10 * 60_000;

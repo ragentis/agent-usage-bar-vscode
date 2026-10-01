@@ -1,4 +1,6 @@
 import * as vscode from "vscode";
+import { antigravityConversationsPath } from "./antigravity";
+import { AntigravityHub } from "./antigravity-hub";
 import { claudeSessionsPath, nativeCliVersions } from "./claude";
 import { fetchClaudeUsage, newestCliVersion } from "./claude-api";
 import { codexSessionsPath } from "./codex";
@@ -48,7 +50,14 @@ function providers(onCodexPush: () => void): ProviderPort[] {
     fileSuffix: ".jsonl",
     recursive: true,
   });
+  // Conversations are databases with companion files, so every write in the directory counts.
+  const antigravityWatcher = new FileWatcher({
+    directory: antigravityConversationsPath(),
+    fileSuffix: "",
+    recursive: false,
+  });
   let codexAppServer: CodexAppServer | null = null;
+  let antigravityHub: AntigravityHub | null = null;
   const claudeRequest = { plainOnly: false };
   return [
     {
@@ -67,6 +76,15 @@ function providers(onCodexPush: () => void): ProviderPort[] {
       isEnabled: (configuration) => configuration.codexEnabled,
       stop: () => codexAppServer?.stop(),
       dispose: () => codexAppServer?.dispose(),
+    },
+    {
+      id: "antigravity",
+      display: display("antigravity"),
+      read: () => (antigravityHub ??= new AntigravityHub()).readUsage(),
+      watcher: antigravityWatcher,
+      isEnabled: (configuration) => configuration.antigravityEnabled,
+      stop: () => antigravityHub?.stop(),
+      dispose: () => antigravityHub?.dispose(),
     },
   ];
 }

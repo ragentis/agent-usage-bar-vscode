@@ -14,9 +14,16 @@ import {
 import type { StoredHistory, UsageHistoryState } from "./history-store";
 import type { ProviderId } from "./usage";
 
-const UNITS: Record<ProviderId, HistoryUnit> = { claude: "tokens", codex: "percent" };
+/** Antigravity keeps its conversations in databases rather than line transcripts, so it has no strip. */
+type HistoryProvider = Exclude<ProviderId, "antigravity">;
 
-const PROVIDERS = ["claude", "codex"] as const satisfies readonly ProviderId[];
+const UNITS: Record<HistoryProvider, HistoryUnit> = { claude: "tokens", codex: "percent" };
+
+const PROVIDERS = ["claude", "codex"] as const satisfies readonly HistoryProvider[];
+
+function hasHistory(provider: ProviderId): provider is HistoryProvider {
+  return provider !== "antigravity";
+}
 
 const DAY_MS = 24 * 60 * 60_000;
 
@@ -35,7 +42,7 @@ const SCAN_FRESH_MS = 2 * 60_000;
 /** Activation belongs to the status bar reading; transcripts are parsed once it is on screen. */
 const START_DELAY_MS = 4_000;
 
-function isEnabled(provider: ProviderId, configuration: ExtensionConfiguration): boolean {
+function isEnabled(provider: HistoryProvider, configuration: ExtensionConfiguration): boolean {
   const enabled = provider === "claude" ? configuration.claudeEnabled : configuration.codexEnabled;
   return enabled && configuration.showHistory;
 }
@@ -45,7 +52,7 @@ function isEnabled(provider: ProviderId, configuration: ExtensionConfiguration):
  * the same answer and none of the read coordination the live readings need applies here.
  */
 export class HistoryService {
-  private readonly running = new Map<ProviderId, Promise<void>>();
+  private readonly running = new Map<HistoryProvider, Promise<void>>();
   private startTimer: NodeJS.Timeout | null = null;
   private disposed = false;
 
@@ -72,7 +79,9 @@ export class HistoryService {
 
   /** Transcript writes are the only signal that a day's total has moved. */
   handleActivity(provider: ProviderId): void {
-    void this.scan(provider);
+    if (hasHistory(provider)) {
+      void this.scan(provider);
+    }
   }
 
   handleConfigurationChange(): void {
@@ -85,7 +94,7 @@ export class HistoryService {
     }
   }
 
-  private scan(provider: ProviderId): Promise<void> {
+  private scan(provider: HistoryProvider): Promise<void> {
     if (this.disposed) {
       return Promise.resolve();
     }
@@ -106,7 +115,7 @@ export class HistoryService {
     return run;
   }
 
-  private async derive(provider: ProviderId): Promise<void> {
+  private async derive(provider: HistoryProvider): Promise<void> {
     const unit = UNITS[provider];
     const now = Date.now();
     const stored = this.current(provider, unit);
@@ -135,13 +144,13 @@ export class HistoryService {
   }
 
   /** A stored unit that no longer matches the provider is from another shape and cannot be merged. */
-  private current(provider: ProviderId, unit: HistoryUnit): StoredHistory | null {
+  private current(provider: HistoryProvider, unit: HistoryUnit): StoredHistory | null {
     const stored = this.state.read(provider);
     return stored && stored.unit === unit ? stored : null;
   }
 
   private read(
-    provider: ProviderId,
+    provider: HistoryProvider,
     since: number,
     stored: StoredHistory | null,
   ): Promise<HistoryScan> {

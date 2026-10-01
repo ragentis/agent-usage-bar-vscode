@@ -63,7 +63,11 @@ function windowKind(value: unknown): WindowKind | null {
 }
 
 function snapshotSource(value: unknown): SnapshotSource | null {
-  return value === "claude-account-api" || value === "codex-app-server" ? value : null;
+  return value === "claude-account-api" ||
+    value === "codex-app-server" ||
+    value === "antigravity-hub"
+    ? value
+    : null;
 }
 
 function parseWindow(value: unknown): UsageWindow | null {

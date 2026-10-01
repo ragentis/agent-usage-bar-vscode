@@ -3,7 +3,7 @@ import { resolveConfiguration, type ExtensionConfiguration, type ThemeKind } fro
 
 const SECTION = "agentUsageBar";
 
-export type WritableSetting = "claude.enabled" | "codex.enabled";
+export type WritableSetting = "claude.enabled" | "codex.enabled" | "antigravity.enabled";
 
 /** Both high-contrast kinds resolve with their light or dark counterpart. */
 function themeKind(): ThemeKind {

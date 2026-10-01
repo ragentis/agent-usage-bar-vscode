@@ -58,9 +58,10 @@ The layout follows one rule: **testable modules do not import anything that requ
 | `claude-api.ts` | `fetch` | Calling the account endpoint and parsing its response. |
 | `claude-credentials.ts` | node | Reading token sources: the credentials file and macOS keychain. |
 | `codex-appserver.ts` | node | Discovering the CLI, managing JSON-RPC, and parsing replies. |
+| `antigravity-hub.ts` | node, `fetch` | Starting a hub per read, asking it over loopback HTTP, and parsing replies. |
 | `watcher.ts` | node | Watching files with debounce and retry backoff. |
 | `transcripts.ts` | node | Walking a transcript tree and handing out its lines. |
-| `claude.ts`, `codex.ts` | node | Resolving provider-specific paths. |
+| `claude.ts`, `codex.ts`, `antigravity.ts` | node | Resolving provider-specific paths. |
 | `claude-history.ts`, `codex-history.ts` | node | Taking one provider's daily totals out of its transcripts. |
 | `history-service.ts` | — | Deciding when a scan runs and how far back it reaches. |
 | `history-store.ts` | — | Serializing and validating stored daily totals. |
@@ -73,13 +74,15 @@ The layout follows one rule: **testable modules do not import anything that requ
 | `formatting.ts` | — | Status text, percentages, and durations. |
 | `tooltip.ts` | — | Tooltip content and Markdown escaping. |
 
-Four small types preserve that boundary: `CodexProcess`, `LaunchCodex`, `SharedStore`, and `SettingReader`. `CodexProcess` and `SharedStore` are interfaces; `LaunchCodex` and `SettingReader` are function type aliases. Each describes only the VS Code or operating-system capability its module uses, so tests can provide a substitute without starting the real service.
+Seven small types preserve that boundary: `CodexProcess`, `LaunchCodex`, `Hub`, `HubProcess`, `LaunchHub`, `SharedStore`, and `SettingReader`. `CodexProcess`, `Hub`, `HubProcess`, and `SharedStore` are interfaces; `LaunchCodex`, `LaunchHub`, and `SettingReader` are function type aliases. Each describes only the VS Code or operating-system capability its module uses, so tests can provide a substitute without starting the real service.
 
 ## Tests
 
-Tests cover both providers' response parsers, `watcher.ts`, `formatting.ts`, `shared-state.ts`, and `read-coordinator.ts`. The history parsers are pinned against the two shapes of Codex rate-limit payload on disk and against Claude Code replaying earlier messages into a resumed session, because either one silently changes the numbers rather than failing. The two heaviest are `tooltip.ts` and `usage-bar.ts` — the latter because a rate-limit wait, a lease, a provider toggle, and a window closing all reach for the same state.
+Tests cover every provider's response parser, `watcher.ts`, `formatting.ts`, `shared-state.ts`, and `read-coordinator.ts`. The history parsers are pinned against the two shapes of Codex rate-limit payload on disk and against Claude Code replaying earlier messages into a resumed session, because either one silently changes the numbers rather than failing. The two heaviest are `tooltip.ts` and `usage-bar.ts` — the latter because a rate-limit wait, a lease, a provider toggle, and a window closing all reach for the same state.
 
-`codex-appserver.ts` starts Codex through `LaunchCodex` for the same reason. Tests can then simulate partial frames, a silent server, or a stop that arrives during startup. A real Codex installation cannot reproduce those cases on demand.
+`codex-appserver.ts` starts Codex through `LaunchCodex` for the same reason. Tests can then simulate partial frames, a silent server, or a stop that arrives during startup. A real Codex installation cannot reproduce those cases on demand. `antigravity-hub.ts` takes its hub through `LaunchHub` on the same terms: a hub that is still starting, one that never listens, a missing CLI, and a stop that arrives mid-read.
+
+The Antigravity replies are pinned against shapes captured from a live hub, including the one that is easy to get wrong: the hub answers in proto3 JSON, which omits a zero, so a spent bucket arrives with a reset time and no `remainingFraction`.
 
 All source and test files are also checked by `tsc --strict`. One `tsconfig.json` covers `src/` and `test/`, so the editor and `npm run typecheck` apply the same type rules. Type checking complements the tests; it is not runtime coverage.
 
@@ -111,9 +114,10 @@ The build writes two untracked files. `dist/extension.js` is the shipped extensi
 | --- | --- |
 | Runtime dependencies | Any entry under `dependencies`. |
 | Bundle inputs | An input that did not come from `src/`. |
-| Network targets | Any written-out URL other than the one allowed endpoint. |
+| Network targets | Any written-out URL other than the one allowed endpoint and the loopback origin. |
 | `node:fs` members | Anything the bundle reaches for beyond `readFile`, `readdir`, `stat`, `lstat`, `existsSync`, and `watch`. |
 | `node:child_process` members | Anything beyond `spawn`, plus a literal `shell: true`. |
+| `node:net` members | Anything beyond `createServer`, which finds a free port for the Antigravity hub. |
 | Codex credentials | The literal `.codex/auth.json` path. |
 | Keychain verbs | Any password verb other than `find-generic-password`, and `unlock-keychain`. |
 | Absolute paths | A rooted path outside the pinned list of two programs the extension starts. |
@@ -122,7 +126,7 @@ The module checks used members against an allowlist. This is stricter than rejec
 
 Three limits are worth stating rather than discovering, because each marks where the audit stops and review begins:
 
-- A URL assembled from parts at runtime is outside the allowlist, which covers addresses written out in full.
+- A URL assembled from parts at runtime is outside the allowlist, which covers addresses written out in full. The Antigravity hub's address is the one such case: its origin is a pinned literal, and the port and path are appended at runtime.
 - `spawn` is the only way a process starts and `shell: true` is refused, but the program it starts is resolved at runtime, so the audit constrains how rather than which.
 - Packaging proves neither that the VSIX installs nor that it activates; the install before approving a release is what covers that.
 
@@ -150,16 +154,18 @@ The font contains a regular and a tooltip variant of each mark. The status bar c
 
 Keep the pinned code points on re-import, because `contributes.icons` addresses the glyphs by exactly those characters:
 
-| Code point        | Glyph                 | Drawn in         |
-| ----------------- | --------------------- | ---------------- |
-| `U+E800`          | Codex                 | status bar, menu |
-| `U+E801`          | Claude                | status bar, menu |
-| `U+E802`          | Claude, tooltip size  | tooltips         |
-| `U+E803`          | Codex, tooltip size   | tooltips         |
-| `U+E810`          | Idle day              | tooltips         |
-| `U+E811`–`U+E815` | Day, steps one – five | tooltips         |
-| `U+E816`          | Weekly mark           | tooltips         |
-| `U+E817`          | Weekly mark, halo     | tooltips         |
+| Code point        | Glyph                     | Drawn in         |
+| ----------------- | ------------------------- | ---------------- |
+| `U+E800`          | Codex                     | status bar, menu |
+| `U+E801`          | Claude                    | status bar, menu |
+| `U+E802`          | Claude, tooltip size      | tooltips         |
+| `U+E803`          | Codex, tooltip size       | tooltips         |
+| `U+E804`          | Antigravity               | status bar, menu |
+| `U+E805`          | Antigravity, tooltip size | tooltips         |
+| `U+E810`          | Idle day                  | tooltips         |
+| `U+E811`–`U+E815` | Day, steps one – five     | tooltips         |
+| `U+E816`          | Weekly mark               | tooltips         |
+| `U+E817`          | Weekly mark, halo         | tooltips         |
 
 **An icon id may contain only lowercase letters and hyphens.** That is not the rule the `icons` contribution point enforces: it accepts `[A-Za-z0-9]` segments, so an id carrying a digit registers cleanly and gets its CSS rule like any other. The Markdown renderer is stricter, and keeps a codicon class only when the whole attribute matches
 
@@ -212,7 +218,7 @@ Release Please normally changes only `package.json`, `package-lock.json`, `CHANG
 
 The final phase waits for approval through the `release` environment, which stores both registry tokens and requires a reviewer. Marketplace versions cannot be replaced after publication, so this approval is the runtime verification gate.
 
-Before approving, download the attached VSIX, run **Extensions: Install from VSIX...**, reload VS Code, and confirm that both status items and their provider marks appear. CI tests the modules, audits the built bundle, and creates the VSIX. It does not inspect the final archive contents or load the VSIX into a running Extension Host. Manual installation is therefore the only check that the produced package installs and starts with its required assets.
+Before approving, download the attached VSIX, run **Extensions: Install from VSIX...**, reload VS Code, and confirm that the status items and their provider marks appear. CI tests the modules, audits the built bundle, and creates the VSIX. It does not inspect the final archive contents or load the VSIX into a running Extension Host. Manual installation is therefore the only check that the produced package installs and starts with its required assets.
 
 **When something fails.** Re-run failed jobs on the same workflow run for a flaky test or expired registry token. GitHub retains the run artifact for thirty days, and the published release keeps its attached VSIX. Both registry commands use `--skip-duplicate`, so rerunning one failed matrix entry does not republish a version that already succeeded.
 

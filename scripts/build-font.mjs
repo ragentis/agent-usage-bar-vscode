@@ -32,7 +32,11 @@ const HOVER = { scale: 1.5, lift: 39, gap: 150 };
 /** The hand-drawn marks are centred in their em, so this is the point they are scaled about. */
 const MARK_CENTRE = 500;
 
-const HOVERS = { claude: "claude-hover", openai: "openai-hover" };
+const HOVERS = {
+  claude: "claude-hover",
+  openai: "openai-hover",
+  antigravity: "antigravity-hover",
+};
 
 /**
  * One glyph is one day. The advance width carries the gap to the next day, so a row of them needs no

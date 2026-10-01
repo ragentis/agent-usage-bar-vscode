@@ -30,6 +30,7 @@ const WINDOW_TITLES: Record<WindowKind, string> = { session: "5-hour", weekly: "
 const SOURCE_TITLES: Record<SnapshotSource, string> = {
   "claude-account-api": "Claude account",
   "codex-app-server": "Codex account",
+  "antigravity-hub": "Antigravity account",
 };
 
 /** The only command links trusted tooltip Markdown may contain. */
