@@ -3,8 +3,7 @@ import * as path from "node:path";
 import { antigravityConversationsPath } from "./antigravity";
 import type { Hub } from "./antigravity-hub";
 import { addDay, localDay, tokenCount, type HistoryScan } from "./history";
-import type { ProviderWatcher } from "./usage-bar";
-import { isRecord, validDate } from "./usage";
+import { isRecord, validDate } from "./validation";
 
 /**
  * Each Antigravity conversation is a database that only its hub can read. Two hub calls are made
@@ -131,38 +130,6 @@ export function tokensByDay(metadata: unknown, steps: unknown): Record<string, n
     }
   }
   return days;
-}
-
-/** File times and the clock are compared across a debounce, so a write is given this much slack. */
-const WRITE_SLACK_MS = 1_000;
-
-/**
- * Reading a conversation makes SQLite recreate its empty companion files, and the file watcher
- * reports that as a change. Reporting it would make every scan trigger another scan, so a change
- * counts only when a conversation was written since the previous change.
- */
-export function realWritesOnly(
-  watcher: ProviderWatcher,
-  directory: string = antigravityConversationsPath(),
-  now: () => number = Date.now,
-): ProviderWatcher {
-  return {
-    start: (onChange) => {
-      let seen = now();
-      const report = async (since: number): Promise<void> => {
-        if ((await listConversations(directory, since)).length > 0) {
-          onChange();
-        }
-      };
-      watcher.start(() => {
-        const since = seen - WRITE_SLACK_MS;
-        seen = now();
-        void report(since);
-      });
-    },
-    stop: () => watcher.stop(),
-    dispose: () => watcher.dispose(),
-  };
 }
 
 export type QueryHub = <T>(use: (call: Hub["call"]) => Promise<T>) => Promise<T>;

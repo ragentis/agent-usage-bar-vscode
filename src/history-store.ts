@@ -1,6 +1,7 @@
 import { DAY_PATTERN, type DailyTotals, type HistoryUnit, type UsageSample } from "./history";
 import type { SharedStore } from "./shared-state";
-import { isRecord, validMillis, validUsedPercent, type ProviderId } from "./usage";
+import type { ProviderId } from "./usage";
+import { isRecord, validMillis, validUsedPercent } from "./validation";
 
 /**
  * Stored totals are kept after their transcripts are gone; Claude Code deletes its transcripts

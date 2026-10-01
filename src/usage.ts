@@ -66,11 +66,6 @@ export interface ProviderView {
   absent?: boolean;
 }
 
-/** How Node reports a program or path that does not exist. */
-export function isNotFound(error: unknown): boolean {
-  return isRecord(error) && error.code === "ENOENT";
-}
-
 export function mergeView(
   previous: ProviderView | null | undefined,
   next: ProviderView,
@@ -85,11 +80,6 @@ export function mergeView(
       };
 }
 
-const SESSION_WINDOW_MAX_MINUTES = 360;
-const MAX_LABEL_LENGTH = 80;
-
-const MAX_MESSAGE_LENGTH = 500;
-
 /**
  * Caps external retry delays so a bad value cannot suppress reads indefinitely or overflow
  * `setTimeout`.
@@ -101,54 +91,7 @@ export function cappedRetryAt(retryAt: Date, now = new Date()): Date {
   return retryAt.getTime() > cap ? new Date(cap) : retryAt;
 }
 
-export function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-export function validMillis(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
-}
-
-export function validUsedPercent(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 100
-    ? value
-    : null;
-}
-
-const MAX_WINDOW_MINUTES = 31 * 24 * 60;
-
-export function validWindowMinutes(value: unknown): number | null {
-  return typeof value === "number" &&
-    Number.isFinite(value) &&
-    value > 0 &&
-    value <= MAX_WINDOW_MINUTES
-    ? value
-    : null;
-}
-
-export function validDate(value: unknown): Date | null {
-  if (typeof value !== "string" && typeof value !== "number") {
-    return null;
-  }
-  const date = typeof value === "number" ? new Date(value * 1000) : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-export function validLabel(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed && trimmed.length <= MAX_LABEL_LENGTH ? trimmed : null;
-}
-
-export function validMessage(value: unknown): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed ? trimmed.slice(0, MAX_MESSAGE_LENGTH) : null;
-}
+const SESSION_WINDOW_MAX_MINUTES = 360;
 
 export function classifyWindow(windowMinutes: unknown, fallback: WindowKind): WindowKind {
   if (typeof windowMinutes !== "number" || !Number.isFinite(windowMinutes) || windowMinutes <= 0) {

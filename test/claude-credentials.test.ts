@@ -15,7 +15,7 @@ import {
   type CredentialSource,
   type KeychainResult,
 } from "../src/claude-credentials";
-import { validMessage } from "../src/usage";
+import { validMessage } from "../src/validation";
 
 /**
  * Platform stores are exercised without exposing the keychain secret or its diagnostic output.

@@ -1,7 +1,8 @@
 import { codexSessionsPath } from "./codex";
 import { scanFromSamples, type HistoryScan, type UsageSample } from "./history";
 import { forEachTranscriptLine } from "./transcripts";
-import { classifyWindow, isRecord, validDate, validUsedPercent, validWindowMinutes } from "./usage";
+import { classifyWindow } from "./usage";
+import { isRecord, validDate, validUsedPercent, validWindowMinutes } from "./validation";
 
 /**
  * Codex records the account's own rate-limit percentages beside every token count, so a day's spend

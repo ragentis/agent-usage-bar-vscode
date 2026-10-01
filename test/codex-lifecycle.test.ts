@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { CodexAppServer, type CodexProcess } from "../src/codex-appserver";
-import { isRecord } from "../src/usage";
+import { isRecord } from "../src/validation";
 
 /**
  * A controllable process covers framing, timeouts, and teardown races that a real Codex install

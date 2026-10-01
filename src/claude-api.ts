@@ -1,3 +1,4 @@
+import { PINNED_CLI_VERSION } from "./claude-cli-version";
 import {
   hasExpired,
   noSignInMessage,
@@ -6,51 +7,19 @@ import {
 } from "./claude-credentials";
 import {
   cappedRetryAt,
-  isRecord,
   sortWindows,
   unavailable,
-  validDate,
-  validLabel,
-  validUsedPercent,
   type ProviderResult,
   type UsageSnapshot,
   type UsageWindow,
   type WindowKind,
 } from "./usage";
+import { isRecord, validDate, validLabel, validUsedPercent } from "./validation";
 
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const RESETS_URL = "https://api.anthropic.com/api/oauth/usage?cedar_ember=1";
 const OAUTH_BETA = "oauth-2025-04-20";
 const REQUEST_TIMEOUT_MS = 5_000;
-
-/**
- * The service includes limit resets only for a Claude Code CLI user agent at or above a version
- * floor. The pinned value must be a published release; a newer installed CLI replaces it.
- */
-export const PINNED_CLI_VERSION = "2.1.285";
-const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
-
-function compareVersions(left: string, right: string): number {
-  const rightParts = right.split(".").map(Number);
-  return (
-    left
-      .split(".")
-      .map((part, index) => Number(part) - (rightParts[index] ?? 0))
-      .find((delta) => delta !== 0) ?? 0
-  );
-}
-
-export function newestCliVersion(candidates: readonly unknown[]): string {
-  return candidates
-    .filter(
-      (candidate): candidate is string =>
-        typeof candidate === "string" && VERSION_PATTERN.test(candidate),
-    )
-    .reduce(
-      (newest, candidate) => (compareVersions(candidate, newest) > 0 ? candidate : newest),
-      PINNED_CLI_VERSION,
-    );
-}
 
 /**
  * Accepts both standard `Retry-After` forms. A missing or non-future value, including the

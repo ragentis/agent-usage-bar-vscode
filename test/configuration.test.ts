@@ -10,7 +10,7 @@ import {
   resolveConfiguration,
   type ExtensionConfiguration,
 } from "../src/configuration";
-import { isRecord } from "../src/usage";
+import { isRecord } from "../src/validation";
 
 function configure(overrides: Partial<ExtensionConfiguration> = {}): ExtensionConfiguration {
   return {

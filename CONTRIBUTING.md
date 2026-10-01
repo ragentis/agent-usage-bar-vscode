@@ -57,9 +57,13 @@ The layout follows one rule: **testable modules do not import anything that requ
 | `menu.ts` | vscode | Status item menu commands. |
 | `claude-api.ts` | `fetch` | Calling the account endpoint and parsing its response. |
 | `claude-credentials.ts` | node | Reading token sources: the credentials file and macOS keychain. |
-| `codex-appserver.ts` | node | Discovering the CLI, managing JSON-RPC, and parsing replies. |
+| `claude-cli-version.ts` | node | Choosing the CLI version that the reset request states. |
+| `codex-appserver.ts` | node | Running the app server and managing JSON-RPC. |
+| `codex-binary.ts` | node | Finding the Codex binary across install layouts. |
+| `codex-rate-limits.ts` | — | Parsing the rate-limit reply. |
 | `antigravity-hub.ts` | node, `fetch` | Starting a hub per read, asking it over loopback HTTP, and parsing replies. |
 | `antigravity-history.ts` | node | Deciding which conversations can be read, and taking daily tokens out of the hub's answers. |
+| `antigravity-watcher.ts` | node | Reporting a conversation change only when a conversation was written. |
 | `presence.ts` | node | Confirming that an agent a read could not find left no data directory either. |
 | `watcher.ts` | node | Watching files with debounce and retry backoff. |
 | `transcripts.ts` | node | Walking a transcript tree and handing out its lines. |
@@ -71,7 +75,8 @@ The layout follows one rule: **testable modules do not import anything that requ
 | `usage-bar.ts` | — | Coordinating provider state and rendering updates. |
 | `read-coordinator.ts` | — | Deciding which window reads and when. |
 | `shared-state.ts` | — | Serializing and validating shared readings. |
-| `usage.ts` | — | Shared types and response validators. |
+| `usage.ts` | — | Shared types and window ordering. |
+| `validation.ts` | — | Validators for provider replies, stored state, and files. |
 | `configuration.ts` | — | Plain settings values and their constraints. |
 | `formatting.ts` | — | Status text, percentages, and durations. |
 | `tooltip.ts` | — | Tooltip content and Markdown escaping. |

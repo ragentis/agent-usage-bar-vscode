@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { claudeDirectory } from "./claude";
-import { isRecord, validLabel } from "./usage";
+import { isRecord, validLabel } from "./validation";
 
 const CREDENTIALS_FILE = ".credentials.json";
 const MAX_SECRET_CHARS = 64 * 1024;

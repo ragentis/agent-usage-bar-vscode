@@ -1,9 +1,11 @@
 import * as vscode from "vscode";
 import { antigravityConversationsPath, antigravityDirectory } from "./antigravity";
-import { AntigravityHistory, realWritesOnly } from "./antigravity-history";
+import { AntigravityHistory } from "./antigravity-history";
 import { AntigravityHub } from "./antigravity-hub";
-import { claudeDirectory, claudeSessionsPath, nativeCliVersions } from "./claude";
-import { fetchClaudeUsage, newestCliVersion } from "./claude-api";
+import { realWritesOnly } from "./antigravity-watcher";
+import { claudeDirectory, claudeSessionsPath } from "./claude";
+import { fetchClaudeUsage } from "./claude-api";
+import { nativeCliVersions, newestCliVersion } from "./claude-cli-version";
 import { scanClaudeHistory } from "./claude-history";
 import { codexDirectory, codexSessionsPath } from "./codex";
 import { CodexAppServer } from "./codex-appserver";
@@ -22,7 +24,8 @@ import {
   showLoading,
 } from "./status-bar";
 import { UsageBar, type ProviderDisplay, type ProviderPort } from "./usage-bar";
-import { isRecord, type ProviderId } from "./usage";
+import type { ProviderId } from "./usage";
+import { isRecord } from "./validation";
 import { FileWatcher } from "./watcher";
 
 function display(provider: ProviderId): ProviderDisplay {

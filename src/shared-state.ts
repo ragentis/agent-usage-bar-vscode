@@ -1,11 +1,5 @@
 import {
-  isRecord,
   MAX_RETRY_WAIT_MS,
-  validLabel,
-  validMessage,
-  validMillis,
-  validUsedPercent,
-  validWindowMinutes,
   type ProviderId,
   type ProviderView,
   type SnapshotSource,
@@ -13,6 +7,14 @@ import {
   type UsageWindow,
   type WindowKind,
 } from "./usage";
+import {
+  isRecord,
+  validLabel,
+  validMessage,
+  validMillis,
+  validUsedPercent,
+  validWindowMinutes,
+} from "./validation";
 
 /**
  * The version is part of the key so an incompatible shape is ignored instead of misread. Bump it

@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
-import { mergeView, validLabel, type ProviderView, type UsageSnapshot } from "../src/usage";
+import { mergeView, type ProviderView, type UsageSnapshot } from "../src/usage";
+import { validLabel } from "../src/validation";
 
 const snapshot: UsageSnapshot = {
   windows: [{ kind: "session", usedPercent: 12, resetsAt: null }],

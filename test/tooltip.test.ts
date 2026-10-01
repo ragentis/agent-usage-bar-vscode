@@ -3,7 +3,8 @@ import { expect, test } from "vitest";
 import type { ExtensionConfiguration } from "../src/configuration";
 import { HISTORY_LEVELS, localDay, shiftDay, type DailyTotals } from "../src/history";
 import { buildMessageTooltip, buildTooltip, escapeHtml, TOOLTIP_COMMANDS } from "../src/tooltip";
-import { isRecord, type UsageSnapshot } from "../src/usage";
+import type { UsageSnapshot } from "../src/usage";
+import { isRecord } from "../src/validation";
 
 /**
  * Provider text crosses a trusted-Markdown boundary here. Tests pin escaping and the renderer's

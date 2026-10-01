@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { resolveCodexBinary } from "../src/codex-appserver";
+import { resolveCodexBinary } from "../src/codex-binary";
 
 /**
  * Injectable home and platform let every CI runner exercise all layouts. Absolute Unix candidates

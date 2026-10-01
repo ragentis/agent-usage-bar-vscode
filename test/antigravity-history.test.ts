@@ -6,10 +6,10 @@ import {
   AntigravityHistory,
   isSettled,
   listConversations,
-  realWritesOnly,
   tokensByDay,
   type Conversation,
 } from "../src/antigravity-history";
+import { realWritesOnly } from "../src/antigravity-watcher";
 import type { HubReply } from "../src/antigravity-hub";
 import { localDay } from "../src/history";
 

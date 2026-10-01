@@ -4,13 +4,12 @@ import * as path from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   fetchClaudeUsage,
-  newestCliVersion,
   parseClaudeUsageResponse,
   parseLimitResets,
   parseRetryAfter,
   parseUsageLimits,
-  PINNED_CLI_VERSION,
 } from "../src/claude-api";
+import { newestCliVersion, PINNED_CLI_VERSION } from "../src/claude-cli-version";
 import { fileSource } from "../src/claude-credentials";
 import { MAX_RETRY_WAIT_MS, type ProviderResult } from "../src/usage";
 
