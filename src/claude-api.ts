@@ -18,8 +18,38 @@ import {
 } from "./usage";
 
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
+const RESETS_URL = "https://api.anthropic.com/api/oauth/usage?cedar_ember=1";
 const OAUTH_BETA = "oauth-2025-04-20";
 const REQUEST_TIMEOUT_MS = 5_000;
+
+/**
+ * The service includes limit resets only for a Claude Code CLI user agent at or above a version
+ * floor. The pinned value must be a published release; a newer installed CLI replaces it.
+ */
+export const PINNED_CLI_VERSION = "2.1.285";
+const VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+
+function compareVersions(left: string, right: string): number {
+  const rightParts = right.split(".").map(Number);
+  return (
+    left
+      .split(".")
+      .map((part, index) => Number(part) - (rightParts[index] ?? 0))
+      .find((delta) => delta !== 0) ?? 0
+  );
+}
+
+export function newestCliVersion(candidates: readonly unknown[]): string {
+  return candidates
+    .filter(
+      (candidate): candidate is string =>
+        typeof candidate === "string" && VERSION_PATTERN.test(candidate),
+    )
+    .reduce(
+      (newest, candidate) => (compareVersions(candidate, newest) > 0 ? candidate : newest),
+      PINNED_CLI_VERSION,
+    );
+}
 
 /**
  * Accepts both standard `Retry-After` forms. Missing or non-future values, including the service's
@@ -100,7 +130,7 @@ function blockedReason(value: Record<string, unknown>): string | null {
     : null;
 }
 
-function creditSummary(value: Record<string, unknown>): string | null {
+function extraUsageSummary(value: Record<string, unknown>): string | null {
   const extra = isRecord(value.extra_usage) ? value.extra_usage : null;
   if (!extra || extra.is_enabled !== true) {
     return null;
@@ -112,6 +142,49 @@ function creditSummary(value: Record<string, unknown>): string | null {
   return typeof extra.used_credits === "number" && Number.isFinite(extra.used_credits)
     ? `${extra.used_credits} used`
     : null;
+}
+
+/** Only an unpaused grant with resets left before its end date can still be used. */
+export function parseLimitResets(
+  value: unknown,
+  now: Date,
+): { count: number; expiresAt: Date | null } {
+  const block = isRecord(value) && value.eligible === true ? value : null;
+  const grants = block && Array.isArray(block.grants) ? block.grants : [];
+  let count = 0;
+  let expiresAt: Date | null = null;
+  for (const grant of grants) {
+    if (!isRecord(grant) || grant.paused === true) {
+      continue;
+    }
+    const left = grant.resets_left;
+    const endsAt = validDate(grant.ends_at);
+    if (typeof left !== "number" || !Number.isInteger(left) || left <= 0) {
+      continue;
+    }
+    if (endsAt && endsAt.getTime() <= now.getTime()) {
+      continue;
+    }
+    count += left;
+    if (endsAt && (!expiresAt || endsAt.getTime() < expiresAt.getTime())) {
+      expiresAt = endsAt;
+    }
+  }
+  return { count, expiresAt };
+}
+
+function credits(
+  value: Record<string, unknown>,
+  now: Date,
+): { summary: string | null; expiresAt: Date | null } {
+  const resets = parseLimitResets(value.cedar_ember, now);
+  const available =
+    resets.count > 0 ? `${resets.count} limit reset${resets.count === 1 ? "" : "s"}` : null;
+  return {
+    summary:
+      [extraUsageSummary(value), available].filter((part) => part !== null).join(" · ") || null,
+    expiresAt: available ? resets.expiresAt : null,
+  };
 }
 
 export function parseClaudeUsageResponse(
@@ -126,18 +199,35 @@ export function parseClaudeUsageResponse(
   if (windows.length === 0) {
     return null;
   }
+  const { summary, expiresAt } = credits(value, fetchedAt);
   return {
     windows,
     plan,
     blocked: blockedReason(value),
-    credits: creditSummary(value),
+    credits: summary,
+    creditsExpireAt: expiresAt,
     fetchedAt,
     source: "claude-account-api",
   };
 }
 
+/** Set once the service has refused the reset request but answered the plain one. */
+export interface UsageRequestState {
+  plainOnly: boolean;
+}
+
+/**
+ * The plain request is the one used before limit resets, so refusing the query or the CLI user agent
+ * can cost the resets line but never the reading.
+ */
+function isResetRefusal(status: number): boolean {
+  return status === 400 || status === 403;
+}
+
 export async function fetchClaudeUsage(
   sources?: readonly CredentialSource[],
+  cliVersion: string = PINNED_CLI_VERSION,
+  state: UsageRequestState = { plainOnly: false },
 ): Promise<ProviderResult> {
   const credentials = await readClaudeCredentials(sources);
   if (!credentials) {
@@ -153,18 +243,26 @@ export async function fetchClaudeUsage(
     };
   }
 
-  let response: Response;
-  try {
-    response = await fetch(USAGE_URL, {
+  const send = (withResets: boolean): Promise<Response> =>
+    fetch(withResets ? RESETS_URL : USAGE_URL, {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${credentials.accessToken}`,
         "anthropic-beta": OAUTH_BETA,
+        ...(withResets ? { "User-Agent": `claude-cli/${cliVersion} (external, cli)` } : {}),
       },
       // Refuse redirects so the bundle audit remains an honest bound on where the token can travel.
       redirect: "error",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+
+  let response: Response;
+  try {
+    response = await send(!state.plainOnly);
+    if (!state.plainOnly && isResetRefusal(response.status)) {
+      response = await send(false);
+      state.plainOnly = response.ok;
+    }
   } catch {
     // The message never carries the thrown error, which can quote the request headers.
     return { status: "unavailable", message: "The usage service could not be reached." };

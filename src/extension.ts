@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
-import { claudeSessionsPath } from "./claude";
-import { fetchClaudeUsage } from "./claude-api";
+import { claudeSessionsPath, nativeCliVersions } from "./claude";
+import { fetchClaudeUsage, newestCliVersion } from "./claude-api";
 import { codexSessionsPath } from "./codex";
 import { CodexAppServer } from "./codex-appserver";
 import { HistoryService } from "./history-service";
@@ -16,7 +16,7 @@ import {
   showLoading,
 } from "./status-bar";
 import { UsageBar, type ProviderDisplay, type ProviderPort } from "./usage-bar";
-import type { ProviderId } from "./usage";
+import { isRecord, type ProviderId } from "./usage";
 import { FileWatcher } from "./watcher";
 
 function display(provider: ProviderId): ProviderDisplay {
@@ -28,6 +28,13 @@ function display(provider: ProviderId): ProviderDisplay {
     hide: () => hideStatusBarItem(item),
     dispose: () => item.dispose(),
   };
+}
+
+async function claudeCliVersion(): Promise<string> {
+  const extension = vscode.extensions.getExtension<unknown>("anthropic.claude-code");
+  const manifest: unknown = extension?.packageJSON;
+  const bundled = isRecord(manifest) ? manifest.version : null;
+  return newestCliVersion([bundled, ...(await nativeCliVersions())]);
 }
 
 function providers(onCodexPush: () => void): ProviderPort[] {
@@ -42,11 +49,12 @@ function providers(onCodexPush: () => void): ProviderPort[] {
     recursive: true,
   });
   let codexAppServer: CodexAppServer | null = null;
+  const claudeRequest = { plainOnly: false };
   return [
     {
       id: "claude",
       display: display("claude"),
-      read: () => fetchClaudeUsage(),
+      read: async () => fetchClaudeUsage(undefined, await claudeCliVersion(), claudeRequest),
       watcher: claudeWatcher,
       isEnabled: (configuration) => configuration.claudeEnabled,
     },

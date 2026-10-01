@@ -4,9 +4,12 @@ import * as path from "node:path";
 import { afterEach, expect, test, vi } from "vitest";
 import {
   fetchClaudeUsage,
+  newestCliVersion,
   parseClaudeUsageResponse,
+  parseLimitResets,
   parseRetryAfter,
   parseUsageLimits,
+  PINNED_CLI_VERSION,
 } from "../src/claude-api";
 import { fileSource } from "../src/claude-credentials";
 import { MAX_RETRY_WAIT_MS, type ProviderResult } from "../src/usage";
@@ -181,6 +184,95 @@ test("reports a stopped account and enabled extra usage", () => {
   expect(spent?.blocked).toBe("Spend limit reached");
 });
 
+/** Shaped after a live grant block returned to the CLI user agent. */
+function grant(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    id: "launch-20260921",
+    label: "One usage-limit reset",
+    resets_total: 1,
+    resets_left: 1,
+    starts_at: "2026-07-22T16:00:00+00:00",
+    ends_at: "2026-08-22T16:00:00+00:00",
+    clears: ["five_hour", "seven_day"],
+    paused: false,
+    usable_now: true,
+    ...overrides,
+  };
+}
+
+test("counts usable limit resets and dates the soonest to lapse", () => {
+  const snapshot = parseClaudeUsageResponse(
+    {
+      ...response,
+      cedar_ember: {
+        eligible: true,
+        grants: [
+          grant({ ends_at: "2026-09-01T00:00:00Z" }),
+          grant({ resets_left: 2, ends_at: "2026-08-22T16:00:00+00:00" }),
+        ],
+      },
+    },
+    null,
+    fetchedAt,
+  );
+  expect(snapshot?.credits).toBe("3 limit resets");
+  expect(snapshot?.creditsExpireAt?.toISOString()).toBe("2026-08-22T16:00:00.000Z");
+});
+
+test("a reset that cannot be used is not counted", () => {
+  expect(
+    parseLimitResets(
+      {
+        eligible: true,
+        grants: [
+          grant({ paused: true }),
+          grant({ resets_left: 0 }),
+          grant({ resets_left: 1.5 }),
+          grant({ ends_at: "2026-08-01T00:00:00Z" }),
+          "not a grant",
+        ],
+      },
+      fetchedAt,
+    ),
+  ).toEqual({ count: 0, expiresAt: null });
+});
+
+test("an ineligible or missing block shows no resets, and the rest of the reading stands", () => {
+  const ineligible = parseClaudeUsageResponse(
+    {
+      ...response,
+      cedar_ember: { eligible: false, ineligible_reason: "surface", grants: [grant()] },
+    },
+    null,
+    fetchedAt,
+  );
+  expect(ineligible?.credits).toBeNull();
+  expect(ineligible?.creditsExpireAt).toBeNull();
+  expect(ineligible?.windows).toHaveLength(3);
+  expect(parseLimitResets(null, fetchedAt)).toEqual({ count: 0, expiresAt: null });
+});
+
+test("limit resets sit beside extra usage in one summary", () => {
+  const snapshot = parseClaudeUsageResponse(
+    {
+      ...response,
+      extra_usage: { is_enabled: true, utilization: 48 },
+      cedar_ember: { eligible: true, grants: [grant()] },
+    },
+    null,
+    fetchedAt,
+  );
+  expect(snapshot?.credits).toBe("48% of extra usage · 1 limit reset");
+});
+
+test("the CLI version is the pinned release unless an installed one is newer", () => {
+  expect(newestCliVersion([])).toBe(PINNED_CLI_VERSION);
+  expect(newestCliVersion(["2.1.246", "2.1.226"])).toBe(PINNED_CLI_VERSION);
+  expect(newestCliVersion(["2.1.300", "2.1.246"])).toBe("2.1.300");
+  expect(newestCliVersion(["2.10.0"])).toBe("2.10.0");
+  expect(newestCliVersion(["9.9.9-beta", "latest", "../x", 3, undefined])).toBe(PINNED_CLI_VERSION);
+});
+
 test("rejects a response that carries no recognized window", () => {
   expect(parseClaudeUsageResponse({ limits: [] }, "pro", fetchedAt)).toBeNull();
   expect(parseClaudeUsageResponse("not an object", "pro", fetchedAt)).toBeNull();
@@ -222,6 +314,7 @@ test("a wait longer than the cap is shortened to it rather than taken at its wor
  */
 
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
+const RESETS_URL = "https://api.anthropic.com/api/oauth/usage?cedar_ember=1";
 const signedInDirectories: string[] = [];
 
 afterEach(async () => {
@@ -256,10 +349,12 @@ function answered(status: number, body: unknown, headers: Record<string, string>
   };
 }
 
-function service(reply: unknown): { url: unknown; init: Record<string, unknown> }[] {
+/** Answers each call with the next reply, repeating the last one once they run out. */
+function service(...replies: unknown[]): { url: unknown; init: Record<string, unknown> }[] {
   const calls: { url: unknown; init: Record<string, unknown> }[] = [];
   vi.stubGlobal("fetch", (url: unknown, init: Record<string, unknown>) => {
     calls.push({ url, init });
+    const reply = replies[Math.min(calls.length, replies.length) - 1];
     return reply instanceof Error ? Promise.reject(reply) : Promise.resolve(reply);
   });
   return calls;
@@ -283,14 +378,64 @@ test("the token goes to the one pinned endpoint, and carries nothing else with i
 
   expect(result).toMatchObject({ status: "ok" });
   expect(calls).toHaveLength(1);
-  expect(calls[0]?.url).toBe(USAGE_URL);
+  expect(calls[0]?.url).toBe(RESETS_URL);
   expect(calls[0]?.init.headers).toEqual({
     "Content-Type": "application/json",
     Authorization: "Bearer secret-token",
     "anthropic-beta": "oauth-2025-04-20",
+    "User-Agent": `claude-cli/${PINNED_CLI_VERSION} (external, cli)`,
   });
   expect(calls[0]?.init.redirect).toBe("error");
   expect(calls[0]?.init.signal).toBeInstanceOf(AbortSignal);
+});
+
+test("the user agent names the CLI version it is given", async () => {
+  const calls = service(answered(200, response));
+
+  await fetchClaudeUsage(await signedIn(), "2.1.300");
+
+  expect(calls[0]?.init.headers).toMatchObject({
+    "User-Agent": "claude-cli/2.1.300 (external, cli)",
+  });
+});
+
+test.each([400, 403])(
+  "a reset request refused with %i falls back to the plain one, and stays there",
+  async (status) => {
+    const calls = service(answered(status, {}), answered(200, response));
+    const state = { plainOnly: false };
+
+    const first = await fetchClaudeUsage(await signedIn(), PINNED_CLI_VERSION, state);
+
+    expect(first).toMatchObject({ status: "ok" });
+    expect(calls.map((call) => call.url)).toEqual([RESETS_URL, USAGE_URL]);
+    expect(calls[1]?.init.headers).not.toHaveProperty("User-Agent");
+    expect(calls[1]?.init.redirect).toBe("error");
+    expect(state.plainOnly).toBe(true);
+
+    await fetchClaudeUsage(await signedIn(), PINNED_CLI_VERSION, state);
+
+    expect(calls.map((call) => call.url)).toEqual([RESETS_URL, USAGE_URL, USAGE_URL]);
+  },
+);
+
+test("a refusal of both requests is reported as before, and the resets are tried again", async () => {
+  const calls = service(answered(403, {}));
+  const state = { plainOnly: false };
+
+  const result = refusal(await fetchClaudeUsage(await signedIn(), PINNED_CLI_VERSION, state));
+
+  expect(result.message).toMatch(/no longer signed in/);
+  expect(calls).toHaveLength(2);
+  expect(state.plainOnly).toBe(false);
+});
+
+test.each([401, 429, 500])("an answer of %i costs no second request", async (status) => {
+  const calls = service(answered(status, {}));
+
+  await fetchClaudeUsage(await signedIn());
+
+  expect(calls).toHaveLength(1);
 });
 
 test("the plan comes from the sign-in, which is the only place it is stated", async () => {

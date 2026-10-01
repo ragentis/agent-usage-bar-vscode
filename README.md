@@ -26,7 +26,7 @@ One status bar item per provider, each with its own monochrome glyph:
 
 By default, the item turns yellow when usage reaches the warning threshold and red at the error threshold. Set `agentUsageBar.warnWhen` to `overPace` to show yellow only when the warning threshold is reached ahead of schedule—for example, 80% used before 80% of the window has passed. The red threshold always applies. Colors use the percentage **used**, regardless of the selected display mode. The item also turns red when a provider reports that the account is stopped by a spend limit or hard rate limit, even when the percentage is low; the tooltip states the reason.
 
-Hover to see the plan name, a themed progress bar for each window, exact reset times, pace, any credit balance and when the soonest reset credit expires, and the last refresh error. The bars use the same warning and error thresholds as the status item. The tooltip also links to refresh and settings. Click either status item to toggle that provider, refresh usage, or open settings.
+Hover to see the plan name, a themed progress bar for each window, exact reset times, pace, any credit balance, Codex reset credits and Claude limit resets with the date the soonest one expires, and the last refresh error. The bars use the same warning and error thresholds as the status item. The tooltip also links to refresh and settings. Click either status item to toggle that provider, refresh usage, or open settings.
 
 ## Pace
 
@@ -153,6 +153,8 @@ The extension starts `codex app-server` and requests usage over JSON-RPC through
 ### Claude Code
 
 **The extension reads the token stored by Claude Code, uses it for one request, and discards it.** The request goes to `https://api.anthropic.com/api/oauth/usage`, the same endpoint used by the official Claude Code extension for usage data.
+
+**The request identifies itself as the Claude Code CLI.** It carries the user agent `claude-cli/<version> (external, cli)` because the service returns banked limit resets, the free resets shown under Settings > Usage on claude.ai, only to that client at or above a minimum version. The version is a pinned published release, or the newest Claude Code installed on this machine when that is newer: the official extension's bundled CLI, or a release under `~/.local/share/claude/versions`. Resets are only read and counted, never redeemed. If the service stops listing them, the credits line drops the resets and every other reading stays the same. If it refuses that request outright, the extension repeats it once without the resets query and user agent, and keeps sending the plain request for the rest of the session once that one succeeds.
 
 The token is never logged, cached, or written back to shared state, settings, or the extension's secret storage. Caching it would create a second credential store that could become stale when Claude Code rotates the token or signs out. Reading the existing store when needed avoids that additional copy.
 

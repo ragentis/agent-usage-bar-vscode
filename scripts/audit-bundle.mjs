@@ -17,8 +17,12 @@ if (foreign.length > 0) {
 
 const bundle = await readFile("dist/extension.js", "utf8");
 
-// Pin the one literal remote; runtime-assembled targets are outside this text audit.
-const ALLOWED_URLS = new Set(["https://api.anthropic.com/api/oauth/usage"]);
+// Pin the literal remotes, both on the one usage endpoint; runtime-assembled targets are outside
+// this text audit.
+const ALLOWED_URLS = new Set([
+  "https://api.anthropic.com/api/oauth/usage",
+  "https://api.anthropic.com/api/oauth/usage?cedar_ember=1",
+]);
 const urls = [...new Set(bundle.match(/https?:\/\/[^\s"'`\\]+/g) ?? [])];
 const unexpected = urls.filter((url) => !ALLOWED_URLS.has(url));
 if (unexpected.length > 0) {
