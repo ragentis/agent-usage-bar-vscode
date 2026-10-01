@@ -234,6 +234,7 @@ export async function fetchClaudeUsage(
     return {
       status: "unavailable",
       message: noSignInMessage(),
+      absent: true,
     };
   }
   if (hasExpired(credentials)) {

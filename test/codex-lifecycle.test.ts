@@ -22,7 +22,7 @@ class FakeCodex implements CodexProcess {
   encoding: string | null = null;
   writeError: Error | null = null;
   private data: ((chunk: string) => void) | null = null;
-  private readonly listeners = new Map<string, () => void>();
+  private readonly listeners = new Map<string, (error?: unknown) => void>();
 
   readonly stdin = {
     write: (chunk: string, callback?: (error?: Error | null) => void): void => {
@@ -38,7 +38,7 @@ class FakeCodex implements CodexProcess {
 
   readonly stderr = { resume: (): void => void (this.drainedStderr = true) };
 
-  on(event: "error" | "exit", listener: () => void): void {
+  on(event: "error" | "exit", listener: (error?: unknown) => void): void {
     this.listeners.set(event, listener);
   }
 
@@ -56,8 +56,8 @@ class FakeCodex implements CodexProcess {
     }
   }
 
-  fires(event: "error" | "exit"): void {
-    this.listeners.get(event)?.();
+  fires(event: "error" | "exit", error?: unknown): void {
+    this.listeners.get(event)?.(error);
   }
 
   get requests(): Record<string, unknown>[] {
@@ -254,6 +254,37 @@ test("a process that exits mid-request answers it rather than leaving it hanging
   codex.fires("exit");
 
   await expect(reading).resolves.toMatchObject({ status: "unavailable" });
+});
+
+const NO_SUCH_PROGRAM = Object.assign(new Error("spawn codex ENOENT"), { code: "ENOENT" });
+
+test("a start that finds no Codex program says the agent may be absent", async () => {
+  const world = harness();
+  const reading = world.app.readUsage();
+  await flush();
+
+  world.latest().fires("error", NO_SUCH_PROGRAM);
+
+  await expect(reading).resolves.toEqual({
+    status: "unavailable",
+    message: "The Codex CLI could not be started. Check that Codex is installed.",
+    verbatim: false,
+    absent: true,
+  });
+});
+
+test("a program that is there but will not start is not taken for a missing one", async () => {
+  const world = harness();
+  const reading = world.app.readUsage();
+  await flush();
+
+  world.latest().fires("error", Object.assign(new Error("spawn EACCES"), { code: "EACCES" }));
+
+  await expect(reading).resolves.toEqual({
+    status: "unavailable",
+    message: "The Codex CLI could not be started. Check that Codex is installed.",
+    verbatim: false,
+  });
 });
 
 test("a stream that never breaks into messages is dropped rather than held", async () => {

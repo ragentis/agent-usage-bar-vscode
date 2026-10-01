@@ -4,6 +4,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import {
   classifyWindow,
+  isNotFound,
   isRecord,
   sortWindows,
   validDate,
@@ -36,6 +37,9 @@ const CLIENT_INFO = { name: "agent-usage-bar", title: "Agent Usage Bar", version
  */
 class CodexSaid extends Error {}
 
+/** Marks a start that failed because no Codex program exists where one was looked for. */
+class CodexMissing extends Error {}
+
 interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
@@ -49,7 +53,7 @@ export interface CodexProcess {
     on(event: "data", listener: (chunk: string) => void): void;
   };
   stderr: { resume(): void };
-  on(event: "error" | "exit", listener: () => void): void;
+  on(event: "error" | "exit", listener: (error?: unknown) => void): void;
   removeAllListeners(): void;
   kill(): void;
 }
@@ -285,7 +289,12 @@ export class CodexAppServer {
       this.stop();
       const message =
         error instanceof Error ? error.message : "The Codex app server is unreachable.";
-      return { status: "unavailable", message, verbatim: error instanceof CodexSaid };
+      return {
+        status: "unavailable",
+        message,
+        verbatim: error instanceof CodexSaid,
+        ...(error instanceof CodexMissing ? { absent: true } : {}),
+      };
     }
   }
 
@@ -326,11 +335,10 @@ export class CodexAppServer {
     child.stdout.on("data", (chunk: string) => this.consume(chunk));
     // Draining stderr keeps the pipe from filling and stalling the child.
     child.stderr.resume();
-    child.on("error", () =>
-      this.teardown(
-        new Error("The Codex CLI could not be started. Check that Codex is installed."),
-      ),
-    );
+    child.on("error", (error) => {
+      const message = "The Codex CLI could not be started. Check that Codex is installed.";
+      this.teardown(isNotFound(error) ? new CodexMissing(message) : new Error(message));
+    });
     child.on("exit", () => this.teardown(new Error("The Codex app server stopped.")));
 
     await this.request("initialize", {

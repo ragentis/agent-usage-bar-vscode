@@ -59,6 +59,7 @@ The layout follows one rule: **testable modules do not import anything that requ
 | `claude-credentials.ts` | node | Reading token sources: the credentials file and macOS keychain. |
 | `codex-appserver.ts` | node | Discovering the CLI, managing JSON-RPC, and parsing replies. |
 | `antigravity-hub.ts` | node, `fetch` | Starting a hub per read, asking it over loopback HTTP, and parsing replies. |
+| `presence.ts` | node | Confirming that an agent a read could not find left no data directory either. |
 | `watcher.ts` | node | Watching files with debounce and retry backoff. |
 | `transcripts.ts` | node | Walking a transcript tree and handing out its lines. |
 | `claude.ts`, `codex.ts`, `antigravity.ts` | node | Resolving provider-specific paths. |
@@ -81,6 +82,8 @@ Seven small types preserve that boundary: `CodexProcess`, `LaunchCodex`, `Hub`, 
 Tests cover every provider's response parser, `watcher.ts`, `formatting.ts`, `shared-state.ts`, and `read-coordinator.ts`. The history parsers are pinned against the two shapes of Codex rate-limit payload on disk and against Claude Code replaying earlier messages into a resumed session, because either one silently changes the numbers rather than failing. The two heaviest are `tooltip.ts` and `usage-bar.ts` — the latter because a rate-limit wait, a lease, a provider toggle, and a window closing all reach for the same state.
 
 `codex-appserver.ts` starts Codex through `LaunchCodex` for the same reason. Tests can then simulate partial frames, a silent server, or a stop that arrives during startup. A real Codex installation cannot reproduce those cases on demand. `antigravity-hub.ts` takes its hub through `LaunchHub` on the same terms: a hub that is still starting, one that never listens, a missing CLI, and a stop that arrives mid-read.
+
+An item is hidden only when its agent is `absent`, and a wrong `absent` takes a working item away from someone who has the agent, with no setting to bring it back. Two independent signals must therefore agree. The provider sets `absent` only on the one failure that means nothing exists to run or read: `ENOENT` from `spawn` for Codex and Antigravity, no credential in any source for Claude Code. `confirmAbsence` then clears it unless the agent's data directory is missing too, and treats a directory it cannot check as present. Every other failure, including a program that exists but will not start, keeps the item. When adding a failure path to a provider, leave `absent` unset unless it meets that bar. `usage-bar.ts` decides what an absent agent's item does, because that depends on the other providers: it is hidden unless every provider is on and every agent is absent.
 
 The Antigravity replies are pinned against shapes captured from a live hub, including the one that is easy to get wrong: the hub answers in proto3 JSON, which omits a zero, so a spent bucket arrives with a reset time and no `remainingFraction`.
 

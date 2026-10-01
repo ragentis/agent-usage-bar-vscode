@@ -4,7 +4,7 @@ See Claude Code, Codex, and Antigravity usage, reset times, and pace directly in
 
 Usage is read at the account level, not inferred from local activity, so activity from other machines, terminals, and editors is included.
 
-No configuration is required. All three providers are enabled by default and refresh automatically.
+No configuration is required. All three providers are enabled by default, an item appears for each agent found on this machine, and readings refresh automatically. See [Which items appear](#which-items-appear).
 
 [![VS Marketplace](https://img.shields.io/badge/VS%20Marketplace-install-007ACC?style=flat-square)](https://marketplace.visualstudio.com/items?itemName=ragentis.agent-usage-bar) [![Open VSX](https://img.shields.io/open-vsx/v/ragentis/agent-usage-bar?style=flat-square&label=Open%20VSX&color=C160EF)](https://open-vsx.org/extension/ragentis/agent-usage-bar/) [![Downloads](https://img.shields.io/open-vsx/dt/ragentis/agent-usage-bar?style=flat-square&label=downloads&color=2EA44F)](https://open-vsx.org/extension/ragentis/agent-usage-bar/) [![License](https://img.shields.io/github/license/ragentis/agent-usage-bar-vscode?style=flat-square&label=license&color=2EA44F)](LICENSE)
 
@@ -84,7 +84,23 @@ There is no elected leader. The window that completed the previous read gets a s
 - For the Codex item: [Codex](https://chatgpt.com/download/) installed and signed in, either through the desktop app or as the standalone [CLI](https://github.com/openai/codex). The extension finds whichever you have, including the copy the Codex IDE extension ships.
 - For the Antigravity item: the Antigravity CLI (`agy`) installed and signed in. The official Antigravity extension for VS Code installs it to `~/.gemini/bin` on first run, and the standalone CLI installer puts it in the same place.
 
-None is required for the others. A provider that is not installed or not signed in says so in its tooltip; switch it off in the settings and its item disappears.
+None is required for the others.
+
+## Which items appear
+
+**An enabled provider is not always a visible one.** A provider's `enabled` setting means "show this agent's usage when the agent is found on this machine". With all three enabled and one agent installed, there is one item.
+
+| The provider is | Its agent is | The item                                                  |
+| --------------- | ------------ | --------------------------------------------------------- |
+| off             | found or not | hidden                                                    |
+| on              | found        | shown                                                     |
+| on              | not found    | hidden, unless every provider is on and no agent is found |
+
+The exception covers a fresh install on a machine with no agent: with every provider still on and no agent found, all three items stay, so the tooltips can say what to install. While any provider is off, a missing agent is simply hidden, so switching off the only agent that was found leaves the status bar empty rather than bringing the others back. The menu stays reachable through **Agent Usage Bar: Open menu**.
+
+An agent counts as not found only when two things are both true. There is nothing to run or read for it, and its own data directory does not exist: `~/.claude`, `~/.codex`, or `~/.gemini/antigravity`. An agent that is installed but signed out, or one the extension cannot start, keeps its item and says why in the tooltip.
+
+Nothing about this is remembered. Every read asks again, so an agent installed later gets its item at the next read, without a reload. The menu shows a hidden one as **Not found on this machine**.
 
 ## Install
 
@@ -108,9 +124,9 @@ Run **Agent Usage Bar: Open settings**, or click any status bar item and pick **
 | `agentUsageBar.warningThreshold` | `80` | Warning color threshold based on used percentage. |
 | `agentUsageBar.errorThreshold` | `95` | Error color threshold; never falls below warning. |
 | `agentUsageBar.warnWhen` | `threshold` | `overPace` warns only when usage reaches the threshold ahead of schedule. |
-| `agentUsageBar.claude.enabled` | `true` | Show Claude Code usage. |
-| `agentUsageBar.codex.enabled` | `true` | Show Codex usage. |
-| `agentUsageBar.antigravity.enabled` | `true` | Show Antigravity usage. |
+| `agentUsageBar.claude.enabled` | `true` | Show Claude Code usage while Claude Code is found; see [Which items appear](#which-items-appear). |
+| `agentUsageBar.codex.enabled` | `true` | Show Codex usage while Codex is found. |
+| `agentUsageBar.antigravity.enabled` | `true` | Show Antigravity usage while Antigravity is found. |
 | `agentUsageBar.claude.label` | `""` | Text to show instead of the Claude mark. |
 | `agentUsageBar.codex.label` | `""` | Text to show instead of the Codex mark. |
 | `agentUsageBar.antigravity.label` | `""` | Text to show instead of the Antigravity mark. |
@@ -140,6 +156,8 @@ After a refresh failure, the last good reading remains visible instead of being 
 | Antigravity could not be started | The `agy` CLI was not found in `~/.gemini/bin`. Install the CLI, or switch the item off. |
 | Antigravity is not signed in | Sign in through the Antigravity CLI or its extension. Signing in is picked up on the next read. |
 | Antigravity did not answer in time | The CLI started but did not come up within twenty seconds. The next read starts a fresh one. |
+
+**An item is missing.** Open the menu from another item, or run **Agent Usage Bar: Open menu**. A provider shown as **Not found on this machine** is enabled, but had nothing to run or read and no data directory; see [Which items appear](#which-items-appear). Installing or signing in to the agent brings the item back at the next read, and **Refresh usage** asks at once.
 
 **Rate limited.** A `Retry-After` response pauses background polling, refreshes triggered by local agent activity, and menu refreshes alike. The tooltip shows when reading will resume. A response without a delay pauses reads for one minute. A delay longer than one hour is capped at one hour so an excessive or invalid value cannot leave the extension stalled beyond its longest refresh interval.
 

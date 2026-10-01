@@ -28,7 +28,8 @@ export interface UsageSnapshot {
 /**
  * A new snapshot or the reason it is unavailable. Failures retain the last good snapshot;
  * `retryAt` additionally prevents another request before the provider's stated time. `rateLimited`
- * marks a refusal; when it states no `retryAt`, the reader chooses the wait.
+ * marks a refusal; when it states no `retryAt`, the reader chooses the wait. `absent` marks a read
+ * that found nothing to run or read; `presence.ts` keeps it only when the agent left no trace either.
  */
 export type ProviderResult =
   | { status: "ok"; snapshot: UsageSnapshot }
@@ -38,6 +39,7 @@ export type ProviderResult =
       retryAt?: Date;
       rateLimited?: boolean;
       verbatim?: boolean;
+      absent?: boolean;
     };
 
 export interface ProviderView {
@@ -45,6 +47,13 @@ export interface ProviderView {
   message: string | null;
   /** Prevents provider-authored sentences from being interpreted as a cause and remedy. */
   verbatim?: boolean;
+  /** The agent is not on this machine, so its item is given up unless that is true of every agent. */
+  absent?: boolean;
+}
+
+/** How Node reports a program or path that does not exist. */
+export function isNotFound(error: unknown): boolean {
+  return isRecord(error) && error.code === "ENOENT";
 }
 
 export function mergeView(
@@ -57,6 +66,7 @@ export function mergeView(
         snapshot: previous?.snapshot ?? null,
         message: next.message,
         verbatim: next.verbatim,
+        absent: next.absent,
       };
 }
 

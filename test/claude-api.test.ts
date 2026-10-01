@@ -364,6 +364,7 @@ function refusal(result: ProviderResult): {
   message: string;
   retryAt?: Date;
   rateLimited?: boolean;
+  absent?: boolean;
 } {
   if (result.status !== "unavailable") {
     throw new Error(`expected no reading, got ${result.status}`);
@@ -510,6 +511,8 @@ test("a sign-in that cannot work is not spent on a request", async () => {
     await fetchClaudeUsage([fileSource(await fs.mkdtemp(path.join(os.tmpdir(), "empty-")))]),
   );
   expect(missing.message).toMatch(/No Claude Code sign-in/);
+  expect(missing.absent).toBe(true);
+  expect(expired.absent).toBeUndefined();
 
   expect(calls).toHaveLength(0);
 });

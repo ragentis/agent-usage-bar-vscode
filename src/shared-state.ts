@@ -132,6 +132,7 @@ function parseEntry(value: unknown): SharedEntry | null {
       snapshot: parseSnapshot(value.snapshot),
       message: validMessage(value.message),
       verbatim: value.verbatim === true,
+      absent: value.absent === true,
     },
   };
 }
@@ -146,6 +147,7 @@ function serialize(entry: SharedEntry): Record<string, unknown> {
     refusals: entry.refusals,
     message: entry.view.message,
     verbatim: entry.view.verbatim ?? false,
+    absent: entry.view.absent ?? false,
     snapshot: snapshot && {
       windows: snapshot.windows.map((window) => ({
         kind: window.kind,

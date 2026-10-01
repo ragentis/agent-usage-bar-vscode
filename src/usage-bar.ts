@@ -136,7 +136,7 @@ export class UsageBar {
     );
     if (options.showLoading) {
       for (const provider of targets) {
-        if (provider.isEnabled(this.configuration)) {
+        if (provider.isEnabled(this.configuration) && !this.hidden(provider)) {
           provider.display.loading(this.configuration);
         }
       }
@@ -144,6 +144,12 @@ export class UsageBar {
     await Promise.all(
       targets.map((provider) => this.refreshProvider(provider, options.force ?? false)),
     );
+  }
+
+  /** Whether an enabled provider has given up its item because its agent is not on this machine. */
+  isHidden(provider: ProviderId): boolean {
+    const target = this.providers.find((candidate) => candidate.id === provider);
+    return target !== undefined && this.hidden(target);
   }
 
   setHistory(provider: ProviderId, history: DailyTotals | null): void {
@@ -224,6 +230,7 @@ export class UsageBar {
     const view = nextView(provider.state.view, result);
     provider.state.view = view;
     this.paint(provider);
+    this.paintDependents(provider);
     await this.reads.publish(provider.id, view, retryAt ?? null, refusals);
   }
 
@@ -289,6 +296,7 @@ export class UsageBar {
       provider.state.adoptedAt = shared.publishedAt;
       provider.state.view = mergeView(provider.state.view, shared.view);
       this.paint(provider);
+      this.paintDependents(provider);
     }
     return shared;
   }
@@ -321,6 +329,10 @@ export class UsageBar {
    * time remains stable across redraws.
    */
   private paint(provider: Provider): void {
+    if (this.hidden(provider)) {
+      provider.display.hide();
+      return;
+    }
     const view = provider.state.view ?? { snapshot: null, message: null };
     const { hold } = provider.state;
     const held = hold && hold.until.getTime() > Date.now();
@@ -337,6 +349,29 @@ export class UsageBar {
     );
   }
 
+  /**
+   * An agent that is not on this machine gives up its item. The one exception is the untouched
+   * state, with every provider on and no agent found: then every item stays, so the tooltips can
+   * say what to install. Switching any provider off ends it, so doing that never brings items back.
+   */
+  private hidden(provider: Provider): boolean {
+    return (
+      provider.state.view?.absent === true &&
+      !this.providers.every(
+        (other) => other.isEnabled(this.configuration) && other.state.view?.absent === true,
+      )
+    );
+  }
+
+  /** Whether an absent agent keeps its item depends on the others, so their changes repaint it. */
+  private paintDependents(changed: Provider): void {
+    for (const other of this.providers) {
+      if (other !== changed && other.state.view?.absent && other.isEnabled(this.configuration)) {
+        this.paint(other);
+      }
+    }
+  }
+
   private redraw(): void {
     for (const provider of this.providers) {
       if (provider.state.view && provider.isEnabled(this.configuration)) {
@@ -350,6 +385,7 @@ export class UsageBar {
     provider.state.adoptedAt = 0;
     provider.state.usedAt = null;
     provider.display.hide();
+    this.paintDependents(provider);
   }
 
   private fetchOnce(provider: Provider): Promise<ProviderResult> {
@@ -390,6 +426,11 @@ function nextView(previous: ProviderView | null, result: ProviderResult): Provid
     previous,
     result.status === "ok"
       ? { snapshot: result.snapshot, message: null }
-      : { snapshot: null, message: result.message, verbatim: result.verbatim },
+      : {
+          snapshot: null,
+          message: result.message,
+          verbatim: result.verbatim,
+          absent: result.absent,
+        },
   );
 }

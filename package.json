@@ -243,19 +243,19 @@
           "type": "boolean",
           "default": true,
           "order": 8,
-          "markdownDescription": "Show Claude Code usage in the status bar. The sign-in token Claude Code already stores in `~/.claude/.credentials.json` is read and used for a single request to `api.anthropic.com` that asks for your account usage. The token is never stored, logged, refreshed, or sent anywhere else, and no prompts, code, or file contents leave your machine."
+          "markdownDescription": "Show Claude Code usage in the status bar while Claude Code is found on this machine. The sign-in token Claude Code already stores in `~/.claude/.credentials.json` is read and used for a single request to `api.anthropic.com` that asks for your account usage. The token is never stored, logged, refreshed, or sent anywhere else, and no prompts, code, or file contents leave your machine. On does not mean always visible: while Claude Code is not found, its item stays hidden, unless every provider is on and no agent is found at all."
         },
         "agentUsageBar.codex.enabled": {
           "type": "boolean",
           "default": true,
           "order": 9,
-          "markdownDescription": "Show Codex usage in the status bar. Your local Codex CLI is asked for the limits it already knows for your account. Codex keeps its own sign-in, so this extension never reads or stores your Codex credentials. Nothing is shown when Codex is not installed or is signed out."
+          "markdownDescription": "Show Codex usage in the status bar while Codex is found on this machine. Your local Codex CLI is asked for the limits it already knows for your account. Codex keeps its own sign-in, so this extension never reads or stores your Codex credentials. On does not mean always visible: while Codex is not found, its item stays hidden, unless every provider is on and no agent is found at all."
         },
         "agentUsageBar.antigravity.enabled": {
           "type": "boolean",
           "default": true,
           "order": 10,
-          "markdownDescription": "Show Antigravity usage in the status bar. Your local Antigravity CLI (`agy`) is started for each reading and asked for the limits it already knows for your account. Antigravity keeps its own sign-in, so this extension never reads or stores your Google credentials. Nothing is read when the CLI is not installed or is signed out."
+          "markdownDescription": "Show Antigravity usage in the status bar while Antigravity is found on this machine. Your local Antigravity CLI (`agy`) is started for each reading and asked for the limits it already knows for your account. Antigravity keeps its own sign-in, so this extension never reads or stores your Google credentials. On does not mean always visible: while Antigravity is not found, its item stays hidden, unless every provider is on and no agent is found at all."
         },
         "agentUsageBar.claude.label": {
           "type": "string",

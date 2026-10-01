@@ -84,6 +84,25 @@ test("an Antigravity reading keeps its source and its group names across storage
   expect(shared.read("claude")).toBeNull();
 });
 
+test("an agent found to be absent is absent in every window", async () => {
+  const shared = new SharedUsageState(memento());
+  await shared.publish("codex", {
+    owner: "abc",
+    view: { snapshot: null, message: "The Codex CLI could not be started.", absent: true },
+    retryAt: null,
+  });
+
+  expect(shared.read("codex")?.view.absent).toBe(true);
+
+  await shared.publish("codex", {
+    owner: "abc",
+    view: { snapshot: null, message: "Codex reported no usage windows." },
+    retryAt: null,
+  });
+
+  expect(shared.read("codex")?.view.absent).toBe(false);
+});
+
 test("a claim stamps the lease without discarding the reading it already holds", async () => {
   const shared = new SharedUsageState(memento());
   await shared.publish("codex", { owner: "abc", view: { snapshot, message: null }, retryAt: null });
@@ -246,6 +265,8 @@ test("a v1 entry written by another window reads back as the reading it names", 
     view: {
       message: null,
       verbatim: false,
+      // An entry written before absent agents gave up their item says nothing, so it keeps it.
+      absent: false,
       snapshot: {
         windows: [
           {

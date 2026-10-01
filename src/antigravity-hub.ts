@@ -4,6 +4,7 @@ import { createServer } from "node:net";
 import * as os from "node:os";
 import { antigravityBinary } from "./antigravity";
 import {
+  isNotFound,
   isRecord,
   sortWindows,
   validDate,
@@ -39,7 +40,7 @@ export interface HubReply {
 }
 
 export interface HubProcess {
-  on(event: "error" | "exit", listener: () => void): void;
+  on(event: "error" | "exit", listener: (error?: unknown) => void): void;
   removeAllListeners(): void;
   kill(): void;
 }
@@ -198,6 +199,8 @@ function unavailable(message: string): ProviderResult {
 export class AntigravityHub {
   private child: HubProcess | null = null;
   private lastSpawnFailedAt = 0;
+  /** Repeated during the cooldown, so the item does not come and go between reads. */
+  private lastSpawnFailure = unavailable(NOT_STARTED);
   private disposed = false;
   /** Bumped by every stop, so a read started before one can tell that it was overtaken. */
   private generation = 0;
@@ -222,15 +225,14 @@ export class AntigravityHub {
       return unavailable(STOPPED);
     }
     if (Date.now() - this.lastSpawnFailedAt < RESPAWN_COOLDOWN_MS) {
-      return unavailable(NOT_STARTED);
+      return this.lastSpawnFailure;
     }
     const generation = this.generation;
     let hub: Hub;
     try {
       hub = await this.launch();
     } catch {
-      this.lastSpawnFailedAt = Date.now();
-      return unavailable(NOT_STARTED);
+      return this.spawnFailed(false);
     }
     // A stop during async launch leaves the returned process unowned, so stop it immediately.
     if (this.generation !== generation) {
@@ -240,10 +242,7 @@ export class AntigravityHub {
     this.child = hub.process;
     const ended = new Promise<ProviderResult>((resolve) => {
       // A missing binary is reported here rather than by `spawn` itself.
-      hub.process.on("error", () => {
-        this.lastSpawnFailedAt = Date.now();
-        resolve(unavailable(NOT_STARTED));
-      });
+      hub.process.on("error", (error) => resolve(this.spawnFailed(isNotFound(error))));
       hub.process.on("exit", () => resolve(unavailable("Antigravity stopped before answering.")));
     });
     try {
@@ -253,6 +252,14 @@ export class AntigravityHub {
         this.release();
       }
     }
+  }
+
+  private spawnFailed(absent: boolean): ProviderResult {
+    this.lastSpawnFailedAt = Date.now();
+    this.lastSpawnFailure = absent
+      ? { status: "unavailable", message: NOT_STARTED, absent }
+      : unavailable(NOT_STARTED);
+    return this.lastSpawnFailure;
   }
 
   private async ask(hub: Hub): Promise<ProviderResult> {

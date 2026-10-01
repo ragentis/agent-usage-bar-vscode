@@ -151,9 +151,9 @@ test("the CLI is looked for where Antigravity installs it", () => {
 
 class FakeProcess implements HubProcess {
   killed = 0;
-  private readonly listeners = new Map<string, () => void>();
+  private readonly listeners = new Map<string, (error?: unknown) => void>();
 
-  on(event: "error" | "exit", listener: () => void): void {
+  on(event: "error" | "exit", listener: (error?: unknown) => void): void {
     this.listeners.set(event, listener);
   }
 
@@ -165,12 +165,13 @@ class FakeProcess implements HubProcess {
     this.killed += 1;
   }
 
-  fires(event: "error" | "exit"): void {
-    this.listeners.get(event)?.();
+  fires(event: "error" | "exit", error?: unknown): void {
+    this.listeners.get(event)?.(error);
   }
 }
 
 const REFUSED = new Error("connect ECONNREFUSED");
+const NO_SUCH_PROGRAM = Object.assign(new Error("spawn agy ENOENT"), { code: "ENOENT" });
 
 type Answer = HubReply | Error;
 
@@ -370,13 +371,16 @@ test("a machine with no Antigravity is not asked again on every read", async () 
   const world = harness(answering({ RetrieveUserQuotaSummary: () => REFUSED }));
   const reading = world.hub.readUsage();
   await flush();
-  world.latest().fires("error");
+  world.latest().fires("error", NO_SUCH_PROGRAM);
 
-  await expect(reading).resolves.toMatchObject({
+  const missing = {
     status: "unavailable",
     message: "Antigravity could not be started. Check that the agy CLI is installed.",
-  });
-  await expect(world.hub.readUsage()).resolves.toMatchObject({ status: "unavailable" });
+    absent: true,
+  };
+  await expect(reading).resolves.toEqual(missing);
+  // The repeat inside the cooldown says the same, so the item does not come and go.
+  await expect(world.hub.readUsage()).resolves.toEqual(missing);
   expect(world.attempts()).toBe(1);
 
   await vi.advanceTimersByTimeAsync(60_000);
@@ -387,14 +391,29 @@ test("a machine with no Antigravity is not asked again on every read", async () 
   await later;
 });
 
-test("a launch that fails outright is treated like a missing CLI", async () => {
+test("a CLI that is there but will not start is not taken for a missing one", async () => {
+  const world = harness(answering({ RetrieveUserQuotaSummary: () => REFUSED }));
+  const reading = world.hub.readUsage();
+  await flush();
+
+  world.latest().fires("error", Object.assign(new Error("spawn EACCES"), { code: "EACCES" }));
+
+  await expect(reading).resolves.toEqual({
+    status: "unavailable",
+    message: "Antigravity could not be started. Check that the agy CLI is installed.",
+  });
+});
+
+test("a launch that fails outright is not taken for a missing CLI either", async () => {
   let attempts = 0;
   const hub = new AntigravityHub(() => {
     attempts += 1;
     return Promise.reject(new Error("no local port"));
   });
 
-  await expect(hub.readUsage()).resolves.toMatchObject({ status: "unavailable" });
+  const first = await hub.readUsage();
+  expect(first).toMatchObject({ status: "unavailable" });
+  expect(first).not.toHaveProperty("absent");
   await expect(hub.readUsage()).resolves.toMatchObject({ status: "unavailable" });
   expect(attempts).toBe(1);
 });

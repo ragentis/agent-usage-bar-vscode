@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { ExtensionConfiguration } from "./configuration";
 import { updateSetting } from "./settings";
+import type { ProviderId } from "./usage";
 
 interface MenuItem extends vscode.QuickPickItem {
   action?: "toggleClaude" | "toggleCodex" | "toggleAntigravity" | "settings" | "refresh";
@@ -14,23 +15,30 @@ export async function showMenu(
   configuration: ExtensionConfiguration,
   extensionId: string,
   refresh: () => Promise<void>,
+  hidden: (provider: ProviderId) => boolean,
 ): Promise<void> {
-  const state = (enabled: boolean): string => (enabled ? "On" : "Off");
+  // An enabled provider whose agent is not on this machine has no item to point at.
+  const state = (provider: ProviderId, enabled: boolean): string => {
+    if (!enabled) {
+      return "Off";
+    }
+    return hidden(provider) ? "Not found on this machine" : "On";
+  };
   const choice = await vscode.window.showQuickPick<MenuItem>(
     [
       {
         label: "$(agent-usage-bar-claude) Claude Code",
-        description: state(configuration.claudeEnabled),
+        description: state("claude", configuration.claudeEnabled),
         action: "toggleClaude",
       },
       {
         label: "$(agent-usage-bar-codex) Codex",
-        description: state(configuration.codexEnabled),
+        description: state("codex", configuration.codexEnabled),
         action: "toggleCodex",
       },
       {
         label: "$(agent-usage-bar-antigravity) Antigravity",
-        description: state(configuration.antigravityEnabled),
+        description: state("antigravity", configuration.antigravityEnabled),
         action: "toggleAntigravity",
       },
       { label: "", kind: vscode.QuickPickItemKind.Separator },

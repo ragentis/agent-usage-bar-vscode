@@ -61,6 +61,10 @@ function refusedAt(afterMs: number): Date {
   return new Date(Date.now() + afterMs);
 }
 
+function notInstalled(): ProviderResult {
+  return { status: "unavailable", message: "not installed", absent: true };
+}
+
 function refusedSilently(): ProviderResult {
   return { status: "unavailable", message: "rate limited", rateLimited: true };
 }
@@ -127,7 +131,11 @@ function tracked(id: ProviderId) {
       dispose: () => void (watching = null),
     },
     isEnabled: (configuration) =>
-      id === "claude" ? configuration.claudeEnabled : configuration.codexEnabled,
+      ({
+        claude: configuration.claudeEnabled,
+        codex: configuration.codexEnabled,
+        antigravity: configuration.antigravityEnabled,
+      })[id],
     stop: () => void (counts.stopped += 1),
   };
 
@@ -418,4 +426,159 @@ test("a reading another window took is shown rather than asked for again", async
 
   expect(watching.counts.read).toBe(0);
   expect(watching.last()?.snapshot?.windows[0]?.usedPercent).toBe(63);
+});
+
+test("an agent that is not on this machine gives up its item once another is known to be here", async () => {
+  const window = profile().window({ providers: ["claude", "codex", "antigravity"] });
+  window.of("codex").answers(() => Promise.resolve(notInstalled()));
+  window.bar.start();
+  await flush();
+
+  expect(window.bar.isHidden("codex")).toBe(true);
+  expect(window.of("codex").counts.hidden).toBeGreaterThan(0);
+  expect(window.of("codex").painted.map((view) => view.message)).toEqual([LOADING]);
+  expect(window.bar.isHidden("claude")).toBe(false);
+  expect(window.of("antigravity").last()?.snapshot).not.toBeNull();
+});
+
+test("when no agent is here, every item stays and says so", async () => {
+  const window = profile().window({ providers: ["claude", "codex"] });
+  window.of("claude").answers(() => Promise.resolve(notInstalled()));
+  window.of("codex").answers(() => Promise.resolve(notInstalled()));
+  window.bar.start();
+  await flush();
+
+  expect(window.of("claude").last()?.message).toBe("not installed");
+  expect(window.of("codex").last()?.message).toBe("not installed");
+  expect(window.bar.isHidden("claude")).toBe(false);
+  expect(window.bar.isHidden("codex")).toBe(false);
+});
+
+test("an absent agent gives up its item without waiting for the others to answer", async () => {
+  const window = profile().window({ providers: ["claude", "codex"] });
+  const read = deferred();
+  window.of("claude").answers(() => read.promise);
+  window.of("codex").answers(() => Promise.resolve(notInstalled()));
+  window.bar.start();
+  await flush();
+
+  expect(window.bar.isHidden("codex")).toBe(true);
+  expect(window.of("codex").counts.hidden).toBeGreaterThan(0);
+
+  read.settle(ok(5));
+  await flush();
+
+  expect(window.bar.isHidden("codex")).toBe(true);
+  expect(window.of("codex").painted.map((view) => view.message)).toEqual([LOADING]);
+});
+
+test("the last agent to answer absent brings every item back to say so", async () => {
+  const window = profile().window({ providers: ["claude", "codex"] });
+  const read = deferred();
+  window.of("claude").answers(() => read.promise);
+  window.of("codex").answers(() => Promise.resolve(notInstalled()));
+  window.bar.start();
+  await flush();
+  expect(window.bar.isHidden("codex")).toBe(true);
+
+  read.settle(notInstalled());
+  await flush();
+
+  expect(window.bar.isHidden("codex")).toBe(false);
+  expect(window.of("codex").last()?.message).toBe("not installed");
+  expect(window.of("claude").last()?.message).toBe("not installed");
+});
+
+test("a present agent that cannot be read still counts as here", async () => {
+  const window = profile().window({ providers: ["claude", "codex"] });
+  window
+    .of("claude")
+    .answers(() => Promise.resolve({ status: "unavailable", message: "signed out" }));
+  window.of("codex").answers(() => Promise.resolve(notInstalled()));
+  window.bar.start();
+  await flush();
+
+  expect(window.of("claude").last()?.message).toBe("signed out");
+  expect(window.bar.isHidden("codex")).toBe(true);
+});
+
+test("an agent that turns up later takes its item back", async () => {
+  const window = profile().window({ providers: ["claude", "codex"] });
+  window.of("codex").answers(() => Promise.resolve(notInstalled()));
+  window.bar.start();
+  await flush();
+  expect(window.bar.isHidden("codex")).toBe(true);
+
+  window.of("codex").answers(() => Promise.resolve(ok(9)));
+  await window.bar.refresh({ only: "codex", force: true });
+
+  expect(window.bar.isHidden("codex")).toBe(false);
+  expect(window.of("codex").last()?.snapshot?.windows[0]?.usedPercent).toBe(9);
+});
+
+test("a refresh the user asked for does not flash the item of an absent agent", async () => {
+  const window = profile().window({ providers: ["claude", "codex"] });
+  window.of("codex").answers(() => Promise.resolve(notInstalled()));
+  window.bar.start();
+  await flush();
+
+  await window.bar.refresh({ showLoading: true, force: true });
+
+  expect(window.of("codex").counts.read).toBe(2);
+  expect(window.of("codex").painted.map((view) => view.message)).toEqual([LOADING]);
+  expect(window.of("claude").painted.filter((view) => view.message === LOADING)).toHaveLength(2);
+});
+
+test("switching off the one agent that was found does not bring the absent ones back", async () => {
+  const window = profile().window({ providers: ["claude", "codex"] });
+  window.of("codex").answers(() => Promise.resolve(notInstalled()));
+  window.bar.start();
+  await flush();
+  expect(window.bar.isHidden("codex")).toBe(true);
+
+  window.configure({ claudeEnabled: false });
+  await flush();
+
+  expect(window.bar.isHidden("codex")).toBe(true);
+  expect(window.of("codex").painted.map((view) => view.message)).toEqual([LOADING]);
+});
+
+test("every item staying for a machine with no agent ends once a provider is switched off", async () => {
+  const window = profile().window({ providers: ["claude", "codex", "antigravity"] });
+  for (const id of ["claude", "codex", "antigravity"] as const) {
+    window.of(id).answers(() => Promise.resolve(notInstalled()));
+  }
+  window.bar.start();
+  await flush();
+  expect(window.bar.isHidden("codex")).toBe(false);
+  expect(window.bar.isHidden("antigravity")).toBe(false);
+
+  window.configure({ claudeEnabled: false });
+  await flush();
+
+  expect(window.bar.isHidden("codex")).toBe(true);
+  expect(window.bar.isHidden("antigravity")).toBe(true);
+
+  window.configure({ claudeEnabled: true });
+  await vi.advanceTimersByTimeAsync(TICK_MS);
+
+  expect(window.bar.isHidden("codex")).toBe(false);
+  expect(window.of("claude").last()?.message).toBe("not installed");
+});
+
+test("a window opening beside one that found an agent absent never shows its item", async () => {
+  const { coordinator, window } = profile();
+  const other = coordinator();
+  await other.take("claude");
+  await other.publish("claude", { snapshot: snapshot(20), message: null }, null);
+  await other.take("codex");
+  await other.publish("codex", { snapshot: null, message: "not installed", absent: true }, null);
+
+  const joined = window({ providers: ["claude", "codex"] });
+  joined.bar.start();
+  await flush();
+
+  expect(joined.of("codex").counts.read).toBe(0);
+  expect(joined.bar.isHidden("codex")).toBe(true);
+  expect(joined.of("codex").painted.map((view) => view.message)).toEqual([LOADING]);
 });
