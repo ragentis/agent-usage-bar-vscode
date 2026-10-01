@@ -2,6 +2,27 @@
 
 Notable changes to Agent Usage Bar. Release Please builds this file from the [commit subjects](.github/commit-instructions.md) that land on `main`, and the versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.4.1...v0.5.0) (2026-10-01)
+
+
+### Added
+
+* **antigravity:** show Antigravity usage in the status bar ([c691201](https://github.com/ragentis/agent-usage-bar-vscode/commit/c691201e925ec81b98fddaa9a4c6718104ee1a18))
+* **antigravity:** show daily activity for Antigravity ([b81deba](https://github.com/ragentis/agent-usage-bar-vscode/commit/b81deba57375a9de79322e581d3ed506c350c0d8))
+* **claude:** show banked limit resets in the tooltip ([4badc2f](https://github.com/ragentis/agent-usage-bar-vscode/commit/4badc2fde32b742adfeb00f9cef1621d220af362))
+* **status-bar:** hide the item of an agent that is not on this machine ([9d2faf5](https://github.com/ragentis/agent-usage-bar-vscode/commit/9d2faf592d1d655b765976965dec4e47335948a7))
+* **tooltip:** show plan names instead of slugs ([6c66d4b](https://github.com/ragentis/agent-usage-bar-vscode/commit/6c66d4b92f15d5e2062ca7527f65d51043e320ae))
+
+
+### Fixed
+
+* **codex:** find an npm install of Codex on Windows ([6c30b16](https://github.com/ragentis/agent-usage-bar-vscode/commit/6c30b160f31eb9630d2ce0e66f1e43914a92dce8))
+
+
+### Performance
+
+* **history:** read transcripts as a stream instead of whole files ([6f2fe35](https://github.com/ragentis/agent-usage-bar-vscode/commit/6f2fe35b695e75a2ed0a228beb02ff3db11ae165))
+
 ## [0.4.1](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.4.0...v0.4.1) (2026-09-28)
 
 
