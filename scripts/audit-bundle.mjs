@@ -34,7 +34,7 @@ if (unexpected.length > 0) {
 // Allowlist readable module members instead of guessing write-like names. Only explicit member
 // access can be inspected; default imports are followed and indexed access fails closed.
 const READ_ONLY_MEMBERS = {
-  fs: ["existsSync", "watch"],
+  fs: ["createReadStream", "existsSync", "watch"],
   "fs/promises": ["readFile", "readdir", "stat", "lstat"],
   child_process: ["spawn"],
   net: ["createServer"],

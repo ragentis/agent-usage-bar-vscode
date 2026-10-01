@@ -1,4 +1,4 @@
-import type { Dirent } from "node:fs";
+import { createReadStream, type Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
@@ -56,6 +56,31 @@ async function changedSince(files: readonly string[], since: number): Promise<st
   return files.filter((_, index) => (modified[index] ?? 0) >= since);
 }
 
+/**
+ * Streamed because one long session's transcript reaches tens of megabytes, and the session being
+ * written is read again by every scan. `readline` is not used: it also breaks lines at `\r` and
+ * U+2028, which are valid inside a JSON string.
+ */
+async function forEachLine(file: string, onLine: (line: string) => void): Promise<void> {
+  let rest = "";
+  for await (const chunk of createReadStream(file, "utf8") as AsyncIterable<string>) {
+    const end = chunk.lastIndexOf("\n");
+    if (end === -1) {
+      rest += chunk;
+      continue;
+    }
+    for (const line of (rest + chunk.slice(0, end)).split("\n")) {
+      if (line) {
+        onLine(line);
+      }
+    }
+    rest = chunk.slice(end + 1);
+  }
+  if (rest) {
+    onLine(rest);
+  }
+}
+
 export async function forEachTranscriptLine(
   root: string,
   since: number,
@@ -64,18 +89,11 @@ export async function forEachTranscriptLine(
   const found: string[] = [];
   await directories(root, 0, found);
   for (const file of await changedSince(found, since)) {
-    let text: string;
     try {
-      // oxlint-disable-next-line no-await-in-loop -- reading the tree in parallel would hold every session's text in memory at once
-      text = await fs.readFile(file, "utf8");
+      // oxlint-disable-next-line no-await-in-loop -- reading the tree in parallel would hold a stream open per session
+      await forEachLine(file, onLine);
     } catch {
       // Session files are rewritten and removed while this runs; skip whatever went away.
-      continue;
-    }
-    for (const line of text.split("\n")) {
-      if (line) {
-        onLine(line);
-      }
     }
   }
 }
