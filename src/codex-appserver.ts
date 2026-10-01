@@ -291,9 +291,7 @@ export class CodexAppServer {
     private readonly launch: LaunchCodex = launchCodex,
   ) {}
 
-  /**
-   * Stops the current process while allowing a later read to start a fresh one.
-   */
+  /** A later read starts a fresh process. */
   stop(): void {
     this.teardown(new Error("The Codex app server was stopped."));
   }
@@ -304,9 +302,8 @@ export class CodexAppServer {
   }
 
   /**
-   * A read that produces no reading drops the app server. Credentials are loaded once at startup, so
-   * a signed-out or failing process answers the same way until a fresh one replaces it, and an error
-   * reply leaves it running and healthy-looking. The next read starts one that loads them again.
+   * A read without a snapshot stops the app server. It loads credentials once at startup, so a
+   * signed-out or failing process keeps answering the same way. The next read starts a new one.
    */
   async readUsage(): Promise<ProviderResult> {
     try {

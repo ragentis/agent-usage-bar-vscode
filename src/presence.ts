@@ -3,8 +3,8 @@ import { isNotFound, type ProviderResult } from "./usage";
 
 /**
  * A read that finds nothing to run or read does not prove the agent is missing: an install this
- * extension cannot find fails the same way. The item is given up only when the agent's own data
- * directory is missing too, and a directory that cannot be checked counts as present.
+ * extension cannot find fails the same way. The item is hidden only when the agent's data directory
+ * is missing too. A directory that cannot be checked counts as present.
  */
 export async function confirmAbsence(
   result: ProviderResult,

@@ -52,10 +52,9 @@ export function newestCliVersion(candidates: readonly unknown[]): string {
 }
 
 /**
- * Accepts both standard `Retry-After` forms. Missing or non-future values, including the service's
- * observed `Retry-After: 0`, mean no stated wait; treating zero as immediate retry would create a
- * refusal loop; the reader backs off on its own instead. Valid waits are capped before becoming
- * shared timers.
+ * Accepts both standard `Retry-After` forms. A missing or non-future value, including the
+ * `Retry-After: 0` this service sends, means no stated wait: retrying immediately would loop, so
+ * the reader backs off on its own. Valid waits are capped.
  */
 export function parseRetryAfter(header: string | null, now: Date): Date | null {
   if (!header) {
@@ -93,8 +92,8 @@ function scopeLabel(entry: Record<string, unknown>): string | null {
 
 /**
  * A named scope, such as a per-model weekly limit, becomes its own window because it can stop work
- * before the unscoped one does. Scopes the service does not name collapse into a single window
- * holding the fullest of them, which is the most an unlabelled row can honestly claim.
+ * before the unscoped one does. Unnamed scopes are merged into one window that shows the highest
+ * percentage among them.
  */
 export function parseUsageLimits(value: unknown): UsageWindow[] {
   if (!isRecord(value) || !Array.isArray(value.limits)) {
@@ -217,8 +216,8 @@ export interface UsageRequestState {
 }
 
 /**
- * The plain request is the one used before limit resets, so refusing the query or the CLI user agent
- * can cost the resets line but never the reading.
+ * A refused reset request falls back to the plain request, so a refusal can remove the resets line
+ * but not the reading.
  */
 function isResetRefusal(status: number): boolean {
   return status === 400 || status === 403;
@@ -252,7 +251,7 @@ export async function fetchClaudeUsage(
         "anthropic-beta": OAUTH_BETA,
         ...(withResets ? { "User-Agent": `claude-cli/${cliVersion} (external, cli)` } : {}),
       },
-      // Refuse redirects so the bundle audit remains an honest bound on where the token can travel.
+      // Refuse redirects so the token only reaches the host the bundle audit pins.
       redirect: "error",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });

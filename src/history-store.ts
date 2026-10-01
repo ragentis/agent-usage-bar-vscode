@@ -3,9 +3,8 @@ import type { SharedStore } from "./shared-state";
 import { isRecord, validUsedPercent, type ProviderId } from "./usage";
 
 /**
- * Daily totals outlive the transcripts they came from: Claude Code deletes its own after
- * `cleanupPeriodDays`. The version lives in the key so an incompatible shape is ignored rather than
- * misread, on the same terms as `shared-state.ts`.
+ * Stored totals are kept after their transcripts are gone; Claude Code deletes its transcripts
+ * after `cleanupPeriodDays`. The version is part of the key, as in `shared-state.ts`.
  */
 
 const KEY_PREFIX = "usageHistory.v1.";
@@ -14,11 +13,11 @@ const KEY_PREFIX = "usageHistory.v1.";
 const MAX_ENTRIES = 400;
 
 export interface StoredHistory extends DailyTotals {
-  /** Start of the last scan that wrote its result; the floor the next one measures back from. */
+  /** Start of the last scan that wrote its result. The next scan starts from here. */
   scannedAt: number;
-  /** Start of the last scan begun, written or not; only holds other windows off for a while. */
+  /** Start of the last scan begun, whether or not it wrote. Only delays other windows' scans. */
   claimedAt: number;
-  /** Newest sample of the last scan, so an idle stretch does not swallow the next reading. */
+  /** Newest sample of the last scan: the baseline for the first reading after an idle period. */
   last: UsageSample | null;
 }
 
@@ -81,10 +80,9 @@ export class UsageHistoryState {
   }
 
   /**
-   * Stamped before the scan rather than after, so windows opening together do not all repeat the
-   * first full parse. A duplicated scan only wastes work, so no stronger claim is needed. The claim
-   * leaves `scannedAt` alone: a scan that never writes its result must not move the floor the next
-   * one measures back from, or the days between would be lost.
+   * Written before the scan so windows opening together do not all run the first full scan. A
+   * duplicate scan only wastes work, so no stronger lock is needed. `scannedAt` is not changed
+   * here: if a scan never wrote its result, moving it would skip the days in between.
    */
   claim(provider: ProviderId, unit: HistoryUnit, at: number): PromiseLike<void> {
     const stored = this.read(provider);

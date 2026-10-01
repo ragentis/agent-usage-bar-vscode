@@ -14,10 +14,9 @@ import {
 } from "./usage";
 
 /**
- * The version lives in the key so incompatible shapes are ignored instead of misread. Bump it when
- * a field is renamed or changes unit or meaning, but not for an optional additive field. During a
- * version transition each shape uses its own lease, so unnecessary bumps briefly duplicate reads.
- * Wire-format tests make compatible changes explicit.
+ * The version is part of the key so an incompatible shape is ignored instead of misread. Bump it
+ * when a field is renamed or changes unit or meaning, not for an optional added field: each
+ * version has its own lease, so a bump briefly duplicates reads.
  */
 const KEY_PREFIX = "sharedUsage.v1.";
 
@@ -30,8 +29,8 @@ export interface SharedEntry {
   /** When the read was started, not when it answered: the lease every window measures against. */
   readAt: number;
   /**
-   * When the result was written. What the other windows compare against, rather than the age of
-   * the reading inside it: "not signed in" carries no reading at all, and is still news.
+   * When the result was written. Other windows compare against this, not the snapshot's age,
+   * because a failure such as "not signed in" has no snapshot.
    */
   publishedAt: number;
   owner: string;

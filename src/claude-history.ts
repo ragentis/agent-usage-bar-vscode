@@ -4,9 +4,9 @@ import { forEachTranscriptLine } from "./transcripts";
 import { isRecord, validDate } from "./usage";
 
 /**
- * Claude transcripts record tokens, not account percentages, so this measures relative activity and
- * is never presented as a share of any limit. Cache reads are left out: they run an order of
- * magnitude larger than the rest and would turn the reading into context size rather than work done.
+ * Claude transcripts record tokens, not account percentages, so the totals show relative activity
+ * and are never presented as a share of a limit. Cache reads are excluded: they are about ten times
+ * larger than the other counts and would make the total reflect context size.
  */
 
 const MARKER = '"usage"';
@@ -14,7 +14,7 @@ const MARKER = '"usage"';
 /** Claude Code writes local notices, such as a limit being reached, under this model name. */
 const SYNTHETIC_MODEL = "<synthetic>";
 
-/** Comfortably above any single message, so a malformed count cannot flatten the whole scale. */
+/** Above any real message. Caps a malformed count so it cannot dominate the scale. */
 const MAX_MESSAGE_TOKENS = 5_000_000;
 
 export interface ClaudeUsageRecord {

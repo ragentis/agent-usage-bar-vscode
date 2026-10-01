@@ -96,9 +96,9 @@ export function buildStatusText(
   }
   const prefix = windows.some((window) => window.reset) ? "~" : "";
   if (configuration.displayMode === "full") {
-    // Every scope would make the status bar grow with the plan, so a scoped window earns its place
-    // only once it is the one worth watching. The tooltip lists them all regardless. A kind that
-    // has only scopes is stood for by its first one, which `sortWindows` made the most used.
+    // Showing every scope would make the item grow with the plan, so a scoped window is shown only
+    // when its severity is not normal. The tooltip lists them all. A kind that has only scoped
+    // windows shows its first one, which `sortWindows` made the most used.
     const whole = new Set(windows.filter((window) => !window.label).map((window) => window.kind));
     const leads = (window: ResolvedWindow): boolean =>
       !whole.has(window.kind) && windows.find(({ kind }) => kind === window.kind) === window;
@@ -115,9 +115,9 @@ export function buildStatusText(
         .join(" · ")
     );
   }
-  // Compact normally shows the shortest window, but switches to whichever window drives the
-  // warning color so a highlighted status bar always explains itself. Asking for the color rather
-  // than the threshold keeps the swap and the color under one rule.
+  // Compact shows the first window, but switches to the window that causes the warning color, so
+  // a highlighted item shows the reason. Using `severityFor` for both keeps the swap and the color
+  // consistent.
   const alarming = windows
     .filter((window) => severityFor(window, configuration, snapshot.fetchedAt) !== "normal")
     .toSorted((left, right) => right.usedPercent - left.usedPercent)[0];
@@ -140,8 +140,8 @@ export function severityFor(
   if (window.usedPercent < configuration.warningThreshold) {
     return "normal";
   }
-  // Spending no faster than the window's own clock is a threshold crossed on schedule, not a
-  // problem. The error threshold still applies, because a nearly empty window is one at any pace.
+  // In `overPace` mode, usage that is not ahead of the window's elapsed time does not warn. The
+  // error threshold above still applies at any pace.
   return configuration.warnWhen === "overPace" && onPace(window, asOf) ? "normal" : "warning";
 }
 
@@ -152,7 +152,7 @@ export function pickSeverity(
   configuration: ExtensionConfiguration,
   now = new Date(),
 ): Severity {
-  // A stopped account is the one case where the percentage says nothing useful.
+  // A blocked account is an error regardless of its percentages.
   if (snapshot.blocked) {
     return "error";
   }

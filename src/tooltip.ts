@@ -44,8 +44,8 @@ const COLOR = {
   warning: "var(--vscode-charts-yellow)",
   error: "var(--vscode-charts-red)",
   mark: "var(--vscode-descriptionForeground)",
-  // The halo is the hover's own background, so it cuts the mark out of a fill or the track and
-  // vanishes where the mark reaches past the bar.
+  // The halo uses the hover's background color, so it separates the mark from the bar and is
+  // invisible outside the bar.
   halo: "var(--vscode-editorHoverWidget-background)",
 } as const;
 
@@ -56,20 +56,18 @@ const COLOR = {
 const BAR_SCALE = 6;
 
 /**
- * The scaled cells make the bar the widest line. Wrapped text uses a conservative width for
- * proportional glyphs; failure lines may use the measured wider limit.
- *
- * Measured rather than derived. `<small>` does not scale by an exact factor in this renderer, and
- * across six nestings the arithmetic drifts about a percent — four pixels of a bar that has to end
- * where the line of text above it ends.
+ * Measured, not derived: `<small>` does not scale by an exact factor in this renderer, and six
+ * nestings drift by about four pixels. The bar must end where the text line above it ends.
  */
 const BAR_CELLS = 314;
 
 /** The indent beside a bar, in the bar's own cells: a full-size space is a fifth too narrow here. */
 const BAR_INDENT_CELLS = 7;
 
+/** Wrap width for proportional text, conservative so no wrapped line is wider than the bar. */
 const COLUMNS = 52;
 
+/** A failure line stays unwrapped up to this measured wider limit. */
 const LINE_COLUMNS = 60;
 
 const INDENT = "&nbsp;&nbsp;";
@@ -161,9 +159,9 @@ function scaled(markup: string): string {
 const CELL = "&nbsp;";
 
 /**
- * The mark is two glyphs from the extension's own icon font, a halo and the mark drawn over it, so
- * that it can stand taller than the bar and be rounded, which cells cannot. See
- * `scripts/build-font.mjs`, which generates both.
+ * The mark is two glyphs from the extension's icon font: a halo with the mark drawn over it. Glyphs
+ * can be taller than the bar and rounded, which cells cannot. `scripts/build-font.mjs` generates
+ * both.
  */
 const MARK_GLYPH = "agent-usage-bar-mark";
 
@@ -178,10 +176,10 @@ const MARK_CELLS = 3;
 /** The rounded ends taper the bar, so a mark under one of them would be clipped. */
 const MARK_MARGIN = 4;
 
-/** Cells kept clear of the fill edge, whose own position already says the same thing. */
+/** Cells kept clear around the fill edge; a mark that close to it adds no information. */
 const MARK_CLEARANCE = 3;
 
-/** The cell the mark starts at, or nothing when the bar cannot show it centred where it belongs. */
+/** The cell the mark starts at, or null when it cannot be drawn centred at that position. */
 function markAt(elapsedPercent: number | null, filled: number, cells: number): number | null {
   if (elapsedPercent === null) {
     return null;
@@ -257,26 +255,24 @@ function formatDay(day: string, locale?: string): string {
 }
 
 /**
- * A day is one glyph from the extension's own icon font: a bar of its step's height, standing on the
- * text baseline, carrying the gap to the next day inside its advance width. Nothing here draws with
- * cells, because a cell's width and height both follow the one font size and a taller day would only
- * be a wider one. See `scripts/build-font.mjs`, which generates the bars and their metrics.
+ * A day is one glyph from the extension's icon font: a bar whose height is its level, with the gap
+ * to the next day inside its advance width. Cells are not used because a cell's width and height
+ * both follow the font size, so a taller cell would also be wider. `scripts/build-font.mjs`
+ * generates the glyphs.
  */
 const HEAT_GLYPH = "agent-usage-bar-day";
 
 /**
- * Steps are named, never numbered. An icon whose id contains a digit registers and gets its CSS
- * rule, but the Markdown sanitizer keeps a codicon class only when it matches
- * `/^codicon codicon-[a-z-]+( codicon-modifier-[a-z-]+)?$/`. A digit fails that, the class is
- * stripped, and the day draws as an empty element with nothing reported.
+ * Levels are named, not numbered. The Markdown sanitizer keeps a codicon class only when it matches
+ * `/^codicon codicon-[a-z-]+( codicon-modifier-[a-z-]+)?$/`, so an id with a digit loses its class
+ * and draws as an empty element without any error.
  */
 const HEAT_NAMES = ["none", "one", "two", "three", "four", "five"];
 
 /**
- * One hue at five opacities, applied as text color to that glyph. A severity ramp would read a busy
- * day as a failing one. The hue is written out rather than taken from `--vscode-charts-blue` because
- * a theme color cannot carry an opacity; these are the values that variable holds in the default
- * themes, and every step below full blends toward whatever the hover behind it actually is.
+ * One hue at five opacities, applied as the glyph's text color. Severity colors are not used
+ * because a busy day is not a failure. The hue is hard-coded because a theme variable cannot take
+ * an opacity; the values are those of `--vscode-charts-blue` in the default themes.
  */
 const HEAT_HUE: Record<ThemeKind, string> = { dark: "#3794ff", light: "#1a85ff" };
 
@@ -303,8 +299,8 @@ function formatCount(value: number): string {
 }
 
 /**
- * Codex records the account's own percentages, so its days are absolute. Claude records only tokens,
- * which are shown as a count and scaled against the busiest day rather than against any limit.
+ * Codex days are account percentages. Claude and Antigravity days are token counts, which are
+ * scaled against the busiest day, not against a limit.
  */
 function historyBlock(
   totals: DailyTotals,
@@ -349,9 +345,9 @@ function detailRow(left: string, right: string): string {
 }
 
 /**
- * A title is a heading and what it describes is not. A heading carries 8px of margin under itself,
- * and that space belongs above the drawing rather than between the drawing and the line explaining
- * it, so the two share a plain block. Sanitized CSS offers no other way to place the space.
+ * Only the title is a heading. A heading has 8px of bottom margin, which should separate the title
+ * from the drawing, not the drawing from its detail line, so those two share a plain block.
+ * Sanitized CSS offers no other way to place that space.
  */
 function section(title: string, ...body: string[]): string {
   return `<h3>${title}</h3><div>${body.join("")}</div>`;
@@ -372,16 +368,15 @@ function windowBlock(
   asOf: Date,
 ): string {
   const reset = window.reset
-    ? // Reuse the detail row instead of adding a separate reset notice.
-      "~ Reset since this reading"
+    ? "~ Reset since this reading"
     : window.resetsAt
       ? `Resets ${escapeHtml(formatDate(window.resetsAt, configuration.locale))}`
       : "";
   const pace = configuration.showPace ? paceFor(window, asOf) : null;
   const percent = formatPercent(window.usedPercent, configuration.percentageMode);
   const label = configuration.percentageMode === "remaining" ? "remaining" : "used";
-  // Only a weekly window is clocked rather than forecast, so only that bar carries the mark, and it
-  // stands exactly where the elapsed percentage beside it says.
+  // Only a weekly window reports elapsed time instead of a forecast, so only its bar has the mark,
+  // placed at the elapsed percentage shown beside it.
   const elapsed = pace?.kind === "elapsed" ? pace.percent : null;
   const severity = severityFor(window, configuration, asOf);
   const title = `${INDENT}${dim(windowTitle(window))}${INDENT}${percent} <small>${dim(label)}</small>`;

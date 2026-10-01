@@ -17,7 +17,7 @@ export async function showMenu(
   refresh: () => Promise<void>,
   hidden: (provider: ProviderId) => boolean,
 ): Promise<void> {
-  // An enabled provider whose agent is not on this machine has no item to point at.
+  // An enabled provider whose agent is not on this machine has no status bar item.
   const state = (provider: ProviderId, enabled: boolean): string => {
     if (!enabled) {
       return "Off";

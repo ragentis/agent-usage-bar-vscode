@@ -1,7 +1,6 @@
 /**
- * Daily totals are derived from what the providers recorded rather than sampled over time, so every
- * window recomputes the same day to the same value and no coordination is needed. Units differ per
- * provider and are never mixed or compared.
+ * Daily totals are derived from what the providers recorded, not sampled over time, so every window
+ * computes the same value for a day. Units differ per provider and are never mixed or compared.
  */
 
 export type HistoryUnit = "percent" | "tokens";
@@ -26,7 +25,7 @@ function pad(value: number): string {
   return `${value}`.padStart(2, "0");
 }
 
-/** Days are local: the question is which evening the work happened on, not which UTC date. */
+/** Days use the local time zone, not UTC. */
 export function localDay(at: Date): string {
   return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
 }
@@ -45,25 +44,23 @@ export function addDay(days: Record<string, number>, day: string, amount: number
   days[day] = (days[day] ?? 0) + amount;
 }
 
-/** What one scan of a provider's transcripts produced. */
 export interface HistoryScan {
   days: Record<string, number>;
   /** Newest sample seen, carried into the next scan; null for providers without a counter. */
   last: UsageSample | null;
-  /** Some record could not be read yet, so the days are a floor and the scan is worth repeating. */
+  /** Some record could not be read yet: the days are a lower bound and the scan is repeated. */
   pending?: boolean;
-  /** Nothing was written since the last scan, so nothing was read and what is stored stands. */
+  /** Nothing was written since the last scan, so nothing was read and the stored days stand. */
   unchanged?: boolean;
 }
 
 /**
- * A rising percentage is spending; a fall is the window resetting and contributes nothing. Samples
- * from every file must be merged before diffing, because concurrent sessions each record the same
- * account-wide counter and diffing them separately would count one spend once per session.
+ * A rise in percentage is usage; a fall is a window reset and adds nothing. Samples from all files
+ * are merged before diffing, because concurrent sessions record the same account-wide counter and
+ * separate diffs would count one rise once per session.
  *
- * `seed` is the newest sample of the previous scan. It only applies when this scan begins after it,
- * which happens when the account was idle across the whole overlap; without it the first turn after
- * an idle stretch would have nothing to be measured against.
+ * `seed` is the newest sample of the previous scan. It is used only when this scan's first sample
+ * is later, so the first rise after an idle period has a baseline.
  */
 export function scanFromSamples(
   samples: readonly UsageSample[],
@@ -83,9 +80,9 @@ export function scanFromSamples(
 }
 
 /**
- * Inside the scanned span the transcripts are the whole truth, because a file holding a day's
- * records cannot have been written before that day. Earlier days are kept from the store, which
- * outlives the transcripts: Claude Code deletes its own after `cleanupPeriodDays`.
+ * Scanned values replace stored ones from `from` onward: a file holding a day's records cannot have
+ * been last written before that day, so the scan is complete for that span. Earlier days are kept
+ * from the store, because Claude Code deletes its transcripts after `cleanupPeriodDays`.
  */
 export function mergeDays(
   stored: Record<string, number>,
@@ -107,8 +104,8 @@ export function mergeDays(
 }
 
 /**
- * A day's total only grows, so when a scan could not read everything, the stored figure for a day
- * stands wherever it is the higher one.
+ * A day's total only grows, so after an incomplete scan the higher of the stored and scanned values
+ * is kept.
  */
 export function keepHigher(
   days: Record<string, number>,
@@ -137,13 +134,12 @@ export function pruneDays(
 }
 
 /**
- * Steps of the ramp; a day with no activity is drawn at the empty step instead. A step is both a
- * shade and a bar height, and the font carries one glyph per step, so changing this means changing
- * `scripts/build-font.mjs` with it.
+ * Number of activity levels; an idle day uses a separate empty level. Each level has its own glyph
+ * in the icon font, so change `scripts/build-font.mjs` together with this.
  */
 export const HISTORY_LEVELS = 5;
 
-/** Days the strip shows. Thirty glyphs come to the width of the usage bars; fewer fall short of it. */
+/** Days shown in the strip. Thirty glyphs match the width of the usage bars. */
 export const HISTORY_DAYS = 30;
 
 export interface HistoryDay {
@@ -167,11 +163,9 @@ function levelFor(value: number, max: number): number {
 }
 
 /**
- * The strip always spans the requested days, so its width does not move with how much history
- * happens to be on record. A day before the first record is drawn like an idle one; for Claude Code,
- * whose transcripts are deleted after `cleanupPeriodDays`, the oldest cells of a long span can stay
- * empty permanently. Nothing is drawn at all unless some day in view has activity, which keeps an
- * empty strip off the tooltip.
+ * The strip always spans the requested days, so its width is constant. A day before the first
+ * record is drawn as idle. Returns null when no day in the span has activity, so no empty strip is
+ * shown.
  */
 export function historyStrip(
   totals: DailyTotals,

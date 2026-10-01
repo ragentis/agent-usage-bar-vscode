@@ -52,8 +52,8 @@ function providers(onCodexPush: () => void): ProviderPort[] {
     fileSuffix: ".jsonl",
     recursive: true,
   });
-  // A conversation in use is written to its log rather than its database, so no suffix is singled
-  // out here; the wrapper tells real writes from the files a history scan leaves behind.
+  // A conversation in use is written to its log, not its database, so every file is watched. The
+  // wrapper filters out the empty files a history scan leaves behind.
   const antigravityWatcher = realWritesOnly(
     new FileWatcher({
       directory: antigravityConversationsPath(),
@@ -112,7 +112,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // oxlint-disable-next-line prefer-const -- assigned on the next line, read only from the closure
   let usageBar: UsageBar;
   const ports = providers(() => void usageBar.refresh({ only: "codex" }));
-  // History scans run a hub of their own, so one is never stopped along with a usage read.
+  // History scans use a separate hub, so stopping a usage read does not stop a scan.
   const antigravityScans = new AntigravityHub();
   const antigravityHistory = new AntigravityHistory((use) => antigravityScans.query(use));
   const history = new HistoryService(

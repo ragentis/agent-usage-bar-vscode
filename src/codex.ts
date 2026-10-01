@@ -5,9 +5,7 @@ export function codexDirectory(): string {
   return path.join(os.homedir(), ".codex");
 }
 
-/**
- * Transcript writes signal local activity only; account percentages come from the app server.
- */
+/** Transcript writes signal local activity only; account percentages come from the app server. */
 export function codexSessionsPath(): string {
   return path.join(codexDirectory(), "sessions");
 }

@@ -98,7 +98,7 @@ export function renderStatusBarItem(
     return;
   }
   const age = formatAge(snapshot.fetchedAt, STALE_AFTER_MS, now);
-  // A literal codicon, never the provider's own text, so a log value cannot alter the item.
+  // A literal codicon, never the provider's own text, so that text cannot alter the item.
   const blocked = snapshot.blocked ? "$(error) " : "";
   draw(item, {
     text: `${mark} ${blocked}${buildStatusText(snapshot, configuration, now)}${age ? " $(history)" : ""}`,

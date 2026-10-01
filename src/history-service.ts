@@ -32,14 +32,14 @@ const DAY_MS = 24 * 60 * 60_000;
 const FIRST_SCAN_DAYS = 60;
 
 /**
- * A later scan re-derives only the days that could still change, and reads one further day so the
- * first of them has yesterday's readings to be measured against.
+ * A later scan recomputes only the days that can still change. It reads one more day back so the
+ * first of them has an earlier reading as a baseline.
  */
 const RESCAN_BACK_MS = DAY_MS;
 
 /**
- * A scan this recent is treated as the current one, whichever window ran it. An Antigravity scan
- * starts a process, so it is spaced further apart.
+ * A scan this recent, by any window, is not repeated. An Antigravity scan starts a process, so its
+ * interval is longer.
  */
 const SCAN_FRESH_MS: Record<ProviderId, number> = {
   claude: 2 * 60_000,
@@ -47,10 +47,10 @@ const SCAN_FRESH_MS: Record<ProviderId, number> = {
   antigravity: 10 * 60_000,
 };
 
-/** Past the wait itself, so the repeated scan is not refused as too recent by a few milliseconds. */
+/** Added to the wait so the repeated scan is not rejected as too recent. */
 const FOLLOW_UP_MARGIN_MS = 1_000;
 
-/** Activation belongs to the status bar reading; transcripts are parsed once it is on screen. */
+/** Delays the first scan so activation time goes to the status bar reading. */
 const START_DELAY_MS = 4_000;
 
 function isEnabled(provider: ProviderId, configuration: ExtensionConfiguration): boolean {
@@ -63,8 +63,8 @@ function isEnabled(provider: ProviderId, configuration: ExtensionConfiguration):
 }
 
 /**
- * Daily history is derived from what the providers already wrote to disk, so every window computes
- * the same answer and none of the read coordination the live readings need applies here.
+ * Every window derives the same totals from disk, so the lease that coordinates live readings is
+ * not needed. `claimedAt` only avoids duplicate scans.
  */
 export class HistoryService {
   private readonly running = new Map<ProviderId, Promise<void>>();
@@ -98,7 +98,7 @@ export class HistoryService {
     this.followUps.clear();
   }
 
-  /** Transcript writes are the only signal that a day's total has moved. */
+  /** A write by the agent is the only signal that a day's total has changed. */
   handleActivity(provider: ProviderId): void {
     void this.scan(provider, true);
   }
@@ -143,8 +143,8 @@ export class HistoryService {
       : 0;
     if (stored && wait > 0) {
       this.publish(provider, stored);
-      // Only Antigravity waits long enough for a session to end inside the wait, which would leave
-      // its last conversation uncounted until the next one.
+      // Only Antigravity's interval is long enough for a session to end within it. Without a
+      // follow-up, its last conversation would stay uncounted until the next session.
       if (fromActivity && provider === "antigravity") {
         this.followUp(provider, wait);
       }
@@ -175,7 +175,7 @@ export class HistoryService {
     }
   }
 
-  /** One repeat per provider at a time; a repeat that finds nothing left to wait for ends the chain. */
+  /** One pending repeat per provider. A repeat that finds nothing pending schedules no other. */
   private followUp(provider: ProviderId, wait: number): void {
     if (this.disposed || this.followUps.has(provider)) {
       return;
@@ -189,7 +189,7 @@ export class HistoryService {
     );
   }
 
-  /** A stored unit that no longer matches the provider is from another shape and cannot be merged. */
+  /** A stored entry whose unit differs from the provider's cannot be merged and is ignored. */
   private current(provider: ProviderId, unit: HistoryUnit): StoredHistory | null {
     const stored = this.state.read(provider);
     return stored && stored.unit === unit ? stored : null;

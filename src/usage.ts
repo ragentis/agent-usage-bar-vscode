@@ -25,20 +25,21 @@ export interface UsageSnapshot {
   source: SnapshotSource;
 }
 
-/**
- * A new snapshot or the reason it is unavailable. Failures retain the last good snapshot;
- * `retryAt` additionally prevents another request before the provider's stated time. `rateLimited`
- * marks a refusal; when it states no `retryAt`, the reader chooses the wait. `absent` marks a read
- * that found nothing to run or read; `presence.ts` keeps it only when the agent left no trace either.
- */
+/** A new snapshot or the reason it is unavailable. Failures retain the last good snapshot. */
 export type ProviderResult =
   | { status: "ok"; snapshot: UsageSnapshot }
   | {
       status: "unavailable";
       message: string;
+      /** No request is made before this time. */
       retryAt?: Date;
+      /** A refusal. Without `retryAt` the reader chooses the wait. */
       rateLimited?: boolean;
       verbatim?: boolean;
+      /**
+       * Nothing to run or read was found. `presence.ts` keeps it only when the agent's data
+       * directory is missing too.
+       */
       absent?: boolean;
     };
 
@@ -47,7 +48,7 @@ export interface ProviderView {
   message: string | null;
   /** Prevents provider-authored sentences from being interpreted as a cause and remedy. */
   verbatim?: boolean;
-  /** The agent is not on this machine, so its item is given up unless that is true of every agent. */
+  /** The agent is not on this machine. Its item is hidden unless every agent is absent. */
   absent?: boolean;
 }
 
@@ -139,8 +140,8 @@ export function classifyWindow(windowMinutes: unknown, fallback: WindowKind): Wi
 }
 
 /**
- * Kind is the primary axis, and a whole-kind window precedes the scopes inside it. Percentage orders
- * scoped windows only, so providers without scopes keep their original order.
+ * Sorted by kind, then unscoped before scoped. Scoped windows are ordered by percentage; unscoped
+ * ones keep their original order.
  */
 export function sortWindows(windows: UsageWindow[]): UsageWindow[] {
   const order: Record<WindowKind, number> = { session: 0, weekly: 1 };

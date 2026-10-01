@@ -60,8 +60,8 @@ function groupLabel(value: unknown): string | null {
 }
 
 /**
- * The hub answers in proto3 JSON, which omits a zero. A spent bucket therefore carries a reset time
- * and no fraction, while a bucket with neither is one this parser does not understand.
+ * The hub answers in proto3 JSON, which omits a zero. A fully used bucket therefore has a reset
+ * time and no fraction. A bucket with neither is rejected.
  */
 function remainingFraction(value: unknown, resetsAt: Date | null): number | null {
   if (value === undefined) {
@@ -109,7 +109,7 @@ export function parseQuotaSummary(value: unknown, fetchedAt: Date): UsageSnapsho
     : { windows, plan: null, blocked: null, credits: null, fetchedAt, source: "antigravity-hub" };
 }
 
-/** The same answer names the account holder; only the plan is taken out of it. */
+/** The reply also contains the account holder's name and email; only the plan is read. */
 export function parsePlan(value: unknown): string | null {
   const status = isRecord(value) && isRecord(value.userStatus) ? value.userStatus.planStatus : null;
   const info = isRecord(status) ? status.planInfo : null;
@@ -139,10 +139,10 @@ function freePort(): Promise<number> {
 }
 
 /**
- * A private hub with a token generated here, so no existing hub's token is read and Antigravity
- * keeps ownership of the sign-in. The hub listens only with `AGY_ENABLE_HUB` set. The second
- * variable is the one Google's extension sets; that extension opens the sign-in URLs the hub
- * prints, and nothing here does. The null log file keeps each start from leaving a log behind.
+ * Starts a private hub with a token generated here, so no existing hub's token is read. The hub
+ * listens only when `AGY_ENABLE_HUB` is set. `ANTIGRAVITY_VSCODE_HOST` is what Google's extension
+ * sets; nothing here opens the sign-in URLs the hub prints. The null log file prevents a log file
+ * per start.
  */
 async function launchHub(): Promise<Hub> {
   const port = await freePort();
@@ -195,14 +195,14 @@ function unavailable(message: string): UnavailableResult {
 }
 
 /**
- * One hub per read: started, asked, and stopped. A running hub holds well over a hundred megabytes
- * and answers a repeated question from its own cache, so keeping one between reads would cost
- * memory and return a reading of unknown age. An instance runs one hub at a time.
+ * One hub per read: started, asked, and stopped. A running hub uses over a hundred megabytes and
+ * answers repeated calls from its cache, so keeping it would cost memory and return stale
+ * readings. An instance runs one hub at a time.
  */
 export class AntigravityHub {
   private child: HubProcess | null = null;
   private lastSpawnFailedAt = 0;
-  /** Repeated during the cooldown, so the item does not come and go between reads. */
+  /** Returned again during the cooldown, so the item's visibility does not change between reads. */
   private lastSpawnFailure = unavailable(NOT_STARTED);
   private disposed = false;
   /** Bumped by every stop, so a read started before one can tell that it was overtaken. */
@@ -312,7 +312,7 @@ export class AntigravityHub {
 
   /**
    * The hub refuses connections until it listens, so a rejected call means it is still starting.
-   * Nothing is returned once the wait runs out or the hub is no longer this read's own.
+   * Returns null when the wait runs out or the hub was stopped.
    */
   private async firstReply(hub: Hub, method: string): Promise<HubReply | null> {
     const deadline = Date.now() + STARTUP_TIMEOUT_MS;

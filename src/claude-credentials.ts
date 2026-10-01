@@ -70,9 +70,7 @@ export function readKeychain(service: string = KEYCHAIN_SERVICE): Promise<Keycha
     });
     let secret = "";
     let settled = false;
-    /**
-     * Settles once across process, size, and timeout paths, including stream chunks already in flight.
-     */
+    // Settles once across the process, size, and timeout paths, including chunks in flight.
     const finish = (result: KeychainResult): void => {
       if (settled) {
         return;

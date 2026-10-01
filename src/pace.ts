@@ -50,8 +50,8 @@ function progressOf(window: UsageWindow, asOf: Date): Progress | null {
 }
 
 /**
- * Whether a window has spent no more of its allowance than of its own time. A window that cannot be
- * measured is not on pace, so callers keep whatever they do without one.
+ * Whether the used percentage is at most the elapsed percentage of the window. A window that cannot
+ * be measured is not on pace.
  */
 export function onPace(window: UsageWindow, asOf: Date): boolean {
   const progress = progressOf(window, asOf);

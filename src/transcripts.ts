@@ -3,9 +3,8 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
 /**
- * Provider transcripts are read for their recorded numbers only. Nothing from a message body is
- * parsed, kept, or shown; both providers hand their line handler the raw text and take a sample or
- * a token count out of it.
+ * Provider transcripts are read for their recorded numbers only. Each line goes to the provider's
+ * handler, which extracts a sample or a token count; no message content is kept or shown.
  */
 
 /**
@@ -39,16 +38,16 @@ async function directories(root: string, depth: number, found: string[]): Promis
 }
 
 /**
- * Modification time is the only sound filter. A resumed session appends to the file it started in,
- * so neither the file name nor Codex's date-partitioned folders say which days a file now holds,
- * while a file containing a day's records cannot have been written before that day.
+ * Modification time is the only reliable filter. A resumed session appends to its original file,
+ * so neither the file name nor Codex's dated folders tell which days a file holds. A file with a
+ * day's records cannot have been last written before that day.
  */
 async function changedSince(files: readonly string[], since: number): Promise<string[]> {
   const modified = await Promise.all(
     files.map((file) =>
       fs.stat(file).then(
         (stats) => stats.mtimeMs,
-        // A file that went away between listing and checking is simply not part of this scan.
+        // A file removed between listing and checking is skipped.
         () => 0,
       ),
     ),

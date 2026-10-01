@@ -16,7 +16,7 @@ export function antigravityDirectory(): string {
 
 /**
  * Conversation writes signal local activity only; account percentages come from the hub. The hub
- * this extension starts writes beside this directory but not into it, so a read never triggers one.
+ * this extension starts does not write into this directory, so a read does not trigger another.
  */
 export function antigravityConversationsPath(): string {
   return path.join(antigravityDirectory(), "conversations");

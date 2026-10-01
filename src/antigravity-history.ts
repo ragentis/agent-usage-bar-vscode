@@ -6,16 +6,16 @@ import { addDay, localDay, type HistoryScan } from "./history";
 import { isRecord, validDate } from "./usage";
 
 /**
- * Antigravity keeps each conversation in a database of its own, which only its own hub can read.
- * The hub is asked for two things per conversation: the tokens of every model call, and the steps,
- * whose times date those calls. The steps answer also carries the conversation itself; nothing of
- * it but a step's time is taken. As for Claude Code, cache reads are left out.
+ * Each Antigravity conversation is a database that only its hub can read. Two hub calls are made
+ * per conversation: one returns the tokens of every model call, the other the steps, whose times
+ * date those calls. The steps reply also contains the conversation content; only step times are
+ * read. Cache reads are excluded, as for Claude Code.
  */
 
 const DATABASE_SUFFIX = ".db";
 const LOG_SUFFIX = ".db-wal";
 
-/** The id goes into a request, so a file name that is not one is never passed on. */
+/** The id is sent in a request, so file names that are not ids are skipped. */
 const CONVERSATION_ID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
 
 /**
@@ -25,10 +25,10 @@ const CONVERSATION_ID = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/;
  */
 const QUIET_MS = 60_000;
 
-/** A log nobody has written for this long was left behind, and the conversation is not in use. */
+/** A log not written for this long is treated as left over; the conversation is not in use. */
 const ABANDONED_MS = 30 * 60_000;
 
-/** Comfortably above any single call, so a malformed count cannot flatten the whole scale. */
+/** Above any real call. Caps a malformed count so it cannot dominate the scale. */
 const MAX_CALL_TOKENS = 5_000_000;
 
 interface FileState {
@@ -52,7 +52,7 @@ async function fileState(file: string): Promise<FileState | null> {
   }
 }
 
-/** Conversations written since `since`. Reading one leaves an empty log behind, which is not a write. */
+/** Conversations written since `since`. An empty log left by a read does not count as a write. */
 export async function listConversations(directory: string, since: number): Promise<Conversation[]> {
   let names: string[];
   try {
@@ -115,7 +115,7 @@ function stepTime(step: unknown): Date | null {
     : null;
 }
 
-/** A call the answers cannot date is left out rather than placed on a guessed day. */
+/** A call without a dated step is skipped instead of being assigned a guessed day. */
 export function tokensByDay(metadata: unknown, steps: unknown): Record<string, number> {
   const calls =
     isRecord(metadata) && Array.isArray(metadata.generatorMetadata)
@@ -149,9 +149,9 @@ interface ChangeWatcher {
 const WRITE_SLACK_MS = 1_000;
 
 /**
- * Reading a conversation makes SQLite recreate its empty companion files, which a file watcher
- * reports like any other change. Passing those on would have every scan answered by another one,
- * so a change counts only when some conversation was really written since the last one.
+ * Reading a conversation makes SQLite recreate its empty companion files, and the file watcher
+ * reports that as a change. Reporting it would make every scan trigger another scan, so a change
+ * counts only when a conversation was written since the previous change.
  */
 export function realWritesOnly(
   watcher: ChangeWatcher,
@@ -190,9 +190,8 @@ function signatureOf({ database }: Conversation): string {
 }
 
 /**
- * What each conversation came to is remembered between scans, for two reasons. A hub is then
- * started only when a settled conversation has changed, and a conversation that cannot be read
- * right now still counts with what it held when it last could.
+ * Per-conversation totals are kept between scans. A hub is then started only when a settled
+ * conversation has changed, and a conversation that cannot be read now keeps its last known total.
  */
 export class AntigravityHistory {
   private readonly known = new Map<string, Known>();
@@ -204,10 +203,10 @@ export class AntigravityHistory {
   ) {}
 
   /**
-   * A window that has read nothing yet would have to ask for every conversation in the span. When
-   * none was written since the last scan, whichever window ran it, the stored days already hold
-   * them all. The slack covers a conversation that scan had to leave because it was in use: within
-   * half an hour of its last write it is still looked for, and after that the scan read it anyway.
+   * A window with no totals in memory would have to ask for every conversation in the span. It
+   * skips that when no conversation was written since the last stored scan, because the stored days
+   * are then complete. The check reaches `ABANDONED_MS` further back to include a conversation that
+   * scan skipped as in use.
    */
   async scan(since: number, scannedAt = 0): Promise<HistoryScan> {
     if (this.known.size === 0 && scannedAt > 0) {
@@ -233,7 +232,7 @@ export class AntigravityHistory {
           const metadata = await call("GetCascadeTrajectoryGeneratorMetadata", request);
           // oxlint-disable-next-line no-await-in-loop
           const steps = await call("GetCascadeTrajectorySteps", request);
-          // A conversation the hub will not hand over counts for nothing until it changes.
+          // A conversation the hub cannot return counts as zero until it changes.
           const readable = metadata.status === 200 && steps.status === 200;
           this.known.set(conversation.id, {
             signature: signatureOf(conversation),

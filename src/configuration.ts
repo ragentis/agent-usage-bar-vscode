@@ -5,7 +5,7 @@
 export type DisplayMode = "compact" | "full";
 export type PercentageMode = "used" | "remaining";
 export type WarnWhen = "threshold" | "overPace";
-/** Not a setting: the strip's hue is written out per theme; theme colors carry no opacity. */
+/** Not a setting. The history strip's hue is hard-coded per theme; see `tooltip.ts`. */
 export type ThemeKind = "light" | "dark";
 
 export interface ExtensionConfiguration {

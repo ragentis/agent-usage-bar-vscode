@@ -17,7 +17,7 @@ const IDLE_STOP_MS = 10 * 60_000;
 const HOLD_JITTER_MS = 2_000;
 /**
  * A refusal that states no wait is retried after a minute, then after twice the previous wait. The
- * limit is shared with other clients, so a fixed minute could keep it tripped by the retries alone.
+ * limit is shared with other clients, so retrying every minute could keep it exceeded.
  */
 const REFUSAL_BASE_WAIT_MS = 60_000;
 const REFUSAL_MAX_WAIT_MS = 15 * 60_000;
@@ -66,7 +66,7 @@ interface ProviderState {
   /** Last local read; used only for process idling, not refresh coordination. */
   usedAt: number | null;
   adoptedAt: number;
-  /** Derived from transcripts on its own schedule, so it is held beside the reading, not in it. */
+  /** Scanned on its own schedule, so it is stored separately from the reading. */
   history: DailyTotals | null;
 }
 
@@ -146,7 +146,7 @@ export class UsageBar {
     );
   }
 
-  /** Whether an enabled provider has given up its item because its agent is not on this machine. */
+  /** Whether an enabled provider's item is hidden because its agent is not on this machine. */
   isHidden(provider: ProviderId): boolean {
     const target = this.providers.find((candidate) => candidate.id === provider);
     return target !== undefined && this.hidden(target);
@@ -274,8 +274,8 @@ export class UsageBar {
   }
 
   /**
-   * Publication time also carries failures without a snapshot, allowing an initially loading window
-   * to adopt a no-sign-in result. `mergeView` preserves the last good reading.
+   * Publication time changes for failures too, so a window that is still loading adopts a
+   * no-sign-in result. `mergeView` preserves the last good reading.
    */
   private adopt(provider: Provider): SharedEntry | null {
     const shared = this.reads.latest(provider.id);
@@ -350,9 +350,8 @@ export class UsageBar {
   }
 
   /**
-   * An agent that is not on this machine gives up its item. The one exception is the untouched
-   * state, with every provider on and no agent found: then every item stays, so the tooltips can
-   * say what to install. Switching any provider off ends it, so doing that never brings items back.
+   * The item of an absent agent is hidden. Exception: when every provider is enabled and every
+   * agent is absent, all items stay so the tooltips can say what to install.
    */
   private hidden(provider: Provider): boolean {
     return (
@@ -363,7 +362,7 @@ export class UsageBar {
     );
   }
 
-  /** Whether an absent agent keeps its item depends on the others, so their changes repaint it. */
+  /** An absent agent's visibility depends on the other providers, so their changes repaint it. */
   private paintDependents(changed: Provider): void {
     for (const other of this.providers) {
       if (other !== changed && other.state.view?.absent && other.isEnabled(this.configuration)) {
@@ -406,7 +405,7 @@ export class UsageBar {
       if (provider.isEnabled(this.configuration)) {
         provider.watcher.start(() => {
           void this.refresh({ only: provider.id });
-          // The same transcript write that proves the account was used moves that day's total.
+          // The write that triggers a usage refresh also changes that day's history total.
           this.onActivity(provider.id);
         });
       } else {
