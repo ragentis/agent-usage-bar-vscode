@@ -151,8 +151,17 @@ export function parseCredentials(raw: string | null): ClaudeCredentials | null {
       typeof oauth.expiresAt === "number" && Number.isFinite(oauth.expiresAt)
         ? oauth.expiresAt
         : null,
-    plan: validLabel(oauth.subscriptionType),
+    plan: planWithTier(validLabel(oauth.subscriptionType), oauth.rateLimitTier),
   };
+}
+
+/** `subscriptionType` says only "max"; the rate-limit tier carries the 5x or 20x multiplier. */
+function planWithTier(plan: string | null, tier: unknown): string | null {
+  if (!plan || typeof tier !== "string") {
+    return plan;
+  }
+  const multiplier = /_(\d+x)$/.exec(tier)?.[1];
+  return multiplier && tier.endsWith(`_${plan}_${multiplier}`) ? `${plan}_${multiplier}` : plan;
 }
 
 export function noSignInMessage(platform: NodeJS.Platform = process.platform): string {

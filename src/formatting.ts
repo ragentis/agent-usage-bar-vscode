@@ -42,6 +42,16 @@ export function formatRemaining(resetsAt: Date | null, now = new Date()): string
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
+export function formatPlan(plan: string): string {
+  if (!/^[a-z0-9]+(?:[_-][a-z0-9]+)*$/.test(plan)) {
+    return plan;
+  }
+  return plan
+    .split(/[_-]/)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
 /**
  * Retry waits use a fixed clock time because changing countdown text rebuilds and closes an open
  * hover. No wait outlives an hour, so the date is unnecessary.

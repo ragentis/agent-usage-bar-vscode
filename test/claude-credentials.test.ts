@@ -66,6 +66,15 @@ test("the stored sign-in is read, and nothing unusable is mistaken for one", () 
   expect(parseCredentials(stored({ expiresAt: "soon" }))?.expiresAt).toBeNull();
 });
 
+test("the rate-limit tier adds the Max multiplier, and only when it names the same plan", () => {
+  const plan = (overrides: Record<string, unknown>) => parseCredentials(stored(overrides))?.plan;
+  expect(plan({ rateLimitTier: "default_claude_max_20x" })).toBe("max_20x");
+  expect(plan({ rateLimitTier: "default_claude_max_5x" })).toBe("max_5x");
+  expect(plan({ rateLimitTier: "default_claude_ai" })).toBe("max");
+  expect(plan({ subscriptionType: "pro", rateLimitTier: "default_claude_max_20x" })).toBe("pro");
+  expect(plan({ rateLimitTier: 20 })).toBe("max");
+});
+
 test("the file is read only when it is a file, and only while it is a plausible size", async () => {
   const source = fileSource(directory);
   expect(await source()).toBeNull();

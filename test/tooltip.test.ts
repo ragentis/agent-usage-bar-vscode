@@ -264,7 +264,7 @@ test("a reading is drawn as a header, a block per window, and where it came from
   expect(text).toContain(`<p></p><hr><h6></h6>${STEP}`);
   expect(text).toContain(`<p></p>${STEP}<hr><h1></h1>`);
   expect(text).toContain(`${INDENT}$(agent-usage-bar-claude) <b>Claude Code usage</b>`);
-  expect(text).toContain("· plus");
+  expect(text).toContain("· Plus");
   const session = windowBlock(text, "5-hour");
   expect(session).toMatch(heading("5-hour", "12%"));
   expect(session).toContain(">used<");

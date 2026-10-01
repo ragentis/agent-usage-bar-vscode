@@ -1,7 +1,13 @@
 import { expect, test } from "vitest";
 import type { ExtensionConfiguration } from "../src/configuration";
 import type { UsageSnapshot } from "../src/usage";
-import { buildStatusText, formatMoment, formatRemaining, pickSeverity } from "../src/formatting";
+import {
+  buildStatusText,
+  formatMoment,
+  formatPlan,
+  formatRemaining,
+  pickSeverity,
+} from "../src/formatting";
 
 const now = new Date("2026-08-01T10:00:00Z");
 const snapshot: UsageSnapshot = {
@@ -165,4 +171,12 @@ test("a blocked account is an error however low the percentage is", () => {
   expect(pickSeverity({ ...snapshot, blocked: "Spend control reached" }, configure(), now)).toBe(
     "error",
   );
+});
+
+test("a plan slug reads as a name, and anything else is shown as given", () => {
+  expect(formatPlan("plus")).toBe("Plus");
+  expect(formatPlan("max_20x")).toBe("Max 20x");
+  expect(formatPlan("self-serve")).toBe("Self Serve");
+  expect(formatPlan("Team Plan")).toBe("Team Plan");
+  expect(formatPlan("a\n\nb")).toBe("a\n\nb");
 });

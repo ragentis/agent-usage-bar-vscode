@@ -2,6 +2,7 @@ import type { ExtensionConfiguration, ThemeKind } from "./configuration";
 import {
   formatMoment,
   formatPercent,
+  formatPlan,
   type ResolvedWindow,
   resolveWindows,
   severityFor,
@@ -477,7 +478,9 @@ export function buildTooltip(
   now = new Date(),
   history: DailyTotals | null = null,
 ): string {
-  const plan = snapshot.plan ? ` ${dim(`· ${wrapped(snapshot.plan, title.length + 5)}`)}` : "";
+  const plan = snapshot.plan
+    ? ` ${dim(`· ${wrapped(formatPlan(snapshot.plan), title.length + 5)}`)}`
+    : "";
   const windows = resolveWindows(snapshot, now);
   // EDGE supplies outer padding; GAP plus STEP compensates for the rule's negative bottom margin.
   const blocks = [
