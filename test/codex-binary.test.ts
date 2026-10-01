@@ -15,6 +15,8 @@ beforeEach(async () => {
   home = await fs.mkdtemp(path.join(os.tmpdir(), "agent-usage-bar-home-"));
   // Keep Windows candidates inside the temporary home on every runner.
   vi.stubEnv("LOCALAPPDATA", path.join(home, "AppData", "Local"));
+  // One entry, so the runner's own PATH and its separator stay out of the Windows cases.
+  vi.stubEnv("PATH", path.join(home, "npm"));
 });
 
 afterEach(async () => {
@@ -49,6 +51,33 @@ test("the newest versioned install wins, because the directory name carries no o
 });
 
 test("with no install found, the bare name is left for PATH to resolve", async () => {
+  expect(await resolveCodexBinary(home, "win32")).toBe("codex");
+});
+
+const NPM_PACKAGE = ["npm", "node_modules", "@openai", "codex", "node_modules", "@openai"];
+
+test("an npm install is run by its native binary, because its shim on PATH cannot be spawned", async () => {
+  await install("npm", "codex.cmd");
+  const native = await install(
+    ...NPM_PACKAGE,
+    "codex-win32-arm64",
+    "vendor",
+    "aarch64-pc-windows-msvc",
+    "bin",
+    "codex.exe",
+  );
+  expect(await resolveCodexBinary(home, "win32")).toBe(native);
+
+  const plugin = await install(".codex", "plugins", ".plugin-appserver", "codex.exe");
+  expect(await resolveCodexBinary(home, "win32")).toBe(native);
+  expect(plugin).not.toBe(native);
+
+  const installed = await install(...WINDOWS_BIN, "abc123", "codex.exe");
+  expect(await resolveCodexBinary(home, "win32")).toBe(installed);
+});
+
+test("a shim with no native binary beside it is not handed to spawn", async () => {
+  await install("npm", "codex.cmd");
   expect(await resolveCodexBinary(home, "win32")).toBe("codex");
 });
 
