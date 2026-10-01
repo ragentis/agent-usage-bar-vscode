@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
+import type { ProviderId } from "../usage";
 import { resolveConfiguration, type ExtensionConfiguration, type ThemeKind } from "./configuration";
-import type { ProviderId } from "./usage";
 
 const SECTION = "agentUsageBar";
 

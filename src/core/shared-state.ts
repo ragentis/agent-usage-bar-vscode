@@ -6,7 +6,7 @@ import {
   type UsageSnapshot,
   type UsageWindow,
   type WindowKind,
-} from "./usage";
+} from "../usage";
 import {
   isRecord,
   validLabel,
@@ -14,7 +14,7 @@ import {
   validMillis,
   validUsedPercent,
   validWindowMinutes,
-} from "./validation";
+} from "../validation";
 
 /**
  * The version is part of the key so an incompatible shape is ignored instead of misread. Bump it

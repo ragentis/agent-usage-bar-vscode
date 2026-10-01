@@ -1,6 +1,6 @@
-import { antigravityConversationsPath } from "./antigravity";
+import type { ProviderWatcher } from "../../core/usage-bar";
 import { listConversations } from "./antigravity-history";
-import type { ProviderWatcher } from "./usage-bar";
+import { antigravityConversationsPath } from "./antigravity";
 
 /** File times and the clock are compared across a debounce, so a write is given this much slack. */
 const WRITE_SLACK_MS = 1_000;

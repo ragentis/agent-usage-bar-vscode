@@ -1,6 +1,6 @@
+import type { ProviderId, ProviderView } from "../usage";
 import { MIN_REFRESH_INTERVAL_SECONDS } from "./configuration";
 import type { SharedEntry, SharedUsageState } from "./shared-state";
-import type { ProviderId, ProviderView } from "./usage";
 
 const INCUMBENT_GRACE_MS = 5_000;
 

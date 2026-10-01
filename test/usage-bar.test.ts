@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import type { ExtensionConfiguration } from "../src/configuration";
-import { ReadCoordinator } from "../src/read-coordinator";
-import { SharedUsageState, type SharedStore } from "../src/shared-state";
-import { UsageBar, type ProviderPort } from "../src/usage-bar";
+import type { ExtensionConfiguration } from "../src/core/configuration";
+import { ReadCoordinator } from "../src/core/read-coordinator";
+import { SharedUsageState, type SharedStore } from "../src/core/shared-state";
+import { UsageBar, type ProviderPort } from "../src/core/usage-bar";
 import {
   MAX_RETRY_WAIT_MS,
   type ProviderId,

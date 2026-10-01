@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { codexSample } from "../src/codex-history";
+import { codexSample } from "../src/providers/codex/codex-history";
 
 /**
  * Codex has moved the weekly window between `primary` and `secondary` across versions, and both

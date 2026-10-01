@@ -1,13 +1,13 @@
 import { expect, test } from "vitest";
-import type { ExtensionConfiguration } from "../src/configuration";
-import type { UsageSnapshot } from "../src/usage";
+import type { ExtensionConfiguration } from "../src/core/configuration";
 import {
   buildStatusText,
   formatMoment,
   formatPlan,
   formatRemaining,
   pickSeverity,
-} from "../src/formatting";
+} from "../src/ui/formatting";
+import type { UsageSnapshot } from "../src/usage";
 
 const now = new Date("2026-08-01T10:00:00Z");
 const snapshot: UsageSnapshot = {

@@ -1,4 +1,4 @@
-import type { UsageWindow, WindowKind } from "./usage";
+import type { UsageWindow, WindowKind } from "../usage";
 
 /**
  * Session windows start with activity and support a forecast. Weekly windows include inactive time,

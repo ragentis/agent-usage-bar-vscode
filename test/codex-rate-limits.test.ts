@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { parseRateLimitsResponse } from "../src/codex-rate-limits";
+import { parseRateLimitsResponse } from "../src/providers/codex/codex-rate-limits";
 
 const fetchedAt = new Date("2026-08-02T12:12:53.681Z");
 

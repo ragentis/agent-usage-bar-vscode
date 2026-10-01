@@ -2,7 +2,7 @@
  * Settings and validation stay independent of `vscode`; only `settings.ts` crosses the host boundary.
  */
 
-import { PROVIDER_IDS, type ProviderId } from "./usage";
+import { PROVIDER_IDS, type ProviderId } from "../usage";
 
 export type DisplayMode = "compact" | "full";
 export type PercentageMode = "used" | "remaining";

@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
-import { MIN_REFRESH_INTERVAL_SECONDS } from "../src/configuration";
-import { ReadCoordinator } from "../src/read-coordinator";
-import { SharedUsageState, type SharedEntry, type SharedStore } from "../src/shared-state";
+import { MIN_REFRESH_INTERVAL_SECONDS } from "../src/core/configuration";
+import { ReadCoordinator } from "../src/core/read-coordinator";
+import { SharedUsageState, type SharedEntry, type SharedStore } from "../src/core/shared-state";
 import type { ProviderId } from "../src/usage";
 
 const FLOOR_MS = MIN_REFRESH_INTERVAL_SECONDS * 1_000;

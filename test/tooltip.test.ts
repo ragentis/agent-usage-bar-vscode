@@ -1,8 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { expect, test } from "vitest";
-import type { ExtensionConfiguration } from "../src/configuration";
-import { HISTORY_LEVELS, localDay, shiftDay, type DailyTotals } from "../src/history";
-import { buildMessageTooltip, buildTooltip, escapeHtml, TOOLTIP_COMMANDS } from "../src/tooltip";
+import type { ExtensionConfiguration } from "../src/core/configuration";
+import { HISTORY_LEVELS, localDay, shiftDay, type DailyTotals } from "../src/history/history";
+import { buildMessageTooltip, buildTooltip, escapeHtml, TOOLTIP_COMMANDS } from "../src/ui/tooltip";
 import type { UsageSnapshot } from "../src/usage";
 import { isRecord } from "../src/validation";
 

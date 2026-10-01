@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { CodexAppServer, type CodexProcess } from "../src/codex-appserver";
+import { CodexAppServer, type CodexProcess } from "../src/providers/codex/codex-appserver";
 import { isRecord } from "../src/validation";
 
 /**

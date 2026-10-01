@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { FileWatcher } from "../src/watcher";
+import { FileWatcher } from "../src/core/watcher";
 
 /**
  * These tests use the real platform watcher; the CI matrix covers inotify, FSEvents, and

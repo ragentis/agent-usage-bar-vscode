@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { formatPace, onPace, paceFor, type Pace } from "../src/pace";
+import { formatPace, onPace, paceFor, type Pace } from "../src/ui/pace";
 import type { UsageWindow } from "../src/usage";
 
 /**

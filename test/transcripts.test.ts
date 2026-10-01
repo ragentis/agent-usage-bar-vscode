@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import { forEachTranscriptLine } from "../src/transcripts";
+import { forEachTranscriptLine } from "../src/history/transcripts";
 
 /**
  * Real files, because the cases that matter are where the stream cuts the text: a transcript is

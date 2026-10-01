@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { SharedUsageState, type SharedEntry, type SharedStore } from "../src/shared-state";
+import { SharedUsageState, type SharedEntry, type SharedStore } from "../src/core/shared-state";
 import { MAX_RETRY_WAIT_MS, type UsageSnapshot } from "../src/usage";
 
 /**

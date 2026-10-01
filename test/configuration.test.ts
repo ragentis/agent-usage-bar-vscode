@@ -9,7 +9,7 @@ import {
   MIN_REFRESH_INTERVAL_SECONDS,
   resolveConfiguration,
   type ExtensionConfiguration,
-} from "../src/configuration";
+} from "../src/core/configuration";
 import { isRecord } from "../src/validation";
 
 function configure(overrides: Partial<ExtensionConfiguration> = {}): ExtensionConfiguration {

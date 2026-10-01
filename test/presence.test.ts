@@ -2,7 +2,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import { confirmAbsence } from "../src/presence";
+import { confirmAbsence } from "../src/core/presence";
 import type { ProviderResult } from "../src/usage";
 
 let home = "";

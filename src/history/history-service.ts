@@ -1,4 +1,6 @@
-import { providerEnabled, type ExtensionConfiguration } from "./configuration";
+import { providerEnabled, type ExtensionConfiguration } from "../core/configuration";
+import { PROVIDER_IDS, type ProviderId } from "../usage";
+import type { StoredHistory, UsageHistoryState } from "./history-store";
 import {
   dayStart,
   keepHigher,
@@ -11,8 +13,6 @@ import {
   type HistoryScan,
   type HistoryUnit,
 } from "./history";
-import type { StoredHistory, UsageHistoryState } from "./history-store";
-import { PROVIDER_IDS, type ProviderId } from "./usage";
 
 const UNITS: Record<ProviderId, HistoryUnit> = {
   claude: "tokens",

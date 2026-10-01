@@ -1,9 +1,9 @@
 import * as vscode from "vscode";
-import { providerLabel, type ExtensionConfiguration } from "./configuration";
+import { providerLabel, type ExtensionConfiguration } from "../core/configuration";
+import type { DailyTotals } from "../history/history";
+import { PROVIDER_NAMES, type ProviderId, type ProviderView } from "../usage";
 import { buildStatusText, formatAge, pickSeverity, type Severity } from "./formatting";
-import type { DailyTotals } from "./history";
 import { buildMessageTooltip, buildTooltip } from "./tooltip";
-import { PROVIDER_NAMES, type ProviderId, type ProviderView } from "./usage";
 
 /**
  * Priorities just above the commonly used 100 keep the provider items adjacent when possible;

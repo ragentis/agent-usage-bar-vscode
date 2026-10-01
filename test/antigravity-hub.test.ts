@@ -1,6 +1,5 @@
 import * as path from "node:path";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { antigravityBinary } from "../src/antigravity";
 import {
   AntigravityHub,
   parsePlan,
@@ -8,7 +7,8 @@ import {
   type Hub,
   type HubProcess,
   type HubReply,
-} from "../src/antigravity-hub";
+} from "../src/providers/antigravity/antigravity-hub";
+import { antigravityBinary } from "../src/providers/antigravity/antigravity";
 
 const fetchedAt = new Date("2026-10-01T00:32:00.000Z");
 

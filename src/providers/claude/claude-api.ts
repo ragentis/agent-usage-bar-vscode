@@ -1,10 +1,3 @@
-import { PINNED_CLI_VERSION } from "./claude-cli-version";
-import {
-  hasExpired,
-  noSignInMessage,
-  readClaudeCredentials,
-  type CredentialSource,
-} from "./claude-credentials";
 import {
   cappedRetryAt,
   sortWindows,
@@ -13,8 +6,15 @@ import {
   type UsageSnapshot,
   type UsageWindow,
   type WindowKind,
-} from "./usage";
-import { isRecord, validDate, validLabel, validUsedPercent } from "./validation";
+} from "../../usage";
+import { isRecord, validDate, validLabel, validUsedPercent } from "../../validation";
+import { PINNED_CLI_VERSION } from "./claude-cli-version";
+import {
+  hasExpired,
+  noSignInMessage,
+  readClaudeCredentials,
+  type CredentialSource,
+} from "./claude-credentials";
 
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const RESETS_URL = "https://api.anthropic.com/api/oauth/usage?cedar_ember=1";

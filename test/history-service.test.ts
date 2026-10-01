@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import type { ExtensionConfiguration } from "../src/configuration";
-import { localDay, shiftDay, type DailyTotals, type HistoryScan } from "../src/history";
-import { HistoryService } from "../src/history-service";
-import { UsageHistoryState } from "../src/history-store";
-import type { SharedStore } from "../src/shared-state";
+import type { ExtensionConfiguration } from "../src/core/configuration";
+import type { SharedStore } from "../src/core/shared-state";
+import { HistoryService } from "../src/history/history-service";
+import { UsageHistoryState } from "../src/history/history-store";
+import { localDay, shiftDay, type DailyTotals, type HistoryScan } from "../src/history/history";
 import type { ProviderId } from "../src/usage";
 
 /**

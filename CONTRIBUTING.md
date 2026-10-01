@@ -49,6 +49,15 @@ The hook catches invalid local subjects earliest, and the pull request check cat
 
 The layout follows one rule: **testable modules do not import anything that requires an extension host.** `usage-bar.ts` receives providers through ports instead of constructing them. Only the wiring in `extension.ts` needs to build the real providers; the modules above it remain plain TypeScript that can run under `vitest`.
 
+`src/` is grouped by role. `extension.ts`, `usage.ts`, and `validation.ts` stay at its root.
+
+| Folder | Contents |
+| --- | --- |
+| `core/` | Provider coordination, shared state, settings, and file watching. |
+| `providers/claude/`, `providers/codex/`, `providers/antigravity/` | Everything specific to one agent. |
+| `history/` | The data behind the daily activity strip. |
+| `ui/` | The status bar item, tooltip, menu, and their formatting. |
+
 | File | External dependency | Responsibility |
 | --- | --- | --- |
 | `extension.ts` | vscode | Activation and wiring. The only module that constructs providers. |
@@ -204,7 +213,7 @@ Two tests keep the manifest and the asset together: one pins every `fontPath` to
 
 The configuration is reproduced exactly on a re-run, glyph ids included, but the font is not: Fontello stamps each build, so the `.woff` differs by a few bytes even when nothing about the glyphs changed. A diff on that file with no configuration change beside it means nothing was edited.
 
-The numbers live at the top of [build-font.mjs](scripts/build-font.mjs). `ADVANCE` is the one to reach for first: thirty of it should come to the width the usage bars occupy, and that width is measured, not derived — the bars are 314 space cells shrunk by six `<small>` elements, the space ratio belongs to the theme's font, and `<small>` does not scale by an exact factor in this renderer, so the arithmetic drifts a few pixels over the row. Compare against a rendered tooltip. `HEIGHTS` must keep one entry per step plus the idle mark, and `HISTORY_LEVELS` in [history.ts](src/history.ts) must agree with it; a test pins the manifest against that count so a missing glyph fails the build rather than drawing a placeholder box. `MARK` and `HALO` place the weekly mark: its reach above and below the baseline is measured against the bar in a rendered tooltip, since the bar's height belongs to the theme's font and the hover aligns a codicon `middle`, which sets the glyph's baseline about a pixel under the text's.
+The numbers live at the top of [build-font.mjs](scripts/build-font.mjs). `ADVANCE` is the one to reach for first: thirty of it should come to the width the usage bars occupy, and that width is measured, not derived — the bars are 314 space cells shrunk by six `<small>` elements, the space ratio belongs to the theme's font, and `<small>` does not scale by an exact factor in this renderer, so the arithmetic drifts a few pixels over the row. Compare against a rendered tooltip. `HEIGHTS` must keep one entry per step plus the idle mark, and `HISTORY_LEVELS` in [history.ts](src/history/history.ts) must agree with it; a test pins the manifest against that count so a missing glyph fails the build rather than drawing a placeholder box. `MARK` and `HALO` place the weekly mark: its reach above and below the baseline is measured against the bar in a rendered tooltip, since the bar's height belongs to the theme's font and the hover aligns a codicon `middle`, which sets the glyph's baseline about a pixel under the text's.
 
 ## Releasing
 

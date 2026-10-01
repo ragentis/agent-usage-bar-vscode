@@ -1,15 +1,15 @@
-import { configurationEffect, providerEnabled, type ExtensionConfiguration } from "./configuration";
-import { formatMoment } from "./formatting";
-import type { DailyTotals } from "./history";
-import type { ReadCoordinator } from "./read-coordinator";
-import type { SharedEntry } from "./shared-state";
+import type { DailyTotals } from "../history/history";
+import { formatMoment } from "../ui/formatting";
 import {
   cappedRetryAt,
   mergeView,
   type ProviderId,
   type ProviderResult,
   type ProviderView,
-} from "./usage";
+} from "../usage";
+import { configurationEffect, providerEnabled, type ExtensionConfiguration } from "./configuration";
+import type { ReadCoordinator } from "./read-coordinator";
+import type { SharedEntry } from "./shared-state";
 
 const TICK_INTERVAL_MS = 5_000;
 /** How long an unused provider process is kept before it is stopped; see `stopIfIdle`. */

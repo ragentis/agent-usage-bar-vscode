@@ -1,4 +1,13 @@
-import type { ExtensionConfiguration, ThemeKind } from "./configuration";
+import type { ExtensionConfiguration, ThemeKind } from "../core/configuration";
+import {
+  dayStart,
+  HISTORY_DAYS,
+  historyStrip,
+  localDay,
+  type DailyTotals,
+  type HistoryStrip,
+} from "../history/history";
+import type { SnapshotSource, UsageSnapshot, WindowKind } from "../usage";
 import {
   formatMoment,
   formatPercent,
@@ -8,16 +17,7 @@ import {
   severityFor,
   type Severity,
 } from "./formatting";
-import {
-  dayStart,
-  HISTORY_DAYS,
-  historyStrip,
-  localDay,
-  type DailyTotals,
-  type HistoryStrip,
-} from "./history";
 import { formatPace, paceFor } from "./pace";
-import type { SnapshotSource, UsageSnapshot, WindowKind } from "./usage";
 
 /**
  * Tooltip Markdown is trusted to enable HTML, theme icons, and command links, so every external

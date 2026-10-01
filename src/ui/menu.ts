@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
-import { providerEnabled, type ExtensionConfiguration } from "./configuration";
-import { updateSetting } from "./settings";
-import { PROVIDER_IDS, PROVIDER_NAMES, type ProviderId } from "./usage";
+import { providerEnabled, type ExtensionConfiguration } from "../core/configuration";
+import { updateSetting } from "../core/settings";
+import { PROVIDER_IDS, PROVIDER_NAMES, type ProviderId } from "../usage";
 
 interface MenuItem extends vscode.QuickPickItem {
   action?: "settings" | "refresh";

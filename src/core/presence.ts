@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
-import type { ProviderResult } from "./usage";
-import { isNotFound } from "./validation";
+import type { ProviderResult } from "../usage";
+import { isNotFound } from "../validation";
 
 /**
  * A read that finds nothing to run or read does not prove the agent is missing: an install this

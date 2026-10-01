@@ -1,6 +1,6 @@
-import type { ExtensionConfiguration, PercentageMode } from "./configuration";
+import type { ExtensionConfiguration, PercentageMode } from "../core/configuration";
+import type { UsageSnapshot, UsageWindow, WindowKind } from "../usage";
 import { onPace } from "./pace";
-import type { UsageSnapshot, UsageWindow, WindowKind } from "./usage";
 
 export type Severity = "normal" | "warning" | "error";
 

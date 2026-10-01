@@ -2,7 +2,6 @@ import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import * as os from "node:os";
-import { antigravityBinary } from "./antigravity";
 import {
   sortWindows,
   unavailable,
@@ -11,7 +10,7 @@ import {
   type UsageSnapshot,
   type UsageWindow,
   type WindowKind,
-} from "./usage";
+} from "../../usage";
 import {
   isNotFound,
   isRecord,
@@ -19,7 +18,8 @@ import {
   validLabel,
   validMessage,
   validUsedPercent,
-} from "./validation";
+} from "../../validation";
+import { antigravityBinary } from "./antigravity";
 
 const STARTUP_TIMEOUT_MS = 20_000;
 const REQUEST_TIMEOUT_MS = 10_000;

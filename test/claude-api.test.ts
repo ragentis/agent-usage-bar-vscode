@@ -8,9 +8,9 @@ import {
   parseLimitResets,
   parseRetryAfter,
   parseUsageLimits,
-} from "../src/claude-api";
-import { newestCliVersion, PINNED_CLI_VERSION } from "../src/claude-cli-version";
-import { fileSource } from "../src/claude-credentials";
+} from "../src/providers/claude/claude-api";
+import { newestCliVersion, PINNED_CLI_VERSION } from "../src/providers/claude/claude-cli-version";
+import { fileSource } from "../src/providers/claude/claude-credentials";
 import { MAX_RETRY_WAIT_MS, type ProviderResult } from "../src/usage";
 
 const fetchedAt = new Date("2026-08-02T11:36:00Z");

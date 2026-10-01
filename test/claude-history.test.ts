@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { claudeUsage } from "../src/claude-history";
+import { claudeUsage } from "../src/providers/claude/claude-history";
 
 /**
  * A resumed session replays earlier messages into its own transcript, so the same message is on disk

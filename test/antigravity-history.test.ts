@@ -2,16 +2,16 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
+import { localDay } from "../src/history/history";
 import {
   AntigravityHistory,
   isSettled,
   listConversations,
   tokensByDay,
   type Conversation,
-} from "../src/antigravity-history";
-import { realWritesOnly } from "../src/antigravity-watcher";
-import type { HubReply } from "../src/antigravity-hub";
-import { localDay } from "../src/history";
+} from "../src/providers/antigravity/antigravity-history";
+import type { HubReply } from "../src/providers/antigravity/antigravity-hub";
+import { realWritesOnly } from "../src/providers/antigravity/antigravity-watcher";
 
 const MONDAY = "2026-09-28T12:00:00.000Z";
 const TUESDAY = "2026-09-29T12:00:00.000Z";

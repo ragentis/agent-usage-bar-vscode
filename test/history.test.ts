@@ -1,4 +1,6 @@
 import { expect, test } from "vitest";
+import type { SharedStore } from "../src/core/shared-state";
+import { UsageHistoryState } from "../src/history/history-store";
 import {
   dayStart,
   historyStrip,
@@ -10,9 +12,7 @@ import {
   scanFromSamples,
   shiftDay,
   type UsageSample,
-} from "../src/history";
-import { UsageHistoryState } from "../src/history-store";
-import type { SharedStore } from "../src/shared-state";
+} from "../src/history/history";
 
 /**
  * Daily totals are derived from a counter that only rises until it resets, so the aggregation is

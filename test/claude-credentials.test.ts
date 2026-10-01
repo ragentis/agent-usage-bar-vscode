@@ -14,7 +14,7 @@ import {
   readClaudeCredentials,
   type CredentialSource,
   type KeychainResult,
-} from "../src/claude-credentials";
+} from "../src/providers/claude/claude-credentials";
 import { validMessage } from "../src/validation";
 
 /**

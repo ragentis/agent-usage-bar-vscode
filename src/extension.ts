@@ -1,32 +1,35 @@
 import * as vscode from "vscode";
-import { antigravityConversationsPath, antigravityDirectory } from "./antigravity";
-import { AntigravityHistory } from "./antigravity-history";
-import { AntigravityHub } from "./antigravity-hub";
-import { realWritesOnly } from "./antigravity-watcher";
-import { claudeDirectory, claudeSessionsPath } from "./claude";
-import { fetchClaudeUsage } from "./claude-api";
-import { nativeCliVersions, newestCliVersion } from "./claude-cli-version";
-import { scanClaudeHistory } from "./claude-history";
-import { codexDirectory, codexSessionsPath } from "./codex";
-import { CodexAppServer } from "./codex-appserver";
-import { scanCodexHistory } from "./codex-history";
-import { HistoryService } from "./history-service";
-import { UsageHistoryState } from "./history-store";
-import { openSettings, showMenu } from "./menu";
-import { confirmAbsence } from "./presence";
-import { ReadCoordinator } from "./read-coordinator";
-import { affectsSettings, readConfiguration } from "./settings";
-import { SharedUsageState } from "./shared-state";
+import { confirmAbsence } from "./core/presence";
+import { ReadCoordinator } from "./core/read-coordinator";
+import { affectsSettings, readConfiguration } from "./core/settings";
+import { SharedUsageState } from "./core/shared-state";
+import { UsageBar, type ProviderDisplay, type ProviderPort } from "./core/usage-bar";
+import { FileWatcher } from "./core/watcher";
+import { HistoryService } from "./history/history-service";
+import { UsageHistoryState } from "./history/history-store";
+import { AntigravityHistory } from "./providers/antigravity/antigravity-history";
+import { AntigravityHub } from "./providers/antigravity/antigravity-hub";
+import { realWritesOnly } from "./providers/antigravity/antigravity-watcher";
+import {
+  antigravityConversationsPath,
+  antigravityDirectory,
+} from "./providers/antigravity/antigravity";
+import { fetchClaudeUsage } from "./providers/claude/claude-api";
+import { nativeCliVersions, newestCliVersion } from "./providers/claude/claude-cli-version";
+import { scanClaudeHistory } from "./providers/claude/claude-history";
+import { claudeDirectory, claudeSessionsPath } from "./providers/claude/claude";
+import { CodexAppServer } from "./providers/codex/codex-appserver";
+import { scanCodexHistory } from "./providers/codex/codex-history";
+import { codexDirectory, codexSessionsPath } from "./providers/codex/codex";
+import { openSettings, showMenu } from "./ui/menu";
 import {
   createStatusBarItem,
   hideStatusBarItem,
   renderStatusBarItem,
   showLoading,
-} from "./status-bar";
-import { UsageBar, type ProviderDisplay, type ProviderPort } from "./usage-bar";
+} from "./ui/status-bar";
 import type { ProviderId } from "./usage";
 import { isRecord } from "./validation";
-import { FileWatcher } from "./watcher";
 
 function display(provider: ProviderId): ProviderDisplay {
   const item = createStatusBarItem(provider);
