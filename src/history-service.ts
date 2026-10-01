@@ -1,5 +1,3 @@
-import { scanClaudeHistory } from "./claude-history";
-import { scanCodexHistory } from "./codex-history";
 import { providerEnabled, type ExtensionConfiguration } from "./configuration";
 import {
   dayStart,
@@ -22,8 +20,8 @@ const UNITS: Record<ProviderId, HistoryUnit> = {
   antigravity: "tokens",
 };
 
-/** `scannedAt` is when the last stored scan began, or zero when there is none. */
-export type ScanAntigravity = (since: number, scannedAt: number) => Promise<HistoryScan>;
+/** `stored` is what the last scan wrote, or null when there is none. */
+export type HistoryScanner = (since: number, stored: StoredHistory | null) => Promise<HistoryScan>;
 
 const DAY_MS = 24 * 60 * 60_000;
 
@@ -67,7 +65,7 @@ export class HistoryService {
     private readonly state: UsageHistoryState,
     private readonly publish: (provider: ProviderId, totals: DailyTotals | null) => void,
     private readonly readConfiguration: () => ExtensionConfiguration,
-    private readonly scanAntigravity: ScanAntigravity,
+    private readonly scanners: Record<ProviderId, HistoryScanner>,
   ) {}
 
   start(): void {
@@ -146,7 +144,7 @@ export class HistoryService {
       ? localDay(new Date(Math.min(stored.scannedAt, now) - RESCAN_BACK_MS))
       : shiftDay(today, -(MAX_STORED_DAYS - 1));
     await this.state.claim(provider, unit, now);
-    const scan = await this.read(provider, dayStart(shiftDay(from, -1)), stored);
+    const scan = await this.scanners[provider](dayStart(shiftDay(from, -1)), stored);
     const merged = mergeDays(stored?.days ?? {}, scan.days, from);
     const days = scan.pending ? keepHigher(merged, stored?.days ?? {}) : merged;
     const next: StoredHistory = {
@@ -184,18 +182,5 @@ export class HistoryService {
   private current(provider: ProviderId, unit: HistoryUnit): StoredHistory | null {
     const stored = this.state.read(provider);
     return stored && stored.unit === unit ? stored : null;
-  }
-
-  private read(
-    provider: ProviderId,
-    since: number,
-    stored: StoredHistory | null,
-  ): Promise<HistoryScan> {
-    const scanners: Record<ProviderId, () => Promise<HistoryScan>> = {
-      claude: () => scanClaudeHistory(since),
-      codex: () => scanCodexHistory(since, stored?.last ?? null),
-      antigravity: () => this.scanAntigravity(since, stored?.scannedAt ?? 0),
-    };
-    return scanners[provider]();
   }
 }

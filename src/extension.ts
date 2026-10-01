@@ -4,8 +4,10 @@ import { AntigravityHistory, realWritesOnly } from "./antigravity-history";
 import { AntigravityHub } from "./antigravity-hub";
 import { claudeDirectory, claudeSessionsPath, nativeCliVersions } from "./claude";
 import { fetchClaudeUsage, newestCliVersion } from "./claude-api";
+import { scanClaudeHistory } from "./claude-history";
 import { codexDirectory, codexSessionsPath } from "./codex";
 import { CodexAppServer } from "./codex-appserver";
+import { scanCodexHistory } from "./codex-history";
 import { HistoryService } from "./history-service";
 import { UsageHistoryState } from "./history-store";
 import { openSettings, showMenu } from "./menu";
@@ -116,7 +118,11 @@ export function activate(context: vscode.ExtensionContext): void {
     new UsageHistoryState(context.globalState),
     (provider, totals) => usageBar.setHistory(provider, totals),
     readConfiguration,
-    (since, scannedAt) => antigravityHistory.scan(since, scannedAt),
+    {
+      claude: (since) => scanClaudeHistory(since),
+      codex: (since, stored) => scanCodexHistory(since, stored?.last ?? null),
+      antigravity: (since, stored) => antigravityHistory.scan(since, stored?.scannedAt ?? 0),
+    },
   );
   usageBar = new UsageBar(ports, reads, readConfiguration, (provider) =>
     history.handleActivity(provider),

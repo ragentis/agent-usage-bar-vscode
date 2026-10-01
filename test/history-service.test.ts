@@ -7,9 +7,8 @@ import type { SharedStore } from "../src/shared-state";
 import type { ProviderId } from "../src/usage";
 
 /**
- * Only the Antigravity scanner is injected, so these run with the other two providers switched off
- * and cover what is particular to it: scans spaced ten minutes apart, and scans that could not read
- * everything.
+ * These run with Claude Code and Codex switched off and cover what is particular to Antigravity:
+ * scans spaced ten minutes apart, and scans that could not read everything.
  */
 
 const SETTINGS: ExtensionConfiguration = {
@@ -47,15 +46,20 @@ function harness(settings: Partial<ExtensionConfiguration> = {}) {
   let answer: () => Promise<HistoryScan> = () => Promise.resolve({ days: {}, last: null });
   let scans = 0;
   const scannedAt: number[] = [];
+  const unused = (): Promise<HistoryScan> => Promise.resolve({ days: {}, last: null });
   const service = (): HistoryService =>
     new HistoryService(
       new UsageHistoryState(store),
       (provider, totals) => void published.set(provider, totals),
       () => ({ ...SETTINGS, ...settings }),
-      (_since, lastScanAt) => {
-        scans += 1;
-        scannedAt.push(lastScanAt);
-        return answer();
+      {
+        claude: unused,
+        codex: unused,
+        antigravity: (_since, stored) => {
+          scans += 1;
+          scannedAt.push(stored?.scannedAt ?? 0);
+          return answer();
+        },
       },
     );
   return {
