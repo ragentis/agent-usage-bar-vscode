@@ -5,6 +5,7 @@ import * as os from "node:os";
 import {
   sortWindows,
   unavailable,
+  UnstartedWindows,
   type ProviderResult,
   type UnavailableResult,
   type UsageSnapshot,
@@ -205,6 +206,7 @@ export class AntigravityHub {
   private disposed = false;
   /** Bumped by every stop, so a read started before one can tell that it was overtaken. */
   private generation = 0;
+  private readonly unstarted = new UnstartedWindows();
 
   constructor(
     private readonly launch: LaunchHub = launchHub,
@@ -296,7 +298,8 @@ export class AntigravityHub {
     }
     const snapshot = reply.status === 200 ? parseQuotaSummary(reply.body, new Date()) : null;
     if (snapshot) {
-      return { status: "ok", snapshot: { ...snapshot, plan: await this.plan(hub) } };
+      const settled = this.unstarted.withoutRollingResets(snapshot);
+      return { status: "ok", snapshot: { ...settled, plan: await this.plan(hub) } };
     }
     if (!(await this.signedIn(hub))) {
       return unavailable("Antigravity is not signed in. Sign in to the CLI or extension.");

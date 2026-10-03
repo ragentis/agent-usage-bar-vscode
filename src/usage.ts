@@ -100,6 +100,59 @@ export function classifyWindow(windowMinutes: unknown, fallback: WindowKind): Wi
   return windowMinutes <= SESSION_WINDOW_MAX_MINUTES ? "session" : "weekly";
 }
 
+const CLOCK_TOLERANCE_MS = 2 * 60_000;
+const DRIFT_TOLERANCE_MS = 10_000;
+
+interface DatedReset {
+  resetsAt: number;
+  fetchedAt: number;
+}
+
+/**
+ * Codex and Antigravity date a window that has not started a full window length after the request,
+ * so the date moves with every read. A date that moved as far as the time between two readings is
+ * such a date. The first reading has nothing to compare with, so it is judged against the local
+ * clock instead.
+ */
+function unstarted(
+  window: UsageWindow,
+  read: DatedReset,
+  earlier: DatedReset | undefined,
+): boolean {
+  const elapsed = earlier ? read.fetchedAt - earlier.fetchedAt : 0;
+  // An earlier date that has passed belongs to a window that ended, so it cannot be compared.
+  if (earlier && earlier.resetsAt > read.fetchedAt && elapsed > DRIFT_TOLERANCE_MS) {
+    return Math.abs(read.resetsAt - earlier.resetsAt - elapsed) <= DRIFT_TOLERANCE_MS;
+  }
+  return window.windowMinutes
+    ? read.resetsAt >= read.fetchedAt + window.windowMinutes * 60_000 - CLOCK_TOLERANCE_MS
+    : false;
+}
+
+/** Remembers one provider's last reset dates, so the next reading can tell which of them move. */
+export class UnstartedWindows {
+  private previous = new Map<string, DatedReset>();
+
+  /** Removes the reset date of every unused window that has not started. */
+  withoutRollingResets(snapshot: UsageSnapshot): UsageSnapshot {
+    const fetchedAt = snapshot.fetchedAt.getTime();
+    const current = new Map<string, DatedReset>();
+    const windows = snapshot.windows.map((window) => {
+      if (!window.resetsAt) {
+        return window;
+      }
+      const key = `${window.kind}:${window.label ?? ""}`;
+      const read = { resetsAt: window.resetsAt.getTime(), fetchedAt };
+      current.set(key, read);
+      return window.usedPercent === 0 && unstarted(window, read, this.previous.get(key))
+        ? { ...window, resetsAt: null }
+        : window;
+    });
+    this.previous = current;
+    return { ...snapshot, windows };
+  }
+}
+
 /**
  * Sorted by kind, then unscoped before scoped. Scoped windows are ordered by percentage; unscoped
  * ones keep their original order.

@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { unavailable, type ProviderResult } from "../../usage";
+import { unavailable, UnstartedWindows, type ProviderResult } from "../../usage";
 import { isNotFound, isRecord, validMessage } from "../../validation";
 import { resolveCodexBinary } from "./codex-binary";
 import { parseRateLimitsResponse } from "./codex-rate-limits";
@@ -63,6 +63,7 @@ export class CodexAppServer {
   /** Bumped by every teardown, so work started before one can tell that it was overtaken. */
   private generation = 0;
   private readonly pending = new Map<number, PendingRequest>();
+  private readonly unstarted = new UnstartedWindows();
 
   constructor(
     private readonly onExternalUpdate: () => void,
@@ -89,7 +90,7 @@ export class CodexAppServer {
       const result = await this.request("account/rateLimits/read");
       const snapshot = parseRateLimitsResponse(result, new Date());
       if (snapshot) {
-        return { status: "ok", snapshot };
+        return { status: "ok", snapshot: this.unstarted.withoutRollingResets(snapshot) };
       }
       this.stop();
       return unavailable("Codex reported no usage windows. Sign in to Codex.");
