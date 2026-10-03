@@ -2,6 +2,13 @@
 
 Notable changes to Agent Usage Bar. Release Please builds this file from the [commit subjects](.github/commit-instructions.md) that land on `main`, and the versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.2](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.5.1...v0.5.2) (2026-10-03)
+
+
+### Fixed
+
+* **formatting:** hide the reset countdown of a window that has not started ([6ec6b3d](https://github.com/ragentis/agent-usage-bar-vscode/commit/6ec6b3db3f0bdb409cdf3b4324e2d3beb40fa64c))
+
 ## [0.5.1](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.5.0...v0.5.1) (2026-10-03)
 
 
