@@ -2,6 +2,13 @@
 
 Notable changes to Agent Usage Bar. Release Please builds this file from the [commit subjects](.github/commit-instructions.md) that land on `main`, and the versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.5.0...v0.5.1) (2026-10-03)
+
+
+### Fixed
+
+* **status-bar:** show the next model group when one is spent ([699e2dd](https://github.com/ragentis/agent-usage-bar-vscode/commit/699e2dd5a7609590edd7f0a3e55cf5cc97a8fd2f))
+
 ## [0.5.0](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.4.1...v0.5.0) (2026-10-01)
 
 

@@ -2,7 +2,7 @@
   "name": "agent-usage-bar",
   "displayName": "Agent Usage Bar",
   "description": "Show Claude Code, Codex, and Antigravity account usage windows in the VS Code status bar.",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "publisher": "ragentis",
   "license": "MIT",
   "private": true,
