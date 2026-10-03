@@ -84,44 +84,75 @@ function formatWindow(
   return `${WINDOW_LABELS[window.kind]}${scope} ${formatPercent(window.usedPercent, percentageMode)}${suffix}${remaining ? ` (${remaining})` : ""}`;
 }
 
+/** A spent scope cannot change before it resets, so it shows only its reset countdown. */
+function formatSpent(window: UsageWindow, now = new Date()): string {
+  const remaining = formatRemaining(window.resetsAt, now);
+  return `${WINDOW_LABELS[window.kind]} ${window.label} $(circle-slash)${remaining ? ` ${remaining}` : ""}`;
+}
+
+/**
+ * Ranks the scopes of each kind that has only scoped windows. Such scopes are separate allowances,
+ * so the lead is the most used scope that is not spent; `sortWindows` put the most used first.
+ * When every scope is spent, the one that resets first leads. `spent` holds the other spent scopes.
+ */
+function rankScopes(windows: ResolvedWindow[]): {
+  leads: ResolvedWindow[];
+  spent: ResolvedWindow[];
+} {
+  const whole = new Set(windows.filter((window) => !window.label).map((window) => window.kind));
+  const resetTime = (window: ResolvedWindow): number =>
+    window.resetsAt?.getTime() ?? Number.MAX_SAFE_INTEGER;
+  const leads: ResolvedWindow[] = [];
+  const spent: ResolvedWindow[] = [];
+  for (const kind of new Set(windows.map((window) => window.kind))) {
+    if (whole.has(kind)) {
+      continue;
+    }
+    const scopes = windows.filter((window) => window.kind === kind);
+    const lead =
+      scopes.find((window) => window.usedPercent < 100) ??
+      scopes.toSorted((left, right) => resetTime(left) - resetTime(right))[0];
+    if (!lead) {
+      continue;
+    }
+    leads.push(lead);
+    spent.push(...scopes.filter((window) => window !== lead && window.usedPercent >= 100));
+  }
+  return { leads, spent };
+}
+
 export function buildStatusText(
   snapshot: UsageSnapshot,
   configuration: ExtensionConfiguration,
   now = new Date(),
 ): string {
   const windows = resolveWindows(snapshot, now);
-  const primary = windows[0];
+  const { leads, spent } = rankScopes(windows);
+  const live = windows.filter((window) => !spent.includes(window));
+  const primary = live[0];
   if (!primary) {
     return "--";
   }
   const prefix = windows.some((window) => window.reset) ? "~" : "";
-  if (configuration.displayMode === "full") {
-    // Showing every scope would make the item grow with the plan, so a scoped window is shown only
-    // when its severity is not normal. The tooltip lists them all. A kind that has only scoped
-    // windows shows its first one, which `sortWindows` made the most used.
-    const whole = new Set(windows.filter((window) => !window.label).map((window) => window.kind));
-    const leads = (window: ResolvedWindow): boolean =>
-      !whole.has(window.kind) && windows.find(({ kind }) => kind === window.kind) === window;
-    const shown = windows.filter(
-      (window) =>
-        !window.label ||
-        leads(window) ||
-        severityFor(window, configuration, snapshot.fetchedAt) !== "normal",
-    );
-    return (
-      prefix +
-      (shown.length > 0 ? shown : [primary])
-        .map((window) => formatWindow(window, configuration.percentageMode, now))
-        .join(" · ")
-    );
-  }
+  const loud = live.filter(
+    (window) => severityFor(window, configuration, snapshot.fetchedAt) !== "normal",
+  );
+  // Full: showing every scope would make the item grow with the plan, so a scoped window is shown
+  // only when it leads its kind or its severity is not normal. The tooltip lists them all.
   // Compact shows the first window, but switches to the window that causes the warning color, so
   // a highlighted item shows the reason. Using `severityFor` for both keeps the swap and the color
   // consistent.
-  const alarming = windows
-    .filter((window) => severityFor(window, configuration, snapshot.fetchedAt) !== "normal")
-    .toSorted((left, right) => right.usedPercent - left.usedPercent)[0];
-  return prefix + formatWindow(alarming ?? primary, configuration.percentageMode, now);
+  const shown =
+    configuration.displayMode === "full"
+      ? live.filter((window) => !window.label || leads.includes(window) || loud.includes(window))
+      : [loud.toSorted((left, right) => right.usedPercent - left.usedPercent)[0] ?? primary];
+  return (
+    prefix +
+    [
+      ...shown.map((window) => formatWindow(window, configuration.percentageMode, now)),
+      ...spent.map((window) => formatSpent(window, now)),
+    ].join(" · ")
+  );
 }
 
 /**

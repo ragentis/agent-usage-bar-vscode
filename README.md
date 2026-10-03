@@ -20,6 +20,7 @@ One status bar item per provider, each with its own monochrome glyph:
 | `5h 42% (2h 15m) · 7d 18% (4d 6h)` | Both windows, in `full` display mode. |
 | `7d Fable 86% (4d 6h)` | A weekly limit for one model. Plans that carry these get a bar per limit in the tooltip; the status bar names one only while it is the window driving the color. |
 | `5h Gemini 42% (2h 15m)` | An Antigravity window. Antigravity keeps a 5-hour and a weekly limit for each model group, so the status bar shows the most used group of each window and names it; the tooltip has a bar for every one. |
+| `5h Claude and GPT 34% (3h 2m) · 5h Gemini $(circle-slash) 1h 12m` | The Gemini group is spent and refills in 1h 12m. A spent group hands the item to the most used group that still has allowance and keeps only its reset time. If every group is spent, the one that refills first is shown as the percentage. |
 | `5h 58% left (2h 15m)` | The same reading with `percentageMode` set to `remaining`. |
 | `~5h 0%` | The window reset since this reading; `0%` is assumed, not read, and no color is raised on it. |
 | `$(history) 5h 42% (2h 15m)` | The reading is more than ten minutes old. |

@@ -113,6 +113,44 @@ test("a second scope of such a kind still waits until it is loud", () => {
   ).toBe("5h Gemini 30% (3h 12m) · 7d Claude and GPT 51% (2d 5h) · 7d Gemini 9% (2d 5h)");
 });
 
+const [gemini, claudeAndGpt, ...weeklyGroups] = grouped.windows;
+
+test("a spent scope hands the item to the next one and keeps only its reset", () => {
+  const spent: UsageSnapshot = {
+    ...grouped,
+    windows: [{ ...gemini!, usedPercent: 100 }, claudeAndGpt!, ...weeklyGroups],
+  };
+
+  expect(buildStatusText(spent, configure(), now)).toBe(
+    "5h Claude and GPT 4% (3h 12m) · 5h Gemini $(circle-slash) 3h 12m",
+  );
+  expect(buildStatusText(spent, configure({ displayMode: "full" }), now)).toBe(
+    "5h Claude and GPT 4% (3h 12m) · 7d Claude and GPT 51% (2d 5h) · 5h Gemini $(circle-slash) 3h 12m",
+  );
+  expect(buildStatusText(spent, configure({ percentageMode: "remaining" }), now)).toBe(
+    "5h Claude and GPT 96% left (3h 12m) · 5h Gemini $(circle-slash) 3h 12m",
+  );
+  expect(pickSeverity(spent, configure(), now)).toBe("error");
+});
+
+test("when every scope is spent, the one that resets first leads", () => {
+  const windows = [
+    { ...gemini!, usedPercent: 100 },
+    { ...claudeAndGpt!, usedPercent: 100, resetsAt: new Date("2026-08-01T11:12:00Z") },
+    ...weeklyGroups,
+  ];
+
+  expect(buildStatusText({ ...grouped, windows }, configure(), now)).toBe(
+    "5h Claude and GPT 100% (1h 12m) · 5h Gemini $(circle-slash) 3h 12m",
+  );
+});
+
+test("a spent scope beside a whole window of its kind is still shown as a percentage", () => {
+  const windows = [...snapshot.windows, { ...scoped.windows[2]!, usedPercent: 100 }];
+
+  expect(buildStatusText({ ...scoped, windows }, configure(), now)).toBe("7d Fable 100% (2d 5h)");
+});
+
 test("formats reset countdown boundaries", () => {
   expect(formatRemaining(new Date("2026-08-01T10:45:00Z"), now)).toBe("45m");
   expect(formatRemaining(new Date("2026-08-01T09:59:00Z"), now)).toBe("reset due");
