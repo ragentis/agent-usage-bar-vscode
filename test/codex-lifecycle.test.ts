@@ -273,6 +273,29 @@ test("a start that finds no Codex program says the agent may be absent", async (
   });
 });
 
+test("the remedy for a missing program is the window's, since a remote window cannot see a remote Codex", async () => {
+  const spawned: FakeCodex[] = [];
+  const app = new CodexAppServer(
+    () => {},
+    () => {
+      const child = new FakeCodex();
+      spawned.push(child);
+      return Promise.resolve(child);
+    },
+    "A remote window looks for Codex on the local machine, not on the remote host.",
+  );
+  const reading = app.readUsage();
+  await flush();
+
+  spawned[0]?.fires("error", NO_SUCH_PROGRAM);
+
+  await expect(reading).resolves.toMatchObject({
+    message:
+      "The Codex CLI could not be started. A remote window looks for Codex on the local machine, not on the remote host.",
+    absent: true,
+  });
+});
+
 test("a program that is there but will not start is not taken for a missing one", async () => {
   const world = harness();
   const reading = world.app.readUsage();

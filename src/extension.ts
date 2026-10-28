@@ -18,7 +18,7 @@ import { fetchClaudeUsage } from "./providers/claude/claude-api";
 import { nativeCliVersions, newestCliVersion } from "./providers/claude/claude-cli-version";
 import { scanClaudeHistory } from "./providers/claude/claude-history";
 import { claudeDirectory, claudeSessionsPath } from "./providers/claude/claude";
-import { CodexAppServer, launchCodex } from "./providers/codex/codex-appserver";
+import { CodexAppServer, INSTALL_REMEDY, launchCodex } from "./providers/codex/codex-appserver";
 import { scanCodexHistory } from "./providers/codex/codex-history";
 import { codexDirectory, codexSessionsPath } from "./providers/codex/codex";
 import { openSettings, showMenu } from "./ui/menu";
@@ -47,6 +47,21 @@ async function claudeCliVersion(): Promise<string> {
   const manifest: unknown = extension?.packageJSON;
   const bundled = isRecord(manifest) ? manifest.version : null;
   return newestCliVersion([bundled, ...(await nativeCliVersions())]);
+}
+
+/**
+ * The Codex extension is a workspace extension, so a remote window installs it on the remote and
+ * this UI-host extension cannot see it there. Only a local, on-disk install is handed to the launcher.
+ */
+function codexExtensionDirectory(): string | undefined {
+  const extension = vscode.extensions.getExtension("openai.chatgpt");
+  return extension?.extensionUri.scheme === "file" ? extension.extensionUri.fsPath : undefined;
+}
+
+function codexRemedy(): string {
+  return vscode.env.remoteName === undefined
+    ? INSTALL_REMEDY
+    : "A remote window looks for Codex on the local machine, not on the remote host.";
 }
 
 function providers(onCodexPush: () => void): ProviderPort[] {
@@ -89,12 +104,11 @@ function providers(onCodexPush: () => void): ProviderPort[] {
       // Lazy startup avoids a Codex process in windows that only adopt another window's readings.
       read: async () =>
         confirmAbsence(
-          await (codexAppServer ??= new CodexAppServer(onCodexPush, () => {
-            const extension = vscode.extensions.getExtension("openai.chatgpt");
-            return launchCodex(
-              extension?.extensionUri.scheme === "file" ? extension.extensionUri.fsPath : undefined,
-            );
-          })).readUsage(),
+          await (codexAppServer ??= new CodexAppServer(
+            onCodexPush,
+            () => launchCodex(codexExtensionDirectory()),
+            codexRemedy(),
+          )).readUsage(),
           codexDirectory(),
         ),
       watcher: codexWatcher,

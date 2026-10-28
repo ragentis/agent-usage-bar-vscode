@@ -27,6 +27,8 @@ class CodexSaid extends Error {}
 /** Marks a start that failed because no Codex program exists where one was looked for. */
 class CodexMissing extends Error {}
 
+export const INSTALL_REMEDY = "Check that Codex is installed.";
+
 interface PendingRequest {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
@@ -68,6 +70,8 @@ export class CodexAppServer {
   constructor(
     private readonly onExternalUpdate: () => void,
     private readonly launch: LaunchCodex = launchCodex,
+    /** Follows the start failure as its second sentence, which the tooltip shows as the remedy. */
+    private readonly remedy: string = INSTALL_REMEDY,
   ) {}
 
   /** A later read starts a fresh process. */
@@ -145,7 +149,7 @@ export class CodexAppServer {
     // Draining stderr keeps the pipe from filling and stalling the child.
     child.stderr.resume();
     child.on("error", (error) => {
-      const message = "The Codex CLI could not be started. Check that Codex is installed.";
+      const message = `The Codex CLI could not be started. ${this.remedy}`;
       this.teardown(isNotFound(error) ? new CodexMissing(message) : new Error(message));
     });
     child.on("exit", () => this.teardown(new Error("The Codex app server stopped.")));
