@@ -2,6 +2,14 @@
 
 Notable changes to Agent Usage Bar. Release Please builds this file from the [commit subjects](.github/commit-instructions.md) that land on `main`, and the versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.5.2...v0.5.3) (2026-10-28)
+
+
+### Fixed
+
+* **codex:** discover the CLI bundled with the IDE extension ([#23](https://github.com/ragentis/agent-usage-bar-vscode/issues/23)) ([ad556fd](https://github.com/ragentis/agent-usage-bar-vscode/commit/ad556fd339de6e54e19b91f8a13dea764bf0610e)), closes [#22](https://github.com/ragentis/agent-usage-bar-vscode/issues/22)
+* **codex:** say where a remote window looks for the CLI ([7df8992](https://github.com/ragentis/agent-usage-bar-vscode/commit/7df8992b2d79d784e5b61efd56b1a23db0189f79))
+
 ## [0.5.2](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.5.1...v0.5.2) (2026-10-03)
 
 
