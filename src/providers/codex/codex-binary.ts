@@ -69,14 +69,42 @@ async function npmNativeBinary(shimDirectory: string): Promise<string | null> {
   return binaries.find((binary) => binary !== null) ?? null;
 }
 
-/**
- * Codex extension installs use changing content-hashed directories, so candidates must be searched.
- * A bare-name fallback still supports PATH installs; injectable home and platform cover every layout
- * on each CI runner.
- */
+/** The editor supplies its actual extension directory, including custom and versioned installs. */
+async function bundledBinary(
+  extensionDirectory: string | undefined,
+  platform: NodeJS.Platform,
+  architecture: string,
+): Promise<string | null> {
+  if (!extensionDirectory) {
+    return null;
+  }
+  const system =
+    platform === "win32"
+      ? "windows"
+      : platform === "darwin"
+        ? "macos"
+        : platform === "linux"
+          ? "linux"
+          : null;
+  const machine = architecture === "x64" ? "x86_64" : architecture === "arm64" ? "aarch64" : null;
+  if (!system || !machine) {
+    return null;
+  }
+  const binary = path.join(
+    extensionDirectory,
+    "bin",
+    `${system}-${machine}`,
+    platform === "win32" ? "codex.exe" : "codex",
+  );
+  return (await exists(binary)) ? binary : null;
+}
+
+/** Existing installs keep their priority; the IDE copy is tried before the bare PATH fallback. */
 export async function resolveCodexBinary(
   home: string = os.homedir(),
   platform: NodeJS.Platform = process.platform,
+  extensionDirectory?: string,
+  architecture: string = process.arch,
 ): Promise<string> {
   if (platform === "win32") {
     const localAppData = process.env.LOCALAPPDATA ?? path.join(home, "AppData", "Local");
@@ -92,7 +120,10 @@ export async function resolveCodexBinary(
       return npm;
     }
     const plugin = path.join(home, ".codex", "plugins", ".plugin-appserver", "codex.exe");
-    return (await exists(plugin)) ? plugin : "codex";
+    if (await exists(plugin)) {
+      return plugin;
+    }
+    return (await bundledBinary(extensionDirectory, platform, architecture)) ?? "codex";
   }
   for (const candidate of [
     path.join(home, ".codex", "bin", "codex"),
@@ -107,5 +138,5 @@ export async function resolveCodexBinary(
       return candidate;
     }
   }
-  return "codex";
+  return (await bundledBinary(extensionDirectory, platform, architecture)) ?? "codex";
 }

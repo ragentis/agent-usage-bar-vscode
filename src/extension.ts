@@ -18,7 +18,7 @@ import { fetchClaudeUsage } from "./providers/claude/claude-api";
 import { nativeCliVersions, newestCliVersion } from "./providers/claude/claude-cli-version";
 import { scanClaudeHistory } from "./providers/claude/claude-history";
 import { claudeDirectory, claudeSessionsPath } from "./providers/claude/claude";
-import { CodexAppServer } from "./providers/codex/codex-appserver";
+import { CodexAppServer, launchCodex } from "./providers/codex/codex-appserver";
 import { scanCodexHistory } from "./providers/codex/codex-history";
 import { codexDirectory, codexSessionsPath } from "./providers/codex/codex";
 import { openSettings, showMenu } from "./ui/menu";
@@ -89,7 +89,12 @@ function providers(onCodexPush: () => void): ProviderPort[] {
       // Lazy startup avoids a Codex process in windows that only adopt another window's readings.
       read: async () =>
         confirmAbsence(
-          await (codexAppServer ??= new CodexAppServer(onCodexPush)).readUsage(),
+          await (codexAppServer ??= new CodexAppServer(onCodexPush, () => {
+            const extension = vscode.extensions.getExtension("openai.chatgpt");
+            return launchCodex(
+              extension?.extensionUri.scheme === "file" ? extension.extensionUri.fsPath : undefined,
+            );
+          })).readUsage(),
           codexDirectory(),
         ),
       watcher: codexWatcher,
