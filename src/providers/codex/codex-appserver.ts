@@ -49,7 +49,7 @@ export type LaunchCodex = () => Promise<CodexProcess>;
 
 /** Long-lived JSON-RPC process; Codex retains ownership of credentials and their refresh. */
 export async function launchCodex(extensionDirectory?: string): Promise<CodexProcess> {
-  const binary = await resolveCodexBinary(undefined, undefined, extensionDirectory);
+  const binary = await resolveCodexBinary({ extensionDirectory });
   return spawn(binary, ["app-server"], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
 }
 

@@ -69,25 +69,26 @@ async function npmNativeBinary(shimDirectory: string): Promise<string | null> {
   return binaries.find((binary) => binary !== null) ?? null;
 }
 
-/** The editor supplies its actual extension directory, including custom and versioned installs. */
+const SYSTEMS: Partial<Record<NodeJS.Platform, string>> = {
+  win32: "windows",
+  darwin: "macos",
+  linux: "linux",
+};
+
+const MACHINES: Partial<Record<string, string>> = { x64: "x86_64", arm64: "aarch64" };
+
+/**
+ * The Codex extension resolves its own binary from this fixed layout; the `codex-package.json`
+ * beside the binary is a packaging manifest it does not consult.
+ */
 async function bundledBinary(
   extensionDirectory: string | undefined,
   platform: NodeJS.Platform,
   architecture: string,
 ): Promise<string | null> {
-  if (!extensionDirectory) {
-    return null;
-  }
-  const system =
-    platform === "win32"
-      ? "windows"
-      : platform === "darwin"
-        ? "macos"
-        : platform === "linux"
-          ? "linux"
-          : null;
-  const machine = architecture === "x64" ? "x86_64" : architecture === "arm64" ? "aarch64" : null;
-  if (!system || !machine) {
+  const system = SYSTEMS[platform];
+  const machine = MACHINES[architecture];
+  if (!extensionDirectory || !system || !machine) {
     return null;
   }
   const binary = path.join(
@@ -99,13 +100,25 @@ async function bundledBinary(
   return (await exists(binary)) ? binary : null;
 }
 
-/** Existing installs keep their priority; the IDE copy is tried before the bare PATH fallback. */
-export async function resolveCodexBinary(
-  home: string = os.homedir(),
-  platform: NodeJS.Platform = process.platform,
-  extensionDirectory?: string,
-  architecture: string = process.arch,
-): Promise<string> {
+export interface CodexBinaryOptions {
+  home?: string;
+  platform?: NodeJS.Platform;
+  architecture?: string;
+  /** The editor's active Codex extension install, when one is visible to this extension host. */
+  extensionDirectory?: string;
+}
+
+/**
+ * Codex desktop installs use changing content-hashed directories, so candidates must be searched.
+ * A bare-name fallback still supports PATH installs; injectable home and platform cover every layout
+ * on each CI runner.
+ */
+export async function resolveCodexBinary({
+  home = os.homedir(),
+  platform = process.platform,
+  architecture = process.arch,
+  extensionDirectory,
+}: CodexBinaryOptions = {}): Promise<string> {
   if (platform === "win32") {
     const localAppData = process.env.LOCALAPPDATA ?? path.join(home, "AppData", "Local");
     const versioned = await newestBinary(
