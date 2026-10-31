@@ -2,6 +2,13 @@
 
 Notable changes to Agent Usage Bar. Release Please builds this file from the [commit subjects](.github/commit-instructions.md) that land on `main`, and the versions follow [semantic versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.5.3...v0.5.4) (2026-10-31)
+
+
+### Fixed
+
+* **claude:** name the plan as the account profile states it ([1136171](https://github.com/ragentis/agent-usage-bar-vscode/commit/113617168f4c3b9afb49de5c0d034a88bc24c73d))
+
 ## [0.5.3](https://github.com/ragentis/agent-usage-bar-vscode/compare/v0.5.2...v0.5.3) (2026-10-28)
 
 
