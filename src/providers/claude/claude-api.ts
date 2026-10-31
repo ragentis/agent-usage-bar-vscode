@@ -18,6 +18,7 @@ import {
 
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const RESETS_URL = "https://api.anthropic.com/api/oauth/usage?cedar_ember=1";
+const PROFILE_URL = "https://api.anthropic.com/api/oauth/profile";
 const OAUTH_BETA = "oauth-2025-04-20";
 const REQUEST_TIMEOUT_MS = 5_000;
 
@@ -180,9 +181,23 @@ export function parseClaudeUsageResponse(
   };
 }
 
-/** Set once the service has refused the reset request but answered the plain one. */
+/**
+ * The sign-in's own plan slug survives a rename unchanged (Max 20x became Ultra while it still
+ * read `max` with tier `max_20x`), so the shown name comes from the account profile instead.
+ */
+export function parseProfilePlan(value: unknown): string | null {
+  const organization = isRecord(value) && isRecord(value.organization) ? value.organization : null;
+  return organization ? validLabel(organization.plan_display_name) : null;
+}
+
 export interface UsageRequestState {
+  /** Set once the service has refused the reset request but answered the plain one. */
   plainOnly: boolean;
+  /**
+   * The profile's plan name, asked once per sign-in. A sign-in is told apart by its expiry so the
+   * token itself is never kept.
+   */
+  profile?: { expiresAt: number | null; plan: string | null };
 }
 
 /**
@@ -192,6 +207,8 @@ export interface UsageRequestState {
 function isResetRefusal(status: number): boolean {
   return status === 400 || status === 403;
 }
+
+type AccountRequest = (url: string, extraHeaders?: Record<string, string>) => Promise<Response>;
 
 export async function fetchClaudeUsage(
   sources?: readonly CredentialSource[],
@@ -210,18 +227,22 @@ export async function fetchClaudeUsage(
     return unavailable("The Claude Code sign-in has expired. Run Claude Code to renew it.");
   }
 
-  const send = (withResets: boolean): Promise<Response> =>
-    fetch(withResets ? RESETS_URL : USAGE_URL, {
+  const request: AccountRequest = (url, extraHeaders = {}) =>
+    fetch(url, {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${credentials.accessToken}`,
         "anthropic-beta": OAUTH_BETA,
-        ...(withResets ? { "User-Agent": `claude-cli/${cliVersion} (external, cli)` } : {}),
+        ...extraHeaders,
       },
       // Refuse redirects so the token only reaches the host the bundle audit pins.
       redirect: "error",
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+  const send = (withResets: boolean): Promise<Response> =>
+    withResets
+      ? request(RESETS_URL, { "User-Agent": `claude-cli/${cliVersion} (external, cli)` })
+      : request(USAGE_URL);
 
   let response: Response;
   try {
@@ -260,5 +281,34 @@ export async function fetchClaudeUsage(
   }
 
   const snapshot = parseClaudeUsageResponse(payload, credentials.plan, new Date());
-  return snapshot ? { status: "ok", snapshot } : unavailable("The usage response held no windows.");
+  if (!snapshot) {
+    return unavailable("The usage response held no windows.");
+  }
+  const plan = await profilePlan(request, credentials.expiresAt, state);
+  return { status: "ok", snapshot: plan ? { ...snapshot, plan } : snapshot };
+}
+
+/**
+ * Asked only after a usage reading succeeds, so it never stands between the user and a reading. A
+ * failed request is not remembered and is tried again on the next reading.
+ */
+async function profilePlan(
+  request: AccountRequest,
+  expiresAt: number | null,
+  state: UsageRequestState,
+): Promise<string | null> {
+  if (state.profile?.expiresAt === expiresAt) {
+    return state.profile.plan;
+  }
+  try {
+    const response = await request(PROFILE_URL);
+    if (!response.ok) {
+      return null;
+    }
+    const plan = parseProfilePlan(await response.json());
+    state.profile = { expiresAt, plan };
+    return plan;
+  } catch {
+    return null;
+  }
 }

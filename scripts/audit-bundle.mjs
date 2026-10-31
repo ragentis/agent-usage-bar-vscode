@@ -18,11 +18,13 @@ if (foreign.length > 0) {
 
 const bundle = await readFile("dist/extension.js", "utf8");
 
-// Pin the literal targets: the one usage endpoint, in both forms, and the loopback origin of the
-// Antigravity hub this extension starts. Runtime-assembled targets are outside this text audit.
+// Pin the literal targets: the usage endpoint, in both forms, the profile endpoint that names the
+// plan, and the loopback origin of the Antigravity hub this extension starts. Runtime-assembled
+// targets are outside this text audit.
 const ALLOWED_URLS = new Set([
   "https://api.anthropic.com/api/oauth/usage",
   "https://api.anthropic.com/api/oauth/usage?cedar_ember=1",
+  "https://api.anthropic.com/api/oauth/profile",
   "http://127.0.0.1",
 ]);
 const urls = [...new Set(bundle.match(/https?:\/\/[^\s"'`\\]+/g) ?? [])];

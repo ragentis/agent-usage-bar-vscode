@@ -6,6 +6,7 @@ import {
   fetchClaudeUsage,
   parseClaudeUsageResponse,
   parseLimitResets,
+  parseProfilePlan,
   parseRetryAfter,
   parseUsageLimits,
 } from "../src/providers/claude/claude-api";
@@ -314,6 +315,7 @@ test("a wait longer than the cap is shortened to it rather than taken at its wor
 
 const USAGE_URL = "https://api.anthropic.com/api/oauth/usage";
 const RESETS_URL = "https://api.anthropic.com/api/oauth/usage?cedar_ember=1";
+const PROFILE_URL = "https://api.anthropic.com/api/oauth/profile";
 const signedInDirectories: string[] = [];
 
 afterEach(async () => {
@@ -371,14 +373,20 @@ function refusal(result: ProviderResult): {
   return result;
 }
 
-test("the token goes to the one pinned endpoint, and carries nothing else with it", async () => {
+test("the token goes only to the pinned endpoints, and carries nothing else with it", async () => {
   const calls = service(answered(200, response));
 
   const result = await fetchClaudeUsage(await signedIn());
 
   expect(result).toMatchObject({ status: "ok" });
-  expect(calls).toHaveLength(1);
-  expect(calls[0]?.url).toBe(RESETS_URL);
+  expect(calls.map((call) => call.url)).toEqual([RESETS_URL, PROFILE_URL]);
+  expect(calls[1]?.init.headers).toEqual({
+    "Content-Type": "application/json",
+    Authorization: "Bearer secret-token",
+    "anthropic-beta": "oauth-2025-04-20",
+  });
+  expect(calls[1]?.init.redirect).toBe("error");
+  expect(calls[1]?.init.signal).toBeInstanceOf(AbortSignal);
   expect(calls[0]?.init.headers).toEqual({
     "Content-Type": "application/json",
     Authorization: "Bearer secret-token",
@@ -404,18 +412,19 @@ test.each([400, 403])(
   async (status) => {
     const calls = service(answered(status, {}), answered(200, response));
     const state = { plainOnly: false };
+    const sources = await signedIn();
 
-    const first = await fetchClaudeUsage(await signedIn(), PINNED_CLI_VERSION, state);
+    const first = await fetchClaudeUsage(sources, PINNED_CLI_VERSION, state);
 
     expect(first).toMatchObject({ status: "ok" });
-    expect(calls.map((call) => call.url)).toEqual([RESETS_URL, USAGE_URL]);
+    expect(calls.map((call) => call.url)).toEqual([RESETS_URL, USAGE_URL, PROFILE_URL]);
     expect(calls[1]?.init.headers).not.toHaveProperty("User-Agent");
     expect(calls[1]?.init.redirect).toBe("error");
     expect(state.plainOnly).toBe(true);
 
-    await fetchClaudeUsage(await signedIn(), PINNED_CLI_VERSION, state);
+    await fetchClaudeUsage(sources, PINNED_CLI_VERSION, state);
 
-    expect(calls.map((call) => call.url)).toEqual([RESETS_URL, USAGE_URL, USAGE_URL]);
+    expect(calls.map((call) => call.url)).toEqual([RESETS_URL, USAGE_URL, PROFILE_URL, USAGE_URL]);
   },
 );
 
@@ -438,12 +447,59 @@ test.each([401, 429, 500])("an answer of %i costs no second request", async (sta
   expect(calls).toHaveLength(1);
 });
 
-test("the plan comes from the sign-in, which is the only place it is stated", async () => {
-  service(answered(200, response));
+const profile = { organization: { plan_display_name: "Ultra", rate_limit_tier: "max_20x" } };
+
+test("the plan is named by the account profile, which follows a rename", async () => {
+  service(answered(200, response), answered(200, profile));
 
   const result = await fetchClaudeUsage(await signedIn());
 
-  expect(result).toMatchObject({ status: "ok", snapshot: { plan: "max" } });
+  expect(result).toMatchObject({ status: "ok", snapshot: { plan: "Ultra" } });
+});
+
+test("the profile is asked once per sign-in", async () => {
+  const calls = service(answered(200, response), answered(200, profile), answered(200, response));
+  const state = { plainOnly: false };
+  const sources = await signedIn();
+
+  await fetchClaudeUsage(sources, PINNED_CLI_VERSION, state);
+  const second = await fetchClaudeUsage(sources, PINNED_CLI_VERSION, state);
+
+  expect(second).toMatchObject({ status: "ok", snapshot: { plan: "Ultra" } });
+  expect(calls.map((call) => call.url)).toEqual([RESETS_URL, PROFILE_URL, RESETS_URL]);
+
+  await fetchClaudeUsage(await signedIn(Date.now() + 7_200_000), PINNED_CLI_VERSION, state);
+
+  expect(calls.map((call) => call.url)).toEqual([
+    RESETS_URL,
+    PROFILE_URL,
+    RESETS_URL,
+    RESETS_URL,
+    PROFILE_URL,
+  ]);
+});
+
+test.each([
+  ["refused", answered(500, {})],
+  ["unreadable", answered(200, undefined)],
+  ["unreachable", new Error("connect ECONNREFUSED")],
+])("a %s profile leaves the sign-in's plan, and is asked again next time", async (_name, reply) => {
+  const calls = service(answered(200, response), reply, answered(200, response));
+  const state = { plainOnly: false };
+  const sources = await signedIn();
+
+  const first = await fetchClaudeUsage(sources, PINNED_CLI_VERSION, state);
+  await fetchClaudeUsage(sources, PINNED_CLI_VERSION, state);
+
+  expect(first).toMatchObject({ status: "ok", snapshot: { plan: "max" } });
+  expect(calls.map((call) => call.url)).toEqual([RESETS_URL, PROFILE_URL, RESETS_URL, PROFILE_URL]);
+});
+
+test("a profile without a plan name leaves the sign-in's plan", () => {
+  expect(parseProfilePlan({ organization: { plan_display_name: "  " } })).toBeNull();
+  expect(parseProfilePlan({ organization: null })).toBeNull();
+  expect(parseProfilePlan("Ultra")).toBeNull();
+  expect(parseProfilePlan(profile)).toBe("Ultra");
 });
 
 test("a refusal carries the wait as a moment, not as words that go stale", async () => {

@@ -208,6 +208,8 @@ A hub is started for a scan only when a conversation that can be read has change
 
 **The extension reads the token stored by Claude Code, uses it for one request, and discards it.** The request goes to `https://api.anthropic.com/api/oauth/usage`, the same endpoint used by the official Claude Code extension for usage data.
 
+**The plan name comes from a second request, made once per sign-in.** After the first successful reading the token also goes to `https://api.anthropic.com/api/oauth/profile`, which the official Claude Code extension reads for account details. The sign-in stores only an internal plan identifier, which can stay the same when a plan is renamed; the profile carries the name claude.ai shows. That answer also names the account holder and organization; only the plan name is taken out of it. The request is repeated when Claude Code renews its token, and a failed one leaves the plan as the sign-in states it.
+
 **The request identifies itself as the Claude Code CLI.** It carries the user agent `claude-cli/<version> (external, cli)` because the service returns banked limit resets, the free resets shown under Settings > Usage on claude.ai, only to that client at or above a minimum version. The version is a pinned published release, or the newest Claude Code installed on this machine when that is newer: the official extension's bundled CLI, or a release under `~/.local/share/claude/versions`. Resets are only read and counted, never redeemed. If the service stops listing them, the credits line drops the resets and every other reading stays the same. If it refuses that request outright, the extension repeats it once without the resets query and user agent, and keeps sending the plain request for the rest of the session once that one succeeds.
 
 The token is never logged, cached, or written back to shared state, settings, or the extension's secret storage. Caching it would create a second credential store that could become stale when Claude Code rotates the token or signs out. Reading the existing store when needed avoids that additional copy.
@@ -262,7 +264,7 @@ When the Anthropic usage endpoint refuses a read with a stated wait, that wait i
 
 ### What is stored, and what never leaves
 
-The Anthropic usage endpoint is the extension's only remote network target. Its one other request stays on this machine: the loopback address of the Antigravity hub it started itself. The extension opens files only for parsing and performs no direct filesystem writes.
+The Anthropic usage and profile endpoints are the extension's only remote network targets. Its one other request stays on this machine: the loopback address of the Antigravity hub it started itself. The extension opens files only for parsing and performs no direct filesystem writes.
 
 `npm run audit:bundle` checks the shipped code on every build. For the member-access forms produced by the current build, it rejects `node:fs` members outside the explicit read-only set. It permits only `spawn` from `node:child_process` and rejects literal `shell: true` options, and permits only `createServer` from `node:net`, which is how a free local port is found.
 

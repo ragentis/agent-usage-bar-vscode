@@ -64,7 +64,7 @@ The layout follows one rule: **testable modules do not import anything that requ
 | `settings.ts` | vscode | Reading and writing the settings section. |
 | `status-bar.ts` | vscode | Rendering a `StatusBarItem` and its tooltip. |
 | `menu.ts` | vscode | Status item menu commands. |
-| `claude-api.ts` | `fetch` | Calling the account endpoint and parsing its response. |
+| `claude-api.ts` | `fetch` | Calling the usage and profile endpoints and parsing their responses. |
 | `claude-credentials.ts` | node | Reading token sources: the credentials file and macOS keychain. |
 | `claude-cli-version.ts` | node | Choosing the CLI version that the reset request states. |
 | `codex-appserver.ts` | node | Running the app server and managing JSON-RPC. |
@@ -134,7 +134,7 @@ The build writes two untracked files. `dist/extension.js` is the shipped extensi
 | --- | --- |
 | Runtime dependencies | Any entry under `dependencies`. |
 | Bundle inputs | An input that did not come from `src/`. |
-| Network targets | Any written-out URL other than the one allowed endpoint and the loopback origin. |
+| Network targets | Any written-out URL other than the allowed usage and profile endpoints and the loopback origin. |
 | `node:fs` members | Anything the bundle reaches for beyond `readFile`, `readdir`, `stat`, `lstat`, `existsSync`, and `watch`. |
 | `node:child_process` members | Anything beyond `spawn`, plus a literal `shell: true`. |
 | `node:net` members | Anything beyond `createServer`, which finds a free port for the Antigravity hub. |
